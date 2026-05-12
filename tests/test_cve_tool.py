@@ -149,6 +149,38 @@ def test_cve_runner_scan_argv_defaults_to_update_never(tmp_path: Path, monkeypat
     assert captured[0][update_index + 1] == "never"
 
 
+def test_cve_runner_update_db_uses_streaming_command(monkeypatch) -> None:
+    runner = _load_cve_runner()
+    captured: list[list[str]] = []
+
+    def fake_stream(argv, *, timeout):  # noqa: ANN001
+        captured.append(argv)
+        assert timeout == 1800
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    class FakeTempDir:
+        def __enter__(self):  # noqa: ANN204
+            return r"C:\temp\cve-update"
+
+        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
+            return False
+
+    monkeypatch.setattr(runner, "run_streaming_command", fake_stream)
+    monkeypatch.setattr(runner.tempfile, "TemporaryDirectory", lambda prefix="": FakeTempDir())
+
+    payload = runner.update_cve_db(
+        runner.ToolCommand(argv=["cve-bin-tool"], mode="executable", display="cve-bin-tool"),
+        offline=False,
+    )
+
+    assert payload["status"] == "ok"
+    assert captured
+    assert "--update" in captured[0]
+    assert "now" in captured[0]
+    assert captured[0][-1] == r"C:\temp\cve-update"
+    assert captured[0][captured[0].index("--output-file") + 1] == r"C:\temp\cve-update\update-db.json"
+
+
 def test_cli_parser_accepts_cve_status_action() -> None:
     parser = cli.build_parser()
 

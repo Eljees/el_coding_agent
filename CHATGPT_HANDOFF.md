@@ -23,6 +23,8 @@
 - Changed CVE scan default behavior to `--update never` so GUI/CLI scans do not stall on network DB refresh.
 - Fixed `status.json` semantics so incomplete unpack or missing raw evidence no longer reports `ok`.
 - Real GUI route was re-tested against `CYBERSEC-11195/contentreader-nls-16.9.0.14297-RedOS.rpm`; intent resolved to `evidence.cve_scan`, unpack succeeded, evidence completed.
+- Reworked `cve-scan update-db` to stream live `cve-bin-tool` progress to the console instead of waiting silently.
+- Fixed `update-db` for `cve-bin-tool 3.4` by running against a temporary directory and writing JSON to a temporary file instead of `nul`.
 - Synced docs with current archive behavior and current repo path.
 - Recreated this handoff file because it was missing from the working tree.
 
@@ -66,6 +68,7 @@
 - `python -m local_codex_lite evidence cve-scan status`
 - `python -m local_codex_lite evidence cve-scan "D:\!ya_drive_sync\YandexDisk\rostel\to_analyze\__old\CYBERSEC-11195\contentreader-nls-16.9.0.14297-RedOS.rpm" --min-severity HIGH --format json,md,high-critical-md`
 - Programmatic `CommandCenterUI` GUI path with task `проверь на cve артефакт ...contentreader-nls-16.9.0.14297-RedOS.rpm`
+- `.\.venv\Scripts\python.exe -m local_codex_lite evidence cve-scan update-db`
 
 Results (2026-05-12):
 
@@ -73,3 +76,4 @@ Results (2026-05-12):
 - `python -m local_codex_lite evidence cve-scan status` -> `installed=true`, `mode=executable`, `version=3.4`.
 - Real CLI scan on `CYBERSEC-11195` -> unpack `archives_ok=1`, `missing_tool=0`, `scan_exit_code=0`, `status.json: status=ok, evidence_complete=true`.
 - Real GUI-path scan on `CYBERSEC-11195` -> intent `evidence.cve_scan`, worker invoked `run_cve_scan.py scan`, evidence bundle refreshed successfully.
+- Real `.\.venv\Scripts\python.exe -m local_codex_lite evidence cve-scan update-db` -> live progress visible; final `status=ok`, `returncode=0`.
