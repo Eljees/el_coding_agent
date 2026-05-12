@@ -268,4 +268,4 @@ def test_make_patch_runtime_fix_uses_shorter_timeout_for_repair_attempts(tmp_pat
     )
 
     assert "+print('fixed')" in patch
-    assert RuntimeFixTimeoutCaptureClien
+    assert RuntimeFixTimeoutCaptureClient.timeouts == [120.0, 45.0]

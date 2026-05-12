@@ -151,7 +151,8 @@ safety levels, and CLI equivalents.
 
 ### `local_codex_lite/artifact_unpack.py`
 Archive inventory and extraction: zip/tar/gz/7z/rar/nupkg/jar/war/ear/whl/rpm.
-Inventory-only mode is safe by default; extraction only into run/evidence output.
+Inventory-only mode is safe by default; extraction goes next to the source by default
+or into an explicitly provided destination, while evidence metadata stays under the run folder.
 
 ### `local_codex_lite/doctor.py`
 Checks config, workspace, git, model endpoint, and basic JSON sanity.
@@ -162,7 +163,9 @@ and optional script(s). Skills are discovered automatically by `skill_registry.p
 They are **not** called by the model — they are procedural scripts invoked by the CLI or
 `cmd_evidence_*` handlers. Do not put untrusted code in skills.
 
-Current skills: `cve-bin-tool/` — installs, updates, and runs `cve-bin-tool`
+Current skills:
+- `artifact-unpack/` — documents archive inventory and extraction workflow for evidence-first analysis.
+- `cve-bin-tool/` — installs, updates, and runs `cve-bin-tool`
 on artifact directories with automatic archive unpacking.
 
 ### Logging
@@ -201,6 +204,7 @@ python -m local_codex_lite run "task" --apply --exec
 python -m local_codex_lite logs latest
 python -m local_codex_lite evidence json-compare left.json right.json
 python -m local_codex_lite evidence artifacts inspect "D:\path\to\dir" --extract
+python -m local_codex_lite evidence artifacts inspect "D:\path\to\dir" "D:\path\to\unpacked" --extract
 python -m local_codex_lite evidence trufflehog analyze "D:\path\to\output"
 python -m local_codex_lite evidence trufflehog scan --repo-url "https://gitlab.example.com/group/project.git"
 python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --install --min-severity HIGH

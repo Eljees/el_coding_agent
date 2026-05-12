@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from .config import AgentConfig, config_as_dict, config_path, default_config, load_config, save_config
@@ -615,8 +616,10 @@ def main() -> int:
     if args.command == "logs":
         if args.logs_command == "latest":
             return cmd_logs_latest(args)
-        if args.logs_command == "diff":
-            return cmd_logs_diff(args)
+        if args.logs_command == "tail":
+            return cmd_logs_tail(args)
+        if args.logs_command == "show":
+            return cmd_logs_show(args)
     if args.command == "evidence":
         if args.evidence_command == "json-compare":
             return cmd_evidence_json_compare(args)

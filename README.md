@@ -59,7 +59,7 @@ If your local model is not reachable, `doctor` will report the failure and `run`
 ## Main commands
 
 ```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 python -m local_codex_lite init
 python -m local_codex_lite doctor
 python -m local_codex_lite doctor deps
@@ -81,7 +81,7 @@ python -m local_codex_lite logs latest
 ## PowerShell helpers
 
 ```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 .\doctor.ps1
 .\ask.ps1 "Что это за проект?"
 .\run.ps1 "Добавь короткий README" -DryRun
@@ -292,22 +292,6 @@ The helper:
 
 The agent also exposes direct evidence-first commands for TruffleHog analysis and scan reproduction.
 
-## Demo calculator
-
-The repo includes a small runnable GUI demo:
-
-```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
-python local_codex_lite\calculator.py
-```
-
-If the demo raises an exception, a small error-report window opens with:
-
-- the traceback text
-- a `Copy traceback` button for sending the error back to the agent
-- selectable text with `Ctrl+C`, `Ctrl+A`, and a right-click copy menu
-- a saved report under `.local-codex-lite\calculator_errors\`
-
 ## Config
 
 Running `init` creates:
@@ -366,7 +350,7 @@ Patch failures are logged per run, together with the retry attempt and a suggest
 ## Tests
 
 ```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 python -m pytest -q
 ```
 

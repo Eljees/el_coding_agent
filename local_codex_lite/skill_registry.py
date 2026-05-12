@@ -12,6 +12,9 @@ _BLOCKED_DIRS = {
     ".mypy_cache",
     "node_modules",
     ".local-codex-lite",
+    ".vscode",
+    "__old",
+    "generated_projects",
 }
 
 

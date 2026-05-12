@@ -5,6 +5,8 @@ __pycache__/
 .local-codex-lite/
 .tmp/
 generated_projects/
+__old/
+.vscode/
 scan_runs/
 tmp_trufflehog/
 pytest_tmp/

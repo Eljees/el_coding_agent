@@ -436,7 +436,19 @@ def _archive_extract_root(extraction_root: Path, source_root: Path, archive_path
     except ValueError:
         rel = Path(archive_path.name)
     safe_parts = [part for part in rel.parts if part not in {"", ".", ".."}]
-    return extraction_root.joinpath(*safe_parts).with_suffix("")
+    if not safe_parts:
+        safe_parts = [archive_path.name]
+    stemmed = list(safe_parts[:-1]) + [_archive_output_name(safe_parts[-1])]
+    return extraction_root.joinpath(*stemmed)
+
+
+def _archive_output_name(name: str) -> str:
+    lower = name.lower()
+    for suffix in sorted(ARCHIVE_SUFFIXES, key=len, reverse=True):
+        if lower.endswith(suffix):
+            trimmed = name[: -len(suffix)]
+            return trimmed or Path(name).stem or "archive"
+    return Path(name).stem or name
 
 
 def _safe_target(target_root: Path, member_path: str) -> Path:
