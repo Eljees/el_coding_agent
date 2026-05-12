@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import shutil
 import subprocess
 import tarfile
@@ -482,11 +483,29 @@ def _gzip_uncompressed_size(path: Path) -> int | None:
 
 
 def _find_7z() -> Path | None:
+    for candidate in _candidate_7z_paths():
+        if candidate.exists():
+            return candidate
     for name in ("7z", "7za", "7zz"):
         found = shutil.which(name)
         if found:
             return Path(found)
     return None
+
+
+def _candidate_7z_paths() -> list[Path]:
+    candidates: list[Path] = []
+    for env_name in ("LOCAL_CODEX_7Z", "SEVENZIP", "SEVEN_ZIP"):
+        value = os.environ.get(env_name, "").strip()
+        if value:
+            candidates.append(Path(value))
+    candidates.extend(
+        [
+            Path(r"C:\Program Files\7-Zip\7z.exe"),
+            Path(r"C:\Program Files (x86)\7-Zip\7z.exe"),
+        ]
+    )
+    return candidates
 
 
 def _record(

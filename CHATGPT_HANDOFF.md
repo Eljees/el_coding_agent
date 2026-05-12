@@ -19,6 +19,10 @@
 - Reworked `skills/cve-bin-tool/run_cve_scan.py` into a deterministic tool runner with `status`, `install`, `update-db`, and `scan`.
 - Added configurable CVE output formats and a dedicated `high_critical_report_<date>.md` report in the old CYBERSEC-style layout.
 - Added `evidence.cve_scan` tool metadata and direct GUI routing for CVE scan tasks.
+- Added standard Windows `7z.exe` discovery and env-based overrides in `local_codex_lite.artifact_unpack`.
+- Changed CVE scan default behavior to `--update never` so GUI/CLI scans do not stall on network DB refresh.
+- Fixed `status.json` semantics so incomplete unpack or missing raw evidence no longer reports `ok`.
+- Real GUI route was re-tested against `CYBERSEC-11195/contentreader-nls-16.9.0.14297-RedOS.rpm`; intent resolved to `evidence.cve_scan`, unpack succeeded, evidence completed.
 - Synced docs with current archive behavior and current repo path.
 - Recreated this handoff file because it was missing from the working tree.
 
@@ -29,6 +33,7 @@
 - `AGENTS.md` previously described extraction only into the evidence directory; that mismatch is now corrected.
 - The CVE runner now prefers the `cve-bin-tool` executable and uses module mode only as a fallback if it actually works.
 - `python -m local_codex_lite evidence cve-scan status` is the quickest smoke check for the tool path.
+- Historical report parity should be treated as report-shape compatibility, not exact CVE-count equality, because tool/database state can drift between scan dates.
 
 ### Files touched today
 
@@ -48,6 +53,7 @@
 - `local_codex_lite/ui.py`
 - `tests/test_planner_retry.py`
 - `tests/test_capabilities_intent.py`
+- `tests/test_artifact_unpack.py`
 - `tests/test_cve_tool.py`
 - `tests/test_registries.py`
 
@@ -58,8 +64,12 @@
 - `python -m local_codex_lite evidence artifacts inspect --help`
 - `python -m local_codex_lite evidence cve-scan --help`
 - `python -m local_codex_lite evidence cve-scan status`
+- `python -m local_codex_lite evidence cve-scan "D:\!ya_drive_sync\YandexDisk\rostel\to_analyze\__old\CYBERSEC-11195\contentreader-nls-16.9.0.14297-RedOS.rpm" --min-severity HIGH --format json,md,high-critical-md`
+- Programmatic `CommandCenterUI` GUI path with task `проверь на cve артефакт ...contentreader-nls-16.9.0.14297-RedOS.rpm`
 
 Results (2026-05-12):
 
-- `python -m pytest -q` -> `60 passed, 59 errors` with `PermissionError` during tmpdir/tempfile setup in this Codex sandbox.
+- `python -m pytest -q` -> `117 passed`.
 - `python -m local_codex_lite evidence cve-scan status` -> `installed=true`, `mode=executable`, `version=3.4`.
+- Real CLI scan on `CYBERSEC-11195` -> unpack `archives_ok=1`, `missing_tool=0`, `scan_exit_code=0`, `status.json: status=ok, evidence_complete=true`.
+- Real GUI-path scan on `CYBERSEC-11195` -> intent `evidence.cve_scan`, worker invoked `run_cve_scan.py scan`, evidence bundle refreshed successfully.

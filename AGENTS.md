@@ -30,7 +30,10 @@ Changes made during the cleanup/improvement pass (tasks #1–#19):
 - `intent.py` `_missing_inputs` refactored: no hardcoded capability IDs, driven by `required_inputs` tuples
 - `capabilities.py` extended with `evidence.cve_scan` capability (12 capabilities total)
 - `skills/cve-bin-tool/` added: `run_cve_scan.py` + `SKILL.md`
+- `artifact_unpack.py` now detects `7z.exe` from standard Windows locations and explicit env overrides
 - `cli_evidence.py` extended with `cmd_evidence_cve_scan` dispatching to the skill script
+- `skills/cve-bin-tool/run_cve_scan.py` now scans with `--update never` by default and classifies incomplete evidence as `partial`/`failed`
+- GUI CVE flow was validated against real artifact `CYBERSEC-11195/contentreader-nls-16.9.0.14297-RedOS.rpm`
 - `ui.py` Apply button fix: preview-ready detection uses plain-text check, not Rich markup
 - `llm_client.py` diff extraction fix: fence detected via `re.search` anywhere in LLM output, not just at position 0
 - Deleted from git: `scan_runs/`, `tmp_trufflehog/`, `generated_projects/`, stray data files

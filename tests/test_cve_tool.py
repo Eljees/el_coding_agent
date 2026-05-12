@@ -39,7 +39,9 @@ def test_cve_runner_normalize_format_tokens_accepts_aliases() -> None:
 
 def test_cve_runner_renders_high_critical_report(tmp_path: Path) -> None:
     runner = _load_cve_runner()
-    artifact = tmp_path / "demo.rpm"
+    case_dir = tmp_path / "CYBERSEC-11195"
+    case_dir.mkdir()
+    artifact = case_dir / "demo.rpm"
     artifact.write_bytes(b"binary payload")
     summary = {
         "severity_counts": {"CRITICAL": 1, "HIGH": 1},
@@ -71,11 +73,80 @@ def test_cve_runner_renders_high_critical_report(tmp_path: Path) -> None:
         findings=findings,
     )
 
-    assert "# demo.rpm: high/critical findings" in report
+    assert "# CYBERSEC-11195: high/critical findings" in report
+    assert "- `demo.rpm`" in report
     assert "SHA256:" in report
     assert "CVE-2025-0001" in report
     assert "CVE-2024-0002" in report
     assert "`cve-bin-tool`: `CRITICAL=1`, `HIGH=1`" in report
+
+
+def test_cve_runner_infers_case_id_from_path(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    artifact = tmp_path / "CYBERSEC-54321" / "nested" / "demo.rpm"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"binary payload")
+
+    assert runner.infer_case_id(artifact) == "CYBERSEC-54321"
+
+
+def test_cve_runner_classifies_partial_when_unpack_incomplete(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    raw = tmp_path / "cve_raw.json"
+    raw.write_text("[]", encoding="utf-8")
+
+    status, error_code, evidence_complete = runner.classify_status(
+        unpack_summary={"archives_failed": 1, "archives_blocked": 0, "missing_tool": 0},
+        scan_summary={"scan_exit_code": 1},
+        raw_json_path=str(raw),
+    )
+
+    assert status == "partial"
+    assert error_code == "artifact_unpack_incomplete"
+    assert evidence_complete is False
+
+
+def test_cve_runner_classifies_failed_without_raw_json(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+
+    status, error_code, evidence_complete = runner.classify_status(
+        unpack_summary={"archives_failed": 0, "archives_blocked": 0, "missing_tool": 0},
+        scan_summary={"scan_exit_code": 0},
+        raw_json_path=str(tmp_path / "missing.json"),
+    )
+
+    assert status == "failed"
+    assert error_code == "scan_no_raw_json"
+    assert evidence_complete is False
+
+
+def test_cve_runner_scan_argv_defaults_to_update_never(tmp_path: Path, monkeypatch) -> None:
+    runner = _load_cve_runner()
+    captured: list[list[str]] = []
+    raw = tmp_path / "cve_raw.json"
+    raw.write_text("[]", encoding="utf-8")
+
+    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0):  # noqa: ANN001
+        captured.append(argv)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    findings, summary, raw_path = runner.run_scan(
+        runner.ToolCommand(argv=["cve-bin-tool"], mode="executable", display="cve-bin-tool"),
+        tmp_path,
+        tmp_path,
+        severity="HIGH",
+        offline=False,
+    )
+
+    assert findings == []
+    assert summary["scan_exit_code"] == 0
+    assert raw_path.endswith("cve_raw.json")
+    assert captured
+    assert "--update" in captured[0]
+    update_index = captured[0].index("--update")
+    assert captured[0][update_index + 1] == "never"
 
 
 def test_cli_parser_accepts_cve_status_action() -> None:
