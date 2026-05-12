@@ -21,6 +21,19 @@ from .trufflehog import analyze_output_root, compare_trufflehog_outputs, scan_re
 from .cli_utils import console, load_urls, workspace_root
 
 
+def resolve_cve_skill_script(root: Path | None = None) -> Path:
+    candidates: list[Path] = []
+    package_root = Path(__file__).resolve().parents[1]
+    candidates.append(package_root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    if root is not None:
+        candidates.append(root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    candidates.append(workspace_root() / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def cmd_evidence_json_compare(args: argparse.Namespace) -> int:
     comparison = compare_json_files(Path(args.left), Path(args.right))
     payload = {
@@ -161,11 +174,7 @@ def cmd_evidence_trufflehog_compare(args: argparse.Namespace) -> int:
 
 def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
     """Run cve-bin-tool CVE scan on an artifact directory via the skill script."""
-    skill_script = Path(__file__).resolve().parent.parent.parent / "skills" / "cve-bin-tool" / "run_cve_scan.py"
-    if not skill_script.exists():
-        # Fallback: locate relative to workspace root
-        root = workspace_root()
-        skill_script = root / "skills" / "cve-bin-tool" / "run_cve_scan.py"
+    skill_script = resolve_cve_skill_script()
     if not skill_script.exists():
         console.print(f"[red]Skill script not found:[/red] {skill_script}")
         console.print("Expected: skills/cve-bin-tool/run_cve_scan.py")

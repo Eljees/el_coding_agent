@@ -141,6 +141,7 @@ python -m local_codex_lite evidence artifacts inspect "D:\path\to\artifacts" --e
 python -m local_codex_lite evidence cve-scan status
 python -m local_codex_lite evidence cve-scan update-db
 python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --format json,md,high-critical-md --min-severity HIGH
+python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --format json,md --min-severity MEDIUM
 python -m local_codex_lite evidence trufflehog analyze "D:\!ya_drive_sync\YandexDisk\rostel\to__issledovat\TruffelHog"
 python -m local_codex_lite evidence trufflehog scan --repo-url "https://gitlab.example.com/group/project.git"
 python -m local_codex_lite logs latest
@@ -262,6 +263,8 @@ The high/critical report is shaped for quick triage and mirrors the older CYBERS
 - summary section
 - table of HIGH / CRITICAL findings
 - notes section
+
+Default CVE triage uses `--min-severity HIGH`. Use `--min-severity MEDIUM` only when the task explicitly asks for a broader report. `json` and `json2` exports have different internal shapes, so compare them with care.
 
 ## Container error classification
 

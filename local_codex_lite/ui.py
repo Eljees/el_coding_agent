@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 try:
@@ -33,6 +34,29 @@ def should_create_project_workspace(task: str, decision: IntentDecision | None =
     return should_use_project_workspace(task)
 
 
+_CVE_MEDIUM_HINTS = (
+    "medium",
+    "med",
+    "полный",
+    "расширенный",
+    "включая medium",
+    "начиная с medium",
+)
+
+
+def cve_min_severity_for_task(task: str) -> str:
+    lowered = task.lower()
+    if any(marker in lowered for marker in _CVE_MEDIUM_HINTS):
+        return "MEDIUM"
+    return "HIGH"
+
+
+def format_duration(seconds: float) -> str:
+    total = max(0, int(seconds))
+    minutes, remainder = divmod(total, 60)
+    return f"{minutes:02d}:{remainder:02d}"
+
+
 @contextlib.contextmanager
 def temporary_cwd(path: Path):
     previous = Path.cwd()
@@ -57,6 +81,9 @@ class CommandCenterUI:
         self._base_workspace_root = Path.cwd().resolve()
         self._active_workspace_root = self._base_workspace_root
         self._active_workspace_task = ""
+        self._busy_label = ""
+        self._busy_started_at = 0.0
+        self._busy_lines: list[str] = []
         self._build()
 
     def _build(self) -> None:
@@ -195,6 +222,13 @@ class CommandCenterUI:
         self._command_output_cache = content
         self._set_text(self.command_text, content)
 
+    def _append_command_output(self, content: str) -> None:
+        combined = self._command_output_cache
+        if combined:
+            combined += "\n"
+        combined += content
+        self._write_command_output(combined)
+
     def _write_intent(self, decision: IntentDecision) -> None:
         self._last_decision = decision
         self.can_do_var.set(f"can do: {decision.can_do}")
@@ -332,8 +366,13 @@ class CommandCenterUI:
             decision = self._last_decision or recognize_intent(task, self.capabilities)
             self._prepare_workspace(task, decision, create=True)
         self._busy = True
+        self._busy_label = label
+        self._busy_started_at = time.time()
+        self._busy_lines = []
         self._update_action_buttons()
-        self._write_command_output(f"Running {label}...\nWorkspace: {self._active_workspace_root}")
+        initial = self._initial_progress_message(label, task)
+        self._write_command_output(initial)
+        self._schedule_busy_heartbeat()
 
         def runner() -> None:
             try:
@@ -346,6 +385,9 @@ class CommandCenterUI:
 
     def _finish_background(self, output: str) -> None:
         self._busy = False
+        if output:
+            output = output.strip()
+            output = output + f"\n\ncompleted in {format_duration(time.time() - self._busy_started_at)}"
         self._write_command_output(output)
         lower = output.lower()
         # Rich strips markup when writing to a StringIO buffer, so check plain text.
@@ -355,6 +397,34 @@ class CommandCenterUI:
             or "run completed" in lower
         )
         self._update_action_buttons()
+
+    def _schedule_busy_heartbeat(self) -> None:
+        if not self._busy:
+            return
+        elapsed = format_duration(time.time() - self._busy_started_at)
+        heartbeat = f"still running: {elapsed}"
+        if not self._busy_lines or self._busy_lines[-1] != heartbeat:
+            self._busy_lines.append(heartbeat)
+            self._append_command_output(heartbeat)
+        self.root.after(3000, self._schedule_busy_heartbeat)
+
+    def _initial_progress_message(self, label: str, task: str) -> str:
+        lines = [f"Running {label}...", f"Workspace: {self._active_workspace_root}"]
+        if label == "cve scan":
+            input_root = extract_artifact_input_path(task)
+            extract_to = extract_artifact_output_path(task)
+            severity = cve_min_severity_for_task(task)
+            lines.extend(
+                [
+                    "CVE scan started.",
+                    f"input={input_root or '-'}",
+                    f"min_severity={severity}",
+                    f"extract_to={extract_to or 'default beside artifact'}",
+                    "unpacking artifacts if needed...",
+                    "cve-bin-tool will run next; this can take several minutes.",
+                ]
+            )
+        return "\n".join(lines)
 
     def _preview_worker(self, task: str) -> str:
         from . import cli as cli_module
@@ -412,6 +482,7 @@ class CommandCenterUI:
         if not input_root:
             return "CVE scan input path not found in task."
         extract_to = extract_artifact_output_path(task)
+        severity = cve_min_severity_for_task(task)
         buffer = io.StringIO()
         args = argparse.Namespace(
             action_or_input=input_root,
@@ -422,7 +493,7 @@ class CommandCenterUI:
             update_db=False,
             skip_unpack=False,
             offline=False,
-            min_severity="HIGH",
+            min_severity=severity,
             format="json,md,high-critical-md",
         )
         with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):

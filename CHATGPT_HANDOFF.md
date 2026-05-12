@@ -32,6 +32,9 @@
 - Added nested archive expansion for the CVE tool path (`rpm -> cpio -> file tree`) and allowed safe 7-Zip skip behavior for dangerous link members during extraction.
 - Added fallback capture for `cve-bin-tool` Windows JSON output when the tool ignores `--output-file` and drops `output.cve-bin-tool.*.json` into the current working directory.
 - Reproduced a non-zero `cve-bin-tool` result on `CYBERSEC-11195` through the agent path: unpack `archives_ok=2`, `files_extracted=394`, `total_findings=7`, `CRITICAL=2`, `HIGH=5`.
+- Synced the CVE defaults so CLI, tool registry, and GUI now treat `HIGH` as the standard triage threshold, with `MEDIUM` only when the task explicitly asks for a broader report.
+- Extended the CVE runner to parse both plain JSON findings and `json2` `vulnerabilities.report[].entries[]` payloads.
+- Added GUI CVE progress messaging and heartbeat updates so long scans show visible activity instead of looking stuck.
 - Synced docs with current archive behavior and current repo path.
 - Recreated this handoff file because it was missing from the working tree.
 
@@ -43,6 +46,7 @@
 - The CVE runner now prefers the `cve-bin-tool` executable and uses module mode only as a fallback if it actually works.
 - `python -m local_codex_lite evidence cve-scan status` is the quickest smoke check for the tool path.
 - Historical report parity should be treated as report-shape compatibility, not exact CVE-count equality, because tool/database state can drift between scan dates.
+- `cve-bin-tool` `json` and `json2` exports are both supported, but they do not share the same internal structure.
 
 ### Files touched today
 
@@ -72,6 +76,10 @@
 - `local_codex_lite/artifact_unpack.py`
 - `skills/cve-bin-tool/run_cve_scan.py`
 - `tests/test_cve_tool.py`
+- `local_codex_lite/cli_evidence.py`
+- `local_codex_lite/tool_registry.py`
+- `local_codex_lite/ui.py`
+- `tests/test_ui_cve.py`
 
 ### Verification
 

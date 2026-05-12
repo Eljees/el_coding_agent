@@ -577,7 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cve.add_argument("--update-db", dest="update_db", action="store_true", help="Update CVE database before scan")
     p_cve.add_argument("--skip-unpack", dest="skip_unpack", action="store_true", help="Skip archive extraction")
     p_cve.add_argument("--offline", action="store_true", help="Run cve-bin-tool in offline mode")
-    p_cve.add_argument("--min-severity", dest="min_severity", default="LOW",
+    p_cve.add_argument("--min-severity", dest="min_severity", default="HIGH",
                        choices=["LOW", "MEDIUM", "HIGH", "CRITICAL"])
     p_cve.add_argument("--format", default="json,md,high-critical-md")
 

@@ -16,6 +16,7 @@ def test_default_tools_include_guarded_shell_runner() -> None:
     assert tools["shell.run"].safety_level == "guarded"
     assert tools["evidence.artifacts.inspect"].requires_exec is False
     assert tools["evidence.cve_scan"].requires_exec is False
+    assert tools["evidence.cve_scan"].schema["properties"]["min_severity"]["default"] == "HIGH"
 
 
 def test_discover_skills_reads_local_skill_md(tmp_path: Path) -> None:

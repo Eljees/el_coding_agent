@@ -98,7 +98,7 @@ def default_tools() -> list[ToolDefinition]:
                     "min_severity": {
                         "type": "string",
                         "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
-                        "default": "LOW",
+                        "default": "HIGH",
                     },
                     "format": {"type": "string", "default": "json,md,high-critical-md"},
                 },

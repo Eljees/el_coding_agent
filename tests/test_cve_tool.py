@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 import time
@@ -271,6 +272,43 @@ def test_cve_runner_find_fallback_output_json_prefers_recent_file(tmp_path: Path
     assert found == new_file
 
 
+def test_cve_runner_load_findings_supports_json2_structure(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    raw = tmp_path / "cve_export.json2"
+    raw.write_text(
+        json.dumps(
+            {
+                "vulnerabilities": {
+                    "report": [
+                        {
+                            "datasource": "NVD",
+                            "entries": [
+                                {
+                                    "cve_number": "CVE-2024-0001",
+                                    "severity": "HIGH",
+                                    "score": "7.5",
+                                    "vendor": "gnu",
+                                    "product": "gcc",
+                                    "version": "8.5.0",
+                                    "source": "NVD",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    findings = runner.load_findings(raw)
+
+    assert len(findings) == 1
+    assert findings[0]["cve"] == "CVE-2024-0001"
+    assert findings[0]["severity"] == "HIGH"
+    assert findings[0]["product"] == "gcc"
+
+
 def test_cli_parser_accepts_cve_status_action() -> None:
     parser = cli.build_parser()
 
@@ -290,6 +328,14 @@ def test_cli_parser_accepts_legacy_cve_scan_path() -> None:
     assert args.action_or_input == r"D:\artifacts"
     assert args.input_root is None
     assert args.format == "json,md"
+
+
+def test_cli_parser_defaults_cve_min_severity_to_high() -> None:
+    parser = cli.build_parser()
+
+    args = parser.parse_args(["evidence", "cve-scan", r"D:\artifacts"])
+
+    assert args.min_severity == "HIGH"
 
 
 def test_cmd_evidence_cve_scan_builds_status_command(monkeypatch) -> None:

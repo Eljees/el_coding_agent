@@ -171,6 +171,8 @@ Current skills:
 - `artifact-unpack/` — documents archive inventory and extraction workflow for evidence-first analysis.
 - `cve-bin-tool/` — installs, updates, and runs `cve-bin-tool`
 on artifact directories with automatic archive unpacking and high/critical report generation.
+Default CVE triage uses `--min-severity HIGH`; lower the threshold only when the task explicitly asks for a broader report.
+`cve-bin-tool` `json` and `json2` outputs use different internal shapes and must not be parsed as if they were the same payload.
 
 ### Logging
 Each run writes under `.local-codex-lite/runs/<timestamp>/`:
@@ -269,6 +271,9 @@ generated-app runtime test -> user scenario -> runtime-fix loop with traceback.
 Each run should record: selected files and why, workspace chosen and why, plan, patch,
 validation errors, apply strategy, repair attempts, command suggestions and outputs,
 evidence bundle status.
+
+**GUI progress should stay visible.**
+Long-running evidence workflows such as CVE scans must show visible progress or heartbeat updates in the GUI so the operator can tell the agent is still working.
 
 **Red flags -- stop and redesign.**
 - "It worked because the file already existed."
