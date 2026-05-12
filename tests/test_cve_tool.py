@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -179,6 +181,94 @@ def test_cve_runner_update_db_uses_streaming_command(monkeypatch) -> None:
     assert "now" in captured[0]
     assert captured[0][-1] == r"C:\temp\cve-update"
     assert captured[0][captured[0].index("--output-file") + 1] == r"C:\temp\cve-update\update-db.json"
+
+
+def test_cve_runner_merge_unpack_summaries_accumulates_counts() -> None:
+    runner = _load_cve_runner()
+
+    merged = runner._merge_unpack_summaries(
+        {"archives_total": 1, "files_extracted": 1, "extraction_root": r"D:\out"},
+        {"archives_total": 2, "files_extracted": 5, "missing_tool": 1, "extraction_root": r"D:\other"},
+    )
+
+    assert merged["archives_total"] == 3
+    assert merged["files_extracted"] == 6
+    assert merged["missing_tool"] == 1
+    assert merged["extraction_root"] == r"D:\out"
+
+
+def test_cve_runner_expand_nested_archives_processes_new_archives_only(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    outer = tmp_path / "outer.cpio"
+    inner = tmp_path / "nested" / "inner.cpio"
+    inner.parent.mkdir()
+    outer.write_text("outer", encoding="utf-8")
+    inner.write_text("inner", encoding="utf-8")
+    calls: list[Path] = []
+
+    def fake_archive_format(path: Path) -> str:
+        return "cpio" if path.suffix == ".cpio" else "unsupported"
+
+    class FakeResult:
+        def __init__(self, count: int) -> None:
+            self.summary = {"archives_total": 1, "files_extracted": count}
+
+    def fake_inspect_artifacts(path: Path, output_root: Path, **kwargs):  # noqa: ANN001
+        calls.append(path)
+        return FakeResult(1)
+
+    summary = runner._expand_nested_archives(tmp_path, fake_archive_format, fake_inspect_artifacts)
+
+    assert summary["archives_total"] == 2
+    assert len(calls) == 2
+    assert {item.name for item in calls} == {"outer.cpio", "inner.cpio"}
+
+
+def test_cve_runner_unpack_archives_passes_extract_target(monkeypatch, tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    source = tmp_path / "demo.rpm"
+    source.write_text("rpm", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    class FakeResult:
+        summary = {"archives_total": 1, "files_extracted": 1}
+        extraction_root = str(tmp_path / "out")
+
+    def fake_inspect_artifacts(source_root, output_root, **kwargs):  # noqa: ANN001
+        captured["source_root"] = source_root
+        captured["output_root"] = output_root
+        captured["kwargs"] = kwargs
+        return FakeResult()
+
+    monkeypatch.setitem(sys.modules, "local_codex_lite.artifact_unpack", SimpleNamespace(
+        archive_format=lambda path: "unsupported",
+        inspect_artifacts=fake_inspect_artifacts,
+    ))
+    monkeypatch.setattr(runner, "_expand_nested_archives", lambda *args, **kwargs: {})
+
+    summary = runner.unpack_archives(source, tmp_path / "out")
+
+    assert summary["archives_total"] == 1
+    assert captured["source_root"] == source
+    assert captured["output_root"] == tmp_path / "out"
+    assert captured["kwargs"]["extract_to"] == tmp_path / "out"
+
+
+def test_cve_runner_find_fallback_output_json_prefers_recent_file(tmp_path: Path) -> None:
+    runner = _load_cve_runner()
+    old_file = tmp_path / "output.cve-bin-tool.2026-05-12.22-00-00.json"
+    new_file = tmp_path / "output.cve-bin-tool.2026-05-12.22-10-00.json"
+    old_file.write_text("[]", encoding="utf-8")
+    new_file.write_text("[]", encoding="utf-8")
+
+    old_time = time.time() - 100
+    new_time = time.time()
+    os.utime(old_file, (old_time, old_time))
+    os.utime(new_file, (new_time, new_time))
+
+    found = runner.find_fallback_output_json(tmp_path, started_after=new_time - 1)
+
+    assert found == new_file
 
 
 def test_cli_parser_accepts_cve_status_action() -> None:

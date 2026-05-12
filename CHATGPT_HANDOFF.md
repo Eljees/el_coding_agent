@@ -28,6 +28,10 @@
 - Added `local_codex_lite.targeting` so repair can extract an intended file target such as `calculator.py` from the task itself.
 - Hardened patch repair against target drift: if a failed diff touches `cli.py`/`patcher.py` while the task explicitly targets another file, repair now recenters on the intended target instead of trusting the bad diff.
 - Strengthened workspace ranking so an explicit filename in the task outranks generic `tests` boosts during context selection.
+- Fixed the CVE RPM workflow so scan extraction goes into the actual `scan_dir` instead of the artifact parent directory.
+- Added nested archive expansion for the CVE tool path (`rpm -> cpio -> file tree`) and allowed safe 7-Zip skip behavior for dangerous link members during extraction.
+- Added fallback capture for `cve-bin-tool` Windows JSON output when the tool ignores `--output-file` and drops `output.cve-bin-tool.*.json` into the current working directory.
+- Reproduced a non-zero `cve-bin-tool` result on `CYBERSEC-11195` through the agent path: unpack `archives_ok=2`, `files_extracted=394`, `total_findings=7`, `CRITICAL=2`, `HIGH=5`.
 - Synced docs with current archive behavior and current repo path.
 - Recreated this handoff file because it was missing from the working tree.
 
@@ -65,6 +69,9 @@
 - `tests/test_workspace_ranking.py`
 - `tests/test_prompts.py`
 - `tests/test_planner_retry.py`
+- `local_codex_lite/artifact_unpack.py`
+- `skills/cve-bin-tool/run_cve_scan.py`
+- `tests/test_cve_tool.py`
 
 ### Verification
 
@@ -77,6 +84,8 @@
 - Programmatic `CommandCenterUI` GUI path with task `проверь на cve артефакт ...contentreader-nls-16.9.0.14297-RedOS.rpm`
 - `.\.venv\Scripts\python.exe -m local_codex_lite evidence cve-scan update-db`
 - `python -m pytest tests\test_targeting.py tests\test_workspace_ranking.py tests\test_prompts.py tests\test_planner_retry.py -q`
+- `python -m local_codex_lite evidence cve-scan "D:\!ya_drive_sync\YandexDisk\rostel\to_analyze\__old\CYBERSEC-11195\contentreader-nls-16.9.0.14297-RedOS.rpm" --min-severity HIGH --format json,md,high-critical-md`
+- `python -m pytest tests\test_cve_tool.py -q`
 
 Results (2026-05-12):
 
@@ -86,3 +95,5 @@ Results (2026-05-12):
 - Real GUI-path scan on `CYBERSEC-11195` -> intent `evidence.cve_scan`, worker invoked `run_cve_scan.py scan`, evidence bundle refreshed successfully.
 - Real `.\.venv\Scripts\python.exe -m local_codex_lite evidence cve-scan update-db` -> live progress visible; final `status=ok`, `returncode=0`.
 - Targeted self-repair tests for `calculator.py` / target drift / ranking / prompt shape -> `21 passed`.
+- Agent-path CVE scan on `CYBERSEC-11195` now reproduces a non-zero result with evidence files updated in `cve_evidence\`: `status=ok`, `reported_findings=7`, `high_critical=7`.
+- Full test suite after the CVE unpack fixes -> `127 passed`.

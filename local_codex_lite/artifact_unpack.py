@@ -25,6 +25,7 @@ ARCHIVE_SUFFIXES = (
     ".gz",
     ".7z",
     ".rar",
+    ".cpio",
     # ZIP-based package formats
     ".nupkg",
     ".jar",
@@ -193,7 +194,7 @@ def archive_format(path: Path) -> str:
 # Formats that are ZIP-based and handled by Python's zipfile module
 _ZIP_LIKE_FORMATS = {"zip", "nupkg", "jar", "war", "ear", "whl"}
 # Formats that require an external tool (7z)
-_EXTERNAL_FORMATS = {"7z", "rar", "rpm"}
+_EXTERNAL_FORMATS = {"7z", "rar", "rpm", "cpio"}
 
 
 def _inspect_one(
@@ -345,7 +346,8 @@ def _inspect_external(
         )
     members = _list_7z_members(executable, archive_path)
     issue = _first_member_issue(members)
-    if issue:
+    allow_7z_safe_skip = extract and fmt in {"rpm", "cpio"}
+    if issue and not allow_7z_safe_skip:
         return _record(archive_path, source_root, fmt, executable.name, "blocked", members, [], "unsafe_member_path", issue), 0, 0
     total_size = sum(item.size or 0 for item in members if not item.is_dir)
     file_count = sum(1 for item in members if not item.is_dir)
@@ -363,7 +365,21 @@ def _inspect_external(
             timeout=1200,
         )
         if result.returncode != 0:
-            return _record(archive_path, source_root, fmt, executable.name, "failed", members, [], "extract_failed", _compact_text(result.stderr or result.stdout)), 0, 0
+            extracted = _relative_extracted_files(extraction_root, source_root, archive_path)
+            warning_text = _compact_text(result.stderr or result.stdout)
+            if extracted and "dangerous link path was ignored" in (result.stderr or result.stdout).lower():
+                return _record(
+                    archive_path,
+                    source_root,
+                    fmt,
+                    executable.name,
+                    "ok",
+                    members,
+                    extracted,
+                    "extract_warnings",
+                    warning_text,
+                ), len(extracted), total_size
+            return _record(archive_path, source_root, fmt, executable.name, "failed", members, [], "extract_failed", warning_text), 0, 0
     extracted = _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
     return _record(archive_path, source_root, fmt, executable.name, "ok", members, extracted), file_count if extract else 0, total_size if extract else 0
 
