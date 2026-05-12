@@ -100,6 +100,7 @@ python -m local_codex_lite ui
 `recognize` classifies the request without executing anything.
 
 `ui` opens a tkinter window for task entry, intent analysis, preview, and log inspection. It is not a separate agent and it still respects the same `run` / `preview` / `--apply` / `--exec` safety model.
+Available skills in the GUI are now labeled from `SKILL.md` frontmatter when `name` / `description` metadata is present.
 
 The window also includes an `Evidence / traceback` box. You can paste a Python traceback or log there, then run `Preview` or `Apply` so the agent repairs against the pasted evidence instead of guessing.
 

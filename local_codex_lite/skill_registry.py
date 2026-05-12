@@ -3,19 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_BLOCKED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    "node_modules",
-    ".local-codex-lite",
-    ".vscode",
-    "__old",
-    "generated_projects",
-}
+from .path_filters import path_has_blocked_dir
 
 
 @dataclass(frozen=True)
@@ -30,7 +18,7 @@ def discover_skills(root: Path) -> list[SkillDefinition]:
     skills: list[SkillDefinition] = []
     for path in sorted(root.rglob("SKILL.md")):
         rel_parts = path.relative_to(root).parts
-        if any(part in _BLOCKED_DIRS for part in rel_parts[:-1]):
+        if path_has_blocked_dir(rel_parts[:-1]):
             continue
         skills.append(_read_skill(path))
     return skills
@@ -44,9 +32,31 @@ def skill_brief_lines(skills: list[SkillDefinition]) -> list[str]:
 
 def _read_skill(path: Path) -> SkillDefinition:
     text = path.read_text(encoding="utf-8", errors="replace")
-    name = _first_heading(text) or path.parent.name
-    summary = _first_body_line(text) or "Local skill instructions"
+    metadata, body = _split_frontmatter(text)
+    name = str(metadata.get("name") or _first_heading(body) or path.parent.name).strip()
+    summary = str(metadata.get("description") or _first_body_line(body) or "Local skill instructions").strip()
     return SkillDefinition(name=name, path=path, summary=summary)
+
+
+def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+    metadata: dict[str, str] = {}
+    end_index = None
+    for index in range(1, len(lines)):
+        line = lines[index].strip()
+        if line == "---":
+            end_index = index
+            break
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        metadata[key.strip()] = value.strip().strip("\"'")
+    if end_index is None:
+        return {}, text
+    body = "\n".join(lines[end_index + 1 :]).lstrip()
+    return metadata, body
 
 
 def _first_heading(text: str) -> str:

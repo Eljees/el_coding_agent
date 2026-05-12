@@ -5,7 +5,7 @@
 ### Current state
 
 - Branch: `test/artifact-unpack`
-- Test status: `python -m pytest -q` fails in this Codex sandbox with `PermissionError` (tmpdir/tempfile writes), but shows `60 passed, 59 errors` before aborting (2026-05-12).
+- Test status: `python -m pytest -q` passes cleanly in this environment: `133 passed` (2026-05-12).
 - Main repo path examples in docs now point to `D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent`
 
 ### Completed today
@@ -35,6 +35,9 @@
 - Synced the CVE defaults so CLI, tool registry, and GUI now treat `HIGH` as the standard triage threshold, with `MEDIUM` only when the task explicitly asks for a broader report.
 - Extended the CVE runner to parse both plain JSON findings and `json2` `vulnerabilities.report[].entries[]` payloads.
 - Added GUI CVE progress messaging and heartbeat updates so long scans show visible activity instead of looking stuck.
+- Centralized runtime/cache blocked directories into `local_codex_lite.path_filters` so workspace, RAG, and skill discovery stop drifting apart.
+- Taught `skill_registry.py` to read `name` and `description` from `SKILL.md` frontmatter so GUI skill summaries stay informative.
+- Expanded the CVE skill resolver to check repo-root, workspace-root, and package-resource style locations before failing.
 - Synced docs with current archive behavior and current repo path.
 - Recreated this handoff file because it was missing from the working tree.
 
@@ -47,6 +50,7 @@
 - `python -m local_codex_lite evidence cve-scan status` is the quickest smoke check for the tool path.
 - Historical report parity should be treated as report-shape compatibility, not exact CVE-count equality, because tool/database state can drift between scan dates.
 - `cve-bin-tool` `json` and `json2` exports are both supported, but they do not share the same internal structure.
+- GUI Available skills should prefer frontmatter metadata over accidentally showing `---` as the summary line.
 
 ### Files touched today
 

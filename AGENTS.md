@@ -164,6 +164,7 @@ Checks config, workspace, git, model endpoint, and basic JSON sanity.
 ### `skills/`
 Each skill is a self-contained subdirectory with `SKILL.md` (instructions + trigger phrases)
 and optional script(s). Skills are discovered automatically by `skill_registry.py`.
+When a skill uses frontmatter, `name` and `description` are the preferred metadata shown in the GUI skill list.
 They are **not** called by the model — they are procedural scripts invoked by the CLI or
 `cmd_evidence_*` handlers. Do not put untrusted code in skills.
 

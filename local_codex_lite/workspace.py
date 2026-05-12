@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .config import WorkspaceConfig
+from .path_filters import path_has_blocked_dir
 from .safety import can_read_path, is_inside_workspace
 from .targeting import detect_task_target
 
@@ -21,20 +22,6 @@ class RankedWorkspaceFile:
     score: int
     reasons: tuple[str, ...]
 
-
-_BLOCKED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    "node_modules",
-    ".local-codex-lite",
-    ".vscode",
-    "__old",
-    "generated_projects",
-}
 
 _IMPORTANT_BASENAMES = {
     "pyproject.toml",
@@ -70,7 +57,7 @@ def build_tree(root: Path, config: WorkspaceConfig) -> list[str]:
             continue
         rel = path.relative_to(root).as_posix()
         rel_path = Path(rel)
-        if any(part in _BLOCKED_DIRS for part in rel_path.parts[:-1]):
+        if path_has_blocked_dir(rel_path.parts[:-1]):
             continue
         if any(_path_matches(rel_path, pattern) for pattern in config.exclude_globs):
             continue

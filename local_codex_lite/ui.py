@@ -420,7 +420,10 @@ class CommandCenterUI:
                     f"input={input_root or '-'}",
                     f"min_severity={severity}",
                     f"extract_to={extract_to or 'default beside artifact'}",
-                    "unpacking artifacts if needed...",
+                    "stage=resolve input",
+                    "stage=unpack artifacts if needed",
+                    "stage=run cve-bin-tool",
+                    "stage=write evidence and reports",
                     "cve-bin-tool will run next; this can take several minutes.",
                 ]
             )

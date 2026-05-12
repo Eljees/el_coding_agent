@@ -9,21 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import AgentConfig
+from .path_filters import BLOCKED_RUNTIME_DIRS, path_has_blocked_dir
 from .safety import is_inside_workspace, is_sensitive_path
-
-_BLOCKED_DIRS = {
-    ".git",
-    ".venv",
-    "venv",
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    "node_modules",
-    ".local-codex-lite",
-    ".vscode",
-    "__old",
-    "generated_projects",
-}
 
 
 @dataclass(frozen=True)
@@ -98,13 +85,13 @@ def build_chunks(root: Path, cfg: AgentConfig) -> list[Chunk]:
     blocked_rel = store_dir.relative_to(root)
     for dirpath, dirnames, filenames in os.walk(root):
         dir_path = Path(dirpath)
-        dirnames[:] = [name for name in dirnames if name not in _BLOCKED_DIRS]
+        dirnames[:] = [name for name in dirnames if name not in BLOCKED_RUNTIME_DIRS]
         for filename in sorted(filenames):
             path = dir_path / filename
             rel_path = path.relative_to(root)
             if _is_blocked_rel_path(rel_path, blocked_rel):
                 continue
-            if any(part in _BLOCKED_DIRS for part in rel_path.parts[:-1]):
+            if path_has_blocked_dir(rel_path.parts[:-1]):
                 continue
             if not _matches_any(rel_path, cfg.rag.include_globs):
                 continue

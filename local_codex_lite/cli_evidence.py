@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.resources
 import json
 import subprocess
 import sys
@@ -25,9 +26,15 @@ def resolve_cve_skill_script(root: Path | None = None) -> Path:
     candidates: list[Path] = []
     package_root = Path(__file__).resolve().parents[1]
     candidates.append(package_root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    candidates.append(Path(__file__).resolve().parent / "skills" / "cve-bin-tool" / "run_cve_scan.py")
     if root is not None:
         candidates.append(root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
     candidates.append(workspace_root() / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    try:
+        packaged = importlib.resources.files("local_codex_lite").joinpath("skills", "cve-bin-tool", "run_cve_scan.py")
+        candidates.append(Path(str(packaged)))
+    except Exception:
+        pass
     for candidate in candidates:
         if candidate.exists():
             return candidate

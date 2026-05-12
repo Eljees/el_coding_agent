@@ -31,3 +31,19 @@ def test_discover_skills_reads_local_skill_md(tmp_path: Path) -> None:
     assert skills[0].name == "Demo Skill"
     assert skills[0].path == skill_path
     assert skill_brief_lines(skills) == ["Demo Skill - Use for demo tasks."]
+
+
+def test_discover_skills_prefers_frontmatter_name_and_description(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "demo"
+    skill_dir.mkdir(parents=True)
+    skill_path = skill_dir / "SKILL.md"
+    skill_path.write_text(
+        "---\nname: demo-frontmatter\ndescription: Use for frontmatter-aware tasks.\n---\n\n# Ignored Heading\n\nBody.\n",
+        encoding="utf-8",
+    )
+
+    skills = discover_skills(tmp_path)
+
+    assert len(skills) == 1
+    assert skills[0].name == "demo-frontmatter"
+    assert skills[0].summary == "Use for frontmatter-aware tasks."

@@ -19,6 +19,22 @@ def test_format_duration_renders_mm_ss() -> None:
     assert ui.format_duration(125) == "02:05"
 
 
+def test_initial_progress_message_lists_cve_stages() -> None:
+    app = ui.CommandCenterUI.__new__(ui.CommandCenterUI)
+    app._active_workspace_root = Path(r"D:\workspace")
+
+    message = ui.CommandCenterUI._initial_progress_message(
+        app,
+        "cve scan",
+        r"проверь на cve артефакт D:\artifacts\demo.rpm",
+    )
+
+    assert "stage=resolve input" in message
+    assert "stage=unpack artifacts if needed" in message
+    assert "stage=run cve-bin-tool" in message
+    assert "min_severity=HIGH" in message
+
+
 def test_resolve_cve_skill_script_prefers_repo_root() -> None:
     root = Path(__file__).resolve().parents[1]
 
