@@ -215,6 +215,16 @@ def patch_repair_prompt_for_issue(
             "Use git-root-relative file paths.\n"
             "If the workspace is nested under a repository root, preserve the workspace folder prefix in paths."
         ),
+        "target_drift": (
+            "You repair unified diffs that drifted away from the intended target file.\n"
+            "Return only a valid unified diff.\n"
+            "The intended target file in the workspace context is authoritative.\n"
+            "Ignore unrelated paths from the previous patch.\n"
+            "If the intended target file does not exist yet, create only that file from /dev/null.\n"
+            "Do not include markdown fences, explanations, or commentary.\n"
+            "Use git-root-relative file paths.\n"
+            "If the workspace is nested under a repository root, preserve the workspace folder prefix in paths."
+        ),
         "path_mismatch": (
             "You repair unified diffs that target the wrong paths.\n"
             "Return only a valid unified diff.\n"

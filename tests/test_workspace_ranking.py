@@ -34,6 +34,19 @@ def test_rank_workspace_files_prefers_tests_for_validation_task(tmp_path: Path) 
     assert any("tests" in reason.lower() for reason in ranked[0].reasons)
 
 
+def test_rank_workspace_files_keeps_explicit_target_above_tests(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "calculator.py").write_text("def add(a, b): return a + b\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_calculator.py").write_text("assert True", encoding="utf-8")
+    config = WorkspaceConfig(root=tmp_path)
+
+    ranked = rank_workspace_files(tmp_path, "add tests for calculator.py and fix calculator.py", config)
+
+    assert ranked[0].path.relative_to(tmp_path).as_posix() == "src/calculator.py"
+    assert any("target" in reason.lower() for reason in ranked[0].reasons)
+
+
 def test_rank_workspace_files_excludes_noise(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "app.py").write_text("print('app')", encoding="utf-8")

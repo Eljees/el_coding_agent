@@ -269,3 +269,58 @@ def test_make_patch_runtime_fix_uses_shorter_timeout_for_repair_attempts(tmp_pat
 
     assert "+print('fixed')" in patch
     assert RuntimeFixTimeoutCaptureClient.timeouts == [120.0, 45.0]
+
+
+class TargetDriftRepairClient:
+    seen_messages = []
+
+    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        pass
+
+    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+        self.__class__.seen_messages.append(messages)
+        return LLMResponse(
+            text="\n".join(
+                [
+                    "diff --git a/calculator.py b/calculator.py",
+                    "--- /dev/null",
+                    "+++ b/calculator.py",
+                    "@@ -0,0 +1,2 @@",
+                    "+def add(a, b):",
+                    "+    return a + b",
+                ]
+            ),
+            raw={"model": "qwen25-coder-14b-awq"},
+        )
+
+
+def test_repair_patch_with_error_retargets_to_intended_file(tmp_path: Path, monkeypatch) -> None:
+    config = AgentConfig()
+    TargetDriftRepairClient.seen_messages = []
+    monkeypatch.setattr(planner, "OpenAICompatibleClient", TargetDriftRepairClient)
+    previous_patch = "\n".join(
+        [
+            "diff --git a/local_codex_lite/cli.py b/local_codex_lite/cli.py",
+            "--- a/local_codex_lite/cli.py",
+            "+++ b/local_codex_lite/cli.py",
+            "@@ -1 +1 @@",
+            "-print('old')",
+            "+print('wrong target')",
+        ]
+    )
+
+    repaired = planner.repair_patch_with_error(
+        "Create a new Python file named calculator.py and add tests",
+        {"summary": "ok"},
+        previous_patch,
+        "error: patch failed: local_codex_lite/cli.py:10\nerror: local_codex_lite/cli.py: patch does not apply",
+        "context_mismatch",
+        tmp_path,
+        config,
+        repair_attempt=1,
+    )
+
+    assert "+++ b/calculator.py" in repaired
+    prompt_text = "\n".join(message["content"] for message in TargetDriftRepairClient.seen_messages[0])
+    assert "target path: calculator.py" in prompt_text.lower()
+    assert "previous patch touched" in prompt_text.lower()

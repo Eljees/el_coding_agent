@@ -26,6 +26,7 @@ from .prompts import (
 )
 from .patcher import RuntimeFixContext
 from .retrying import RetryIssue, classify_httpx_exception, strategy_for_issue
+from .targeting import TaskTarget, detect_task_target
 from .workspace import compact_context
 
 T = TypeVar("T")
@@ -37,6 +38,13 @@ class PlanResult:
     diff: str
     commands: dict
     context: str
+
+
+@dataclass(frozen=True)
+class RepairDiagnosis:
+    intended_target: TaskTarget | None
+    touched_paths: tuple[str, ...]
+    drifted: bool
 
 
 def make_plan(
@@ -288,6 +296,23 @@ def repair_patch_with_error(
 ) -> str:
     client = OpenAICompatibleClient(config.llm)
     last_error: str | None = None
+    diagnosis = _build_repair_diagnosis(task, workspace_root, previous_patch, error)
+    effective_issue_type = "target_drift" if diagnosis.drifted else issue_type
+    if diagnosis.intended_target is not None:
+        replacement_patch = _repair_via_intended_target(
+            client,
+            task,
+            plan,
+            workspace_root,
+            config,
+            previous_patch=previous_patch,
+            error=error,
+            issue_type=effective_issue_type,
+            repair_attempt=repair_attempt,
+            diagnosis=diagnosis,
+        )
+        if replacement_patch is not None and replacement_patch.strip() != previous_patch.strip():
+            return replacement_patch
     if issue_type in {"context_mismatch", "empty_patch"}:
         replacement_patch = _repair_via_full_file_rewrite(
             client,
@@ -311,11 +336,12 @@ def repair_patch_with_error(
             previous_patch=previous_patch,
             error=error,
             extra_context=extra_context,
+            diagnosis=diagnosis,
         ),
         start=1,
     ):
         messages = patch_repair_prompt_for_issue(
-            issue_type,
+            effective_issue_type,
             task,
             json.dumps(plan, ensure_ascii=False, indent=2),
             previous_patch,
@@ -344,6 +370,7 @@ def repair_patch_with_error(
             config,
             previous_patch=previous_patch,
             error=error,
+            diagnosis=diagnosis,
         ),
         extra_context,
     )
@@ -491,6 +518,56 @@ def _merge_context(base_context: str, extra_context: str) -> str:
     return f"{base_context}\n\n{evidence_context_block(extra_context)}"
 
 
+def _build_repair_diagnosis(
+    task: str,
+    workspace_root: Path,
+    previous_patch: str,
+    error: str,
+) -> RepairDiagnosis:
+    intended_target = detect_task_target(task, workspace_root)
+    touched_paths = tuple(_extract_failed_paths(previous_patch, error))
+    if intended_target is None:
+        return RepairDiagnosis(intended_target=None, touched_paths=touched_paths, drifted=False)
+    drifted = bool(touched_paths) and not any(_path_matches_target(path, intended_target) for path in touched_paths)
+    return RepairDiagnosis(intended_target=intended_target, touched_paths=touched_paths, drifted=drifted)
+
+
+def _path_matches_target(path: str, target: TaskTarget) -> bool:
+    candidate = path.replace("\\", "/").lower()
+    target_path = target.path.lower()
+    return candidate == target_path or Path(candidate).name == Path(target_path).name
+
+
+def _build_intended_target_context(
+    workspace_root: Path,
+    diagnosis: RepairDiagnosis | None,
+) -> str:
+    if diagnosis is None or diagnosis.intended_target is None:
+        return ""
+    target = diagnosis.intended_target
+    path = (workspace_root / target.path).resolve()
+    lines = [
+        "# Intended repair target",
+        f"Target path: {target.path}",
+        f"Target mode: {target.mode}",
+        f"Target exists: {target.exists}",
+    ]
+    if diagnosis.touched_paths:
+        lines.extend(["", "Previous patch touched:", *[f"- {item}" for item in diagnosis.touched_paths]])
+    if path.is_file():
+        content = path.read_text(encoding="utf-8", errors="replace")
+        lines.extend(["", f"## Current file: {target.path}", content[:3000]])
+    else:
+        lines.extend(
+            [
+                "",
+                "## Current file state",
+                "The target file does not exist yet. Create only this file unless the task explicitly requires a test file.",
+            ]
+        )
+    return "\n".join(lines)
+
+
 def _repair_context_variants(
     workspace_root: Path,
     task: str,
@@ -499,8 +576,10 @@ def _repair_context_variants(
     previous_patch: str,
     error: str,
     extra_context: str = "",
+    diagnosis: RepairDiagnosis | None = None,
 ) -> list[str]:
-    targeted_context = _build_failed_file_context(
+    target_context = _build_intended_target_context(workspace_root, diagnosis)
+    targeted_context = target_context or _build_failed_file_context(
         workspace_root,
         previous_patch=previous_patch,
         error=error,
@@ -552,8 +631,10 @@ def _build_repair_fallback_context(
     *,
     previous_patch: str,
     error: str,
+    diagnosis: RepairDiagnosis | None = None,
 ) -> str:
-    targeted_context = _build_failed_file_context(
+    target_context = _build_intended_target_context(workspace_root, diagnosis)
+    targeted_context = target_context or _build_failed_file_context(
         workspace_root,
         previous_patch=previous_patch,
         error=error,
@@ -647,6 +728,49 @@ def _repair_via_full_file_rewrite(
     if not replacement_text.strip() or replacement_text.strip() == current_text.strip():
         return None
     return _build_unified_diff(rel_path, current_text, replacement_text)
+
+
+def _repair_via_intended_target(
+    client: OpenAICompatibleClient,
+    task: str,
+    plan: dict,
+    workspace_root: Path,
+    config: AgentConfig,
+    *,
+    previous_patch: str,
+    error: str,
+    issue_type: str,
+    repair_attempt: int,
+    diagnosis: RepairDiagnosis,
+) -> str | None:
+    target = diagnosis.intended_target
+    if target is None:
+        return None
+    path = (workspace_root / target.path).resolve()
+    target_context = _build_intended_target_context(workspace_root, diagnosis)
+    messages = patch_repair_prompt_for_issue(
+        issue_type,
+        task,
+        json.dumps(plan, ensure_ascii=False, indent=2),
+        previous_patch,
+        error,
+        target_context,
+        repair_attempt=repair_attempt,
+    )
+    response = _chat_with_timeout(
+        client,
+        messages,
+        max_tokens=min(1024, config.llm.max_tokens),
+        status_label=f"Retargeting patch (attempt {repair_attempt}.target)",
+        timeout=min(60.0, float(config.llm.timeout)),
+    )
+    patch = extract_diff(response.text)
+    patch_paths = _extract_failed_paths(patch, "")
+    if patch_paths and not any(_path_matches_target(item, target) for item in patch_paths):
+        return None
+    if not target.exists and path.exists():
+        return None
+    return patch
 
 
 def _strip_fences(text: str) -> str:
@@ -835,5 +959,3 @@ def _format_exception(exc: Exception) -> str:
         snippet = body[:400].replace("\n", " ").strip()
         return f"{exc.__class__.__name__} (status={status}): {snippet or str(exc)}"
     return f"{exc.__class__.__name__}: {exc}"
-
-

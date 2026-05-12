@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import WorkspaceConfig
 from .safety import can_read_path, is_inside_workspace
+from .targeting import detect_task_target
 
 
 @dataclass(frozen=True)
@@ -82,10 +83,11 @@ def build_tree(root: Path, config: WorkspaceConfig) -> list[str]:
 def rank_workspace_files(root: Path, task: str, config: WorkspaceConfig) -> list[RankedWorkspaceFile]:
     root = root.resolve()
     task_lower = task.lower()
+    task_target = detect_task_target(task, root)
     ranked: list[RankedWorkspaceFile] = []
     for rel in build_tree(root, config):
         path = root / rel
-        score, reasons = _score_workspace_file(rel, task_lower)
+        score, reasons = _score_workspace_file(rel, task_lower, task_target.path if task_target else None)
         ranked.append(RankedWorkspaceFile(path=path, score=score, reasons=tuple(reasons)))
 
     if not ranked:
@@ -165,13 +167,23 @@ def compact_context(
     return "\n".join(parts).strip() + "\n"
 
 
-def _score_workspace_file(rel: str, task_lower: str) -> tuple[int, list[str]]:
+def _score_workspace_file(rel: str, task_lower: str, intended_target: str | None = None) -> tuple[int, list[str]]:
     rel_lower = rel.lower()
     basename = Path(rel).name.lower()
     stem = Path(rel).stem.lower()
     parts = Path(rel).parts
     score = 0
     reasons: list[str] = []
+
+    if intended_target:
+        target_lower = intended_target.lower()
+        target_basename = Path(target_lower).name
+        if rel_lower == target_lower:
+            score += 260
+            reasons.append("task target path")
+        elif basename == target_basename:
+            score += 220
+            reasons.append("task target filename")
 
     if rel_lower in task_lower:
         score += 140

@@ -1,6 +1,7 @@
 from local_codex_lite.prompts import (
     command_prompt,
     patch_prompt,
+    patch_repair_prompt_for_issue,
     plan_prompt,
     runtime_fix_single_file_command_prompt,
     runtime_fix_single_file_patch_prompt,
@@ -46,3 +47,17 @@ def test_runtime_fix_command_prompt_prefers_verification_command():
     messages = runtime_fix_single_file_command_prompt("task", "{}", "foo.py")
     assert 'windows powershell' in messages[0]['content'].lower()
     assert 'primary verification command' in messages[1]['content'].lower()
+
+
+def test_patch_repair_prompt_supports_target_drift():
+    messages = patch_repair_prompt_for_issue(
+        "target_drift",
+        "create calculator.py",
+        "{}",
+        "diff --git a/foo.py b/foo.py",
+        "patch does not apply",
+        "Target path: calculator.py",
+        repair_attempt=1,
+    )
+    assert "drifted away from the intended target file" in messages[0]["content"].lower()
+    assert "target path: calculator.py" in messages[1]["content"].lower()
