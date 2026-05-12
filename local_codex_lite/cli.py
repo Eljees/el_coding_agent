@@ -568,15 +568,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_th_compare.add_argument("right")
     p_th_compare.add_argument("--out")
 
-    p_cve = evidence_sub.add_parser("cve-scan", help="CVE scan on artifact directory")
-    p_cve.add_argument("input_root", help="Path to artifacts directory (may contain archives)")
+    p_cve = evidence_sub.add_parser("cve-scan", help="CVE scan tool runner")
+    p_cve.add_argument("action_or_input", nargs="?", help="status | install | update-db | scan | <input_root>")
+    p_cve.add_argument("input_root", nargs="?", help="Path to artifacts directory (may contain archives)")
     p_cve.add_argument("--extract-to", dest="extract_to", default=None)
     p_cve.add_argument("--output-dir", dest="output_dir", default=None)
     p_cve.add_argument("--install", action="store_true", help="Auto-install cve-bin-tool if missing")
     p_cve.add_argument("--update-db", dest="update_db", action="store_true", help="Update CVE database before scan")
     p_cve.add_argument("--skip-unpack", dest="skip_unpack", action="store_true", help="Skip archive extraction")
+    p_cve.add_argument("--offline", action="store_true", help="Run cve-bin-tool in offline mode")
     p_cve.add_argument("--min-severity", dest="min_severity", default="LOW",
                        choices=["LOW", "MEDIUM", "HIGH", "CRITICAL"])
+    p_cve.add_argument("--format", default="json,md,high-critical-md")
 
     return parser
 

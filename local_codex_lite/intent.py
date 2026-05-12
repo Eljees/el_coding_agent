@@ -47,6 +47,12 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         if capability.id == "evidence.artifacts.inspect" and _looks_like_artifact_path(text):
             matched.append("pattern:artifact path")
             score += 2
+        if capability.id == "evidence.cve_scan" and _looks_like_artifact_path(text):
+            matched.append("pattern:cve artifact path")
+            score += 2
+        if capability.id == "evidence.cve_scan" and any(marker in lower for marker in ("cve", "cve-bin-tool", "уязвим")):
+            matched.append("phrase:cve scan")
+            score += 3
         scored.append((score, capability, matched))
 
     score, capability, matched_keywords = max(scored, key=lambda item: item[0], default=(0, capabilities[0], []))
@@ -72,6 +78,10 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         summary = "Inventory archive artifacts and extract them safely into an evidence bundle."
         if missing_inputs:
             safe_next_action = "Provide an artifact directory or archive path, then run evidence artifacts inspect."
+    if capability.id == "evidence.cve_scan":
+        summary = "Run cve-bin-tool on artifacts, keep evidence, and generate a high/critical report."
+        if missing_inputs:
+            safe_next_action = "Provide an artifact directory or archive path, then run evidence cve-scan."
     confidence = min(0.45 + 0.08 * score, 0.95)
     risks = []
     if capability.requires_apply:

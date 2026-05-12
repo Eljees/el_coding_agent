@@ -119,6 +119,7 @@ RAG context loading, evidence block loading, stdin evidence reader.
 Evidence sub-commands: `json-compare`, `artifacts inspect`,
 `trufflehog analyze/scan/compare`, `cve-scan`.
 `cmd_evidence_cve_scan` delegates to `skills/cve-bin-tool/run_cve_scan.py` via subprocess.
+`cve-scan` supports `status`, `install`, `update-db`, and `scan` actions.
 
 ### `local_codex_lite/llm_client.py`
 OpenAI-compatible HTTP client: retries, heartbeat output, JSON extraction,
@@ -166,7 +167,7 @@ They are **not** called by the model — they are procedural scripts invoked by 
 Current skills:
 - `artifact-unpack/` — documents archive inventory and extraction workflow for evidence-first analysis.
 - `cve-bin-tool/` — installs, updates, and runs `cve-bin-tool`
-on artifact directories with automatic archive unpacking.
+on artifact directories with automatic archive unpacking and high/critical report generation.
 
 ### Logging
 Each run writes under `.local-codex-lite/runs/<timestamp>/`:
@@ -207,7 +208,11 @@ python -m local_codex_lite evidence artifacts inspect "D:\path\to\dir" --extract
 python -m local_codex_lite evidence artifacts inspect "D:\path\to\dir" "D:\path\to\unpacked" --extract
 python -m local_codex_lite evidence trufflehog analyze "D:\path\to\output"
 python -m local_codex_lite evidence trufflehog scan --repo-url "https://gitlab.example.com/group/project.git"
+python -m local_codex_lite evidence cve-scan status
+python -m local_codex_lite evidence cve-scan install
+python -m local_codex_lite evidence cve-scan update-db
 python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --install --min-severity HIGH
+python -m local_codex_lite evidence cve-scan scan "D:\path\to\artifacts" --format json,md,high-critical-md --min-severity HIGH
 python -m local_codex_lite evidence cve-scan "D:\already\extracted" --skip-unpack
 python -m local_codex_lite ui
 ```

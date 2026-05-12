@@ -171,19 +171,37 @@ def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
         console.print("Expected: skills/cve-bin-tool/run_cve_scan.py")
         return 1
 
-    cmd: list[str] = [sys.executable, str(skill_script), "--input-root", args.input_root]
-    if getattr(args, "extract_to", None):
-        cmd += ["--extract-to", args.extract_to]
-    if getattr(args, "output_dir", None):
-        cmd += ["--output-dir", args.output_dir]
-    if getattr(args, "install", False):
-        cmd.append("--install")
-    if getattr(args, "update_db", False):
-        cmd.append("--update-db")
-    if getattr(args, "skip_unpack", False):
-        cmd.append("--skip-unpack")
-    if getattr(args, "min_severity", None):
-        cmd += ["--min-severity", args.min_severity]
+    action = "scan"
+    input_root = getattr(args, "input_root", None)
+    action_or_input = getattr(args, "action_or_input", None)
+    if action_or_input in {"status", "install", "update-db", "scan"}:
+        action = action_or_input
+    elif action_or_input:
+        input_root = action_or_input
+
+    cmd: list[str] = [sys.executable, str(skill_script), action]
+    if action == "scan":
+        if not input_root:
+            raise SystemExit("Provide an artifact path or use one of: status, install, update-db, scan.")
+        cmd.append(input_root)
+        if getattr(args, "extract_to", None):
+            cmd += ["--extract-to", args.extract_to]
+        if getattr(args, "output_dir", None):
+            cmd += ["--output-dir", args.output_dir]
+        if getattr(args, "install", False):
+            cmd.append("--install")
+        if getattr(args, "update_db", False):
+            cmd.append("--update-db")
+        if getattr(args, "skip_unpack", False):
+            cmd.append("--skip-unpack")
+        if getattr(args, "offline", False):
+            cmd.append("--offline")
+        if getattr(args, "min_severity", None):
+            cmd += ["--min-severity", args.min_severity]
+        if getattr(args, "format", None):
+            cmd += ["--format", args.format]
+    elif getattr(args, "offline", False):
+        cmd.append("--offline")
 
     console.print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, check=False)

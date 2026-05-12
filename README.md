@@ -138,6 +138,9 @@ Useful commands:
 ```powershell
 python -m local_codex_lite evidence json-compare left.json right.json
 python -m local_codex_lite evidence artifacts inspect "D:\path\to\artifacts" --extract
+python -m local_codex_lite evidence cve-scan status
+python -m local_codex_lite evidence cve-scan update-db
+python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --format json,md,high-critical-md --min-severity HIGH
 python -m local_codex_lite evidence trufflehog analyze "D:\!ya_drive_sync\YandexDisk\rostel\to__issledovat\TruffelHog"
 python -m local_codex_lite evidence trufflehog scan --repo-url "https://gitlab.example.com/group/project.git"
 python -m local_codex_lite logs latest
@@ -229,6 +232,36 @@ Supported formats:
 - `.7z` and `.rar` when `7z`, `7za`, or `7zz` is installed
 
 Archive member path traversal and unsupported unsafe tar members are blocked and recorded as evidence.
+
+## CVE scan tool
+
+The `cve-bin-tool` workflow is now a deterministic tool path with explicit actions:
+
+```powershell
+python -m local_codex_lite evidence cve-scan status
+python -m local_codex_lite evidence cve-scan install
+python -m local_codex_lite evidence cve-scan update-db
+python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts"
+python -m local_codex_lite evidence cve-scan scan "D:\path\to\artifacts" --format json,md,high-critical-md --min-severity HIGH
+python -m local_codex_lite evidence cve-scan "D:\already\extracted" --skip-unpack
+```
+
+The runner prefers the `cve-bin-tool` executable and falls back to module mode only if it actually works in the current environment.
+
+Default outputs:
+
+- `cve_raw.json`
+- `cve_summary.json`
+- `status.json`
+- `cve_report.md`
+- `high_critical_report_<date>.md`
+
+The high/critical report is shaped for quick triage and mirrors the older CYBERSEC-style report layout:
+
+- artifact section
+- summary section
+- table of HIGH / CRITICAL findings
+- notes section
 
 ## Container error classification
 

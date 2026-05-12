@@ -12,6 +12,7 @@ def test_capability_registry_contains_expected_ids() -> None:
     assert "logs.latest" in ids
     assert "evidence.json_compare" in ids
     assert "evidence.artifacts.inspect" in ids
+    assert "evidence.cve_scan" in ids
     assert "doctor" in ids
     assert "config.show" in ids
 
@@ -33,6 +34,12 @@ def test_recognize_bug_fix_maps_to_preview_flow() -> None:
     decision = recognize_intent("исправь баг в patcher.py", default_capabilities())
     assert decision.intent == "run.preview"
     assert decision.requires_apply is False
+
+
+def test_recognize_cve_scan_with_path() -> None:
+    decision = recognize_intent(r"проверь на cve артефакты из D:\artifacts\bundle", default_capabilities())
+    assert decision.intent == "evidence.cve_scan"
+    assert decision.can_do == "yes"
 
 
 def test_recognize_unknown_task_returns_partial() -> None:

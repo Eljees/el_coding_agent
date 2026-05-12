@@ -77,6 +77,37 @@ def default_tools() -> list[ToolDefinition]:
             safety_level="safe",
             requires_exec=False,
         ),
+        ToolDefinition(
+            name="evidence.cve_scan",
+            description="Install, update, and run cve-bin-tool scans with evidence outputs and high/critical reports.",
+            schema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["status", "install", "update-db", "scan"],
+                        "default": "scan",
+                    },
+                    "input_root": {"type": "string"},
+                    "extract_to": {"type": "string"},
+                    "output_dir": {"type": "string"},
+                    "install": {"type": "boolean", "default": False},
+                    "update_db": {"type": "boolean", "default": False},
+                    "skip_unpack": {"type": "boolean", "default": False},
+                    "offline": {"type": "boolean", "default": False},
+                    "min_severity": {
+                        "type": "string",
+                        "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+                        "default": "LOW",
+                    },
+                    "format": {"type": "string", "default": "json,md,high-critical-md"},
+                },
+                "additionalProperties": False,
+            },
+            executor="local_codex_lite.cli.cmd_evidence_cve_scan",
+            safety_level="safe",
+            requires_exec=False,
+        ),
     ]
 
 

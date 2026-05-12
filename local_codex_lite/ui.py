@@ -297,6 +297,9 @@ class CommandCenterUI:
         if decision.intent == "evidence.artifacts.inspect":
             self._run_background("artifacts inspect", task, lambda current_task: self._artifact_worker(current_task, extract=False))
             return
+        if decision.intent == "evidence.cve_scan":
+            self._run_background("cve scan", task, self._cve_worker)
+            return
         self._run_background("preview", task, self._preview_worker)
 
     def logs_latest(self) -> None:
@@ -311,6 +314,9 @@ class CommandCenterUI:
         self._write_intent(decision)
         if decision.intent == "evidence.artifacts.inspect":
             self._run_background("artifacts extract", task, lambda current_task: self._artifact_worker(current_task, extract=True))
+            return
+        if decision.intent == "evidence.cve_scan":
+            self._run_background("cve scan", task, self._cve_worker)
             return
         self._run_background("apply", task, lambda current_task: self._run_worker(current_task, apply=True, exec_=False))
 
@@ -399,6 +405,33 @@ class CommandCenterUI:
             return output + (f"\n\n(exit code: {code})" if code else "")
         return f"Artifact inspection finished with exit code {code}"
 
+    def _cve_worker(self, task: str) -> str:
+        from . import cli as cli_module
+
+        input_root = extract_artifact_input_path(task)
+        if not input_root:
+            return "CVE scan input path not found in task."
+        extract_to = extract_artifact_output_path(task)
+        buffer = io.StringIO()
+        args = argparse.Namespace(
+            action_or_input=input_root,
+            input_root=None,
+            extract_to=extract_to or None,
+            output_dir=None,
+            install=False,
+            update_db=False,
+            skip_unpack=False,
+            offline=False,
+            min_severity="HIGH",
+            format="json,md,high-critical-md",
+        )
+        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            code = cli_module.cmd_evidence_cve_scan(args)
+        output = buffer.getvalue().strip()
+        if output:
+            return output + (f"\n\n(exit code: {code})" if code else "")
+        return f"CVE scan finished with exit code {code}"
+
     def _run_worker(self, task: str, *, apply: bool, exec_: bool) -> str:
         from . import cli as cli_module
 
@@ -425,6 +458,8 @@ class CommandCenterUI:
         exec_state = "disabled"
         if not self._busy and self._last_decision is not None:
             if self._last_decision.intent == "evidence.artifacts.inspect" and self._last_decision.can_do == "yes":
+                apply_state = "normal"
+            elif self._last_decision.intent == "evidence.cve_scan" and self._last_decision.can_do == "yes":
                 apply_state = "normal"
             elif self._preview_ready and self._last_decision.intent in {"run.preview", "run.apply", "run.exec"}:
                 apply_state = "normal"
