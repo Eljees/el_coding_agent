@@ -1,0 +1,29 @@
+llm:
+  base_url: "http://localhost:8015/v1"
+  model: "qwen25-coder-14b-awq"
+  api_key: "local-not-needed"
+  temperature: 0.1
+  max_tokens: 2048
+  timeout: 120.0
+  retries: 2
+workspace:
+  root: "."
+  max_file_bytes: 120000
+  include_globs:
+    - "**/*.py"
+    - "**/*.md"
+    - "**/*.toml"
+    - "**/*.yaml"
+    - "**/*.yml"
+    - "**/*.json"
+  exclude_globs:
+    - ".git/**"
+    - ".venv/**"
+    - "venv/**"
+    - "__pycache__/**"
+    - "node_modules/**"
+    - ".local-codex-lite/**"
+safety:
+  require_apply_flag: true
+  require_exec_flag: true
+  allow_sensitive_read: false

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Artifact Unpack"
+  short_description: "Inspect and unpack evidence archives."
+  default_prompt: "Inspect archive artifacts from the provided path and extract them safely into an evidence bundle."
