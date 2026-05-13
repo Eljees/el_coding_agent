@@ -31,7 +31,7 @@ el_coding_agent/
 PowerShell:
 
 ```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 .\setup.ps1
 .\doctor.ps1
 ```
@@ -39,7 +39,7 @@ cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
 Manual setup:
 
 ```powershell
-cd D:\!ya_drive_sync\YandexDisk\rostel\code\El_neur0_harbour\el_coding_agent
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"

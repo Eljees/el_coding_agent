@@ -21,8 +21,18 @@ workspace:
     - ".venv/**"
     - "venv/**"
     - "__pycache__/**"
+    - ".pytest_cache/**"
+    - ".mypy_cache/**"
     - "node_modules/**"
     - ".local-codex-lite/**"
+    - ".tmp/**"
+    - ".vscode/**"
+    - "__old/**"
+    - "generated_projects/**"
+    - "pytest_tmp/**"
+    - "scan_runs/**"
+    - "tmp_trufflehog/**"
+    - "*.egg-info/**"
 safety:
   require_apply_flag: true
   require_exec_flag: true

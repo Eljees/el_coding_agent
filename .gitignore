@@ -12,3 +12,4 @@ tmp_trufflehog/
 pytest_tmp/
 *.pyc
 *.egg-info/
+output.cve-bin-tool.*.json

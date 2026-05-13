@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from local_codex_lite.doctor import probe_local_llm_health
+from local_codex_lite.config import LLMConfig
+from local_codex_lite.doctor import build_doctor_probe_client, probe_local_llm_health
 from local_codex_lite.llm_client import LLMResponse
 
 
@@ -61,3 +62,14 @@ def test_probe_local_llm_health_reports_endpoint_failure() -> None:
     probe = probe_local_llm_health(BrokenClient(), "qwen25-coder-14b-awq")
     assert probe.endpoint_ok is False
     assert probe.error == "connection refused"
+
+
+def test_build_doctor_probe_client_uses_short_timeout_without_retries() -> None:
+    config = LLMConfig(timeout=120.0, retries=3)
+
+    client = build_doctor_probe_client(config)
+
+    assert client.config.timeout == 10.0
+    assert client.config.retries == 0
+    assert client.config.base_url == config.base_url
+    assert client.config.model == config.model

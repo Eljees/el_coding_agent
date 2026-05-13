@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from .config import load_config
+from .config import LLMConfig, load_config
 from .llm_client import OpenAICompatibleClient, extract_json
 from .rag import (
     RagProviderError,
@@ -49,6 +49,16 @@ _DEPENDENCIES = [
     ("rich", False, "rich"),
     ("pytest", False, "pytest"),
 ]
+
+
+def build_doctor_probe_client(config: LLMConfig) -> OpenAICompatibleClient:
+    probe_config = config.model_copy(
+        update={
+            "timeout": min(float(config.timeout), 10.0),
+            "retries": 0,
+        }
+    )
+    return OpenAICompatibleClient(probe_config)
 
 
 def probe_local_llm_health(client: OpenAICompatibleClient, expected_model: str) -> DoctorProbeResult:
@@ -112,7 +122,7 @@ def run_doctor(workspace_root: Path) -> int:
     git_path = shutil.which("git")
     table.add_row("git", "OK" if git_path else "MISSING", git_path or "git not found")
 
-    probe_client = OpenAICompatibleClient(config.llm)
+    probe_client = build_doctor_probe_client(config.llm)
     probe = probe_local_llm_health(probe_client, config.llm.model)
     overall_ok = True
     if probe.endpoint_ok:
@@ -124,17 +134,23 @@ def run_doctor(workspace_root: Path) -> int:
         table.add_row("latency", "FAIL", "unavailable")
         overall_ok = False
 
-    if probe.model_ok is False or probe.response_model is None:
+    if not probe.endpoint_ok:
+        model_status = "UNAVAILABLE"
+        overall_ok = False
+    elif probe.model_ok is False:
         model_status = "MISMATCH"
         overall_ok = False
     elif probe.model_ok is True:
         model_status = "OK"
     else:
         model_status = "UNKNOWN"
-    model_detail = probe.response_model or config.llm.model
+    model_detail = probe.response_model or "unavailable"
     table.add_row("model", model_status, f"expected {config.llm.model}, got {model_detail}")
 
-    if probe.json_ok:
+    if not probe.endpoint_ok:
+        table.add_row("json sanity", "UNAVAILABLE", "endpoint probe did not complete")
+        overall_ok = False
+    elif probe.json_ok:
         table.add_row("json sanity", "OK", "strict JSON probe passed")
     else:
         detail = probe.json_error or "strict JSON probe failed"
