@@ -23,6 +23,7 @@ from .cli_utils import console, load_urls, workspace_root
 
 
 def resolve_cve_skill_script(root: Path | None = None) -> Path:
+    """Return the path to run_cve_scan.py, or raise FileNotFoundError with diagnostics."""
     candidates: list[Path] = []
     package_root = Path(__file__).resolve().parents[1]
     candidates.append(package_root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
@@ -31,14 +32,21 @@ def resolve_cve_skill_script(root: Path | None = None) -> Path:
         candidates.append(root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
     candidates.append(workspace_root() / "skills" / "cve-bin-tool" / "run_cve_scan.py")
     try:
-        packaged = importlib.resources.files("local_codex_lite").joinpath("skills", "cve-bin-tool", "run_cve_scan.py")
+        packaged = importlib.resources.files("local_codex_lite").joinpath(
+            "skills", "cve-bin-tool", "run_cve_scan.py"
+        )
         candidates.append(Path(str(packaged)))
     except Exception:
         pass
     for candidate in candidates:
         if candidate.exists():
             return candidate
-    return candidates[0]
+    searched = "\n  ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        "CVE skill script 'run_cve_scan.py' not found. Searched:\n  "
+        + searched
+        + "\nMake sure 'skills/cve-bin-tool/run_cve_scan.py' exists in the project root."
+    )
 
 
 def cmd_evidence_json_compare(args: argparse.Namespace) -> int:
@@ -181,10 +189,10 @@ def cmd_evidence_trufflehog_compare(args: argparse.Namespace) -> int:
 
 def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
     """Run cve-bin-tool CVE scan on an artifact directory via the skill script."""
-    skill_script = resolve_cve_skill_script()
-    if not skill_script.exists():
-        console.print(f"[red]Skill script not found:[/red] {skill_script}")
-        console.print("Expected: skills/cve-bin-tool/run_cve_scan.py")
+    try:
+        skill_script = resolve_cve_skill_script()
+    except FileNotFoundError as exc:
+        console.print(f"[red]Skill script not found:[/red] {exc}")
         return 1
 
     action = "scan"
@@ -198,7 +206,9 @@ def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
     cmd: list[str] = [sys.executable, str(skill_script), action]
     if action == "scan":
         if not input_root:
-            raise SystemExit("Provide an artifact path or use one of: status, install, update-db, scan.")
+            raise SystemExit(
+                "Provide an artifact path or use one of: status, install, update-db, scan."
+            )
         cmd.append(input_root)
         if getattr(args, "extract_to", None):
             cmd += ["--extract-to", args.extract_to]
@@ -220,5 +230,17 @@ def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
         cmd.append("--offline")
 
     console.print(f"Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, check=False)
+    result = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    # Print captured output so it reaches GUI buffers (redirect_stdout) and the terminal.
+    if result.stdout:
+        console.print(result.stdout, end="")
+    if result.stderr:
+        console.print(result.stderr, end="", highlight=False)
     return result.returncode

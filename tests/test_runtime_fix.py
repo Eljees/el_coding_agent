@@ -23,7 +23,7 @@ def test_detect_runtime_fix_context_finds_single_traceback_file(tmp_path: Path) 
     assert "print('x')" in runtime_fix.current_text
 
 
-def test_detect_runtime_fix_context_ignores_multiple_python_targets(tmp_path: Path) -> None:
+def test_detect_runtime_fix_context_prefers_first_python_target(tmp_path: Path) -> None:
     first = tmp_path / "a.py"
     second = tmp_path / "b.py"
     first.write_text("print('a')\n", encoding="utf-8")
@@ -37,4 +37,6 @@ def test_detect_runtime_fix_context_ignores_multiple_python_targets(tmp_path: Pa
 
     runtime_fix = detect_runtime_fix_context("fix crash", evidence, tmp_path)
 
-    assert runtime_fix is None
+    assert runtime_fix is not None
+    assert runtime_fix.target_path == first.resolve()
+    assert "print('a')" in runtime_fix.current_text

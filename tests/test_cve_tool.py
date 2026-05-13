@@ -126,11 +126,13 @@ def test_cve_runner_classifies_failed_without_raw_json(tmp_path: Path) -> None:
 def test_cve_runner_scan_argv_defaults_to_update_never(tmp_path: Path, monkeypatch) -> None:
     runner = _load_cve_runner()
     captured: list[list[str]] = []
+    captured_cwds: list[Path | None] = []
     raw = tmp_path / "cve_raw.json"
     raw.write_text("[]", encoding="utf-8")
 
-    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0):  # noqa: ANN001
+    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):  # noqa: ANN001
         captured.append(argv)
+        captured_cwds.append(cwd)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(runner.subprocess, "run", fake_run)
@@ -147,9 +149,43 @@ def test_cve_runner_scan_argv_defaults_to_update_never(tmp_path: Path, monkeypat
     assert summary["scan_exit_code"] == 0
     assert raw_path.endswith("cve_raw.json")
     assert captured
+    assert captured_cwds == [tmp_path]
     assert "--update" in captured[0]
     update_index = captured[0].index("--update")
     assert captured[0][update_index + 1] == "never"
+
+
+def test_cve_runner_fallback_search_stays_inside_output_dir(tmp_path: Path, monkeypatch) -> None:
+    runner = _load_cve_runner()
+    scan_dir = tmp_path / "scan"
+    output_dir = tmp_path / "evidence"
+    scan_dir.mkdir()
+    output_dir.mkdir()
+
+    stray = tmp_path / "output.cve-bin-tool.2026-05-13.09-00-00.json"
+    stray.write_text(
+        json.dumps([{"cve_number": "CVE-2024-9999", "severity": "CRITICAL", "product": "wrong"}]),
+        encoding="utf-8",
+    )
+    now = time.time()
+    os.utime(stray, (now, now))
+
+    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):  # noqa: ANN001
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    findings, summary, raw_path = runner.run_scan(
+        runner.ToolCommand(argv=["cve-bin-tool"], mode="executable", display="cve-bin-tool"),
+        scan_dir,
+        output_dir,
+        severity="HIGH",
+        offline=False,
+    )
+
+    assert findings == []
+    assert summary["total_findings"] == 0
+    assert Path(raw_path) == output_dir / "cve_raw.json"
 
 
 def test_cve_runner_update_db_uses_streaming_command(monkeypatch) -> None:
@@ -341,9 +377,9 @@ def test_cli_parser_defaults_cve_min_severity_to_high() -> None:
 def test_cmd_evidence_cve_scan_builds_status_command(monkeypatch) -> None:
     captured: list[list[str]] = []
 
-    def fake_run(cmd, check=False):  # noqa: ANN001
+    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):  # noqa: ANN001
         captured.append(cmd)
-        return SimpleNamespace(returncode=0)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(cli_evidence.subprocess, "run", fake_run)
     args = SimpleNamespace(
@@ -369,9 +405,9 @@ def test_cmd_evidence_cve_scan_builds_status_command(monkeypatch) -> None:
 def test_cmd_evidence_cve_scan_builds_scan_command(monkeypatch) -> None:
     captured: list[list[str]] = []
 
-    def fake_run(cmd, check=False):  # noqa: ANN001
+    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):  # noqa: ANN001
         captured.append(cmd)
-        return SimpleNamespace(returncode=0)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(cli_evidence.subprocess, "run", fake_run)
     args = SimpleNamespace(

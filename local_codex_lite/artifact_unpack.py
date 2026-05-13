@@ -490,10 +490,25 @@ def _enforce_budget(files: int, bytes_: int, max_files: int, max_total_bytes: in
 
 
 def _gzip_uncompressed_size(path: Path) -> int | None:
+    """Return the uncompressed size stored in the gzip trailer (last 4 bytes).
+
+    The gzip format stores the size as a uint32 (mod 2^32), so for files whose
+    uncompressed content exceeds ~4 GB the value wraps around and is unreliable.
+    In that case we fall back to None so the caller skips budget enforcement on
+    the size dimension rather than acting on a wrong number.
+    """
     try:
+        file_size = path.stat().st_size
+        if file_size < 8:
+            return None
         with path.open("rb") as handle:
             handle.seek(-4, 2)
-            return int.from_bytes(handle.read(4), "little")
+            raw = int.from_bytes(handle.read(4), "little")
+        # If the stored size is smaller than the compressed file itself the
+        # value has almost certainly wrapped around — treat as unknown.
+        if raw < file_size:
+            return None
+        return raw
     except OSError:
         return None
 

@@ -20,6 +20,34 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 
 ---
 
+## Current state (updated 2026-05-13)
+
+- Branch: `test/artifact-unpack`
+- Last known clean test run: `127 passed` (2026-05-12, full suite)
+- `cve-bin-tool` confirmed installed: `mode=executable`, `version=3.4`
+- Real GUI-path CVE scan on `CYBERSEC-11195/contentreader-nls-16.9.0.14297-RedOS.rpm` reproduces
+  non-zero: `total_findings=7`, `CRITICAL=2`, `HIGH=5`, `evidence_complete=true`
+- GUI zero-results bug **fixed 2026-05-13**: `subprocess.run` in `cmd_evidence_cve_scan` now
+  uses `capture_output=True` so output is routed through the GUI buffer
+- `resolve_cve_skill_script` now raises `FileNotFoundError` with diagnostics instead of
+  silently returning a non-existent path
+- `_gzip_uncompressed_size` corrected for files > 4 GB (wraps uint32 → returns `None`)
+- `detect_runtime_fix_context` now uses the first traceback candidate instead of refusing all
+  cases with more than one matching file
+- CI pipeline added: `.github/workflows/ci.yml` (ruff, mypy, pytest on Python 3.11 + 3.12)
+
+### Verification commands
+
+```powershell
+python -m pytest -q
+python -m local_codex_lite evidence cve-scan status
+python -m local_codex_lite evidence cve-scan "D:\path\to\artifacts" --min-severity HIGH --format json,md,high-critical-md
+python -m local_codex_lite evidence artifacts inspect --help
+python -m local_codex_lite ui
+```
+
+---
+
 ## Recent structural changes
 
 Changes made during the cleanup/improvement pass (tasks #1–#19):

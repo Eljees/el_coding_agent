@@ -48,9 +48,10 @@ def detect_runtime_fix_context(task: str, evidence_text: str, workspace_root: Pa
         seen.add(resolved)
         candidates.append(resolved)
 
-    if len(candidates) != 1:
+    if not candidates:
         return None
-
+    # When multiple files appear in the traceback, the first one is usually the
+    # most recently raised frame and therefore the most relevant fix target.
     target_path = candidates[0]
     current_text = target_path.read_text(encoding="utf-8", errors="replace")
     return RuntimeFixContext(
