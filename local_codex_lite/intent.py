@@ -38,6 +38,9 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
     for capability in capabilities:
         matched = [keyword for keyword in capability.keywords if keyword in lower]
         score = len(matched)
+        if capability.id == "review.code" and re.search(r"\bpr\b", lower):
+            matched.append("phrase:pr")
+            score += 2
         if capability.id == "logs.latest" and ("покажи последние логи" in lower or "latest logs" in lower):
             matched.append("phrase:latest logs")
             score += 2
@@ -69,11 +72,15 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
     summary = capability.description
     if capability.id == "run.preview":
         summary = "Inspect a code-change request safely before applying anything."
+    if capability.id == "review.code":
+        summary = "Review code changes or a pull request without modifying files."
     if capability.id == "evidence.json_compare":
         summary = "Compare two JSON files or reports and summarize the differences."
     safe_next_action = capability.cli_equivalent
     if capability.id == "evidence.json_compare" and missing_inputs:
         safe_next_action = "Provide the two JSON paths, then run evidence json-compare."
+    if capability.id == "review.code":
+        safe_next_action = "Run python -m local_codex_lite review to inspect the current diff."
     if capability.id == "evidence.artifacts.inspect":
         summary = "Inventory archive artifacts and extract them safely into an evidence bundle."
         if missing_inputs:

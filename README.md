@@ -19,6 +19,7 @@ el_coding_agent/
 - preview changes before applying them
 - apply changes only with `--apply`
 - run suggested commands only with `--exec`
+- review diffs and pull requests with a read-only `review` command
 - keep logs for every run under `.local-codex-lite/runs/<timestamp>/`
 - store evidence separately from fixes under `runs/<timestamp>/evidence/`
 - compare JSON artifacts
@@ -73,6 +74,7 @@ python -m local_codex_lite run "Добавь короткий README" --dry-run
 python -m local_codex_lite run "Добавь короткий README" --assume-clarification --dry-run
 python -m local_codex_lite run "Добавь короткий README" --apply
 python -m local_codex_lite run "Добавь короткий README" --apply --exec
+python -m local_codex_lite review --base origin/main --head HEAD
 python -m local_codex_lite preview "Create a Tkinter calculator app"
 python -m local_codex_lite run "Сделай GUI калькулятор" --apply
 python -m local_codex_lite logs latest

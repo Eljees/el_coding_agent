@@ -105,7 +105,7 @@ def build_chunks(root: Path, cfg: AgentConfig) -> list[Chunk]:
                 continue
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
-            except Exception:
+            except (OSError, PermissionError):  # skip unreadable files
                 continue
             for start, end, chunk_text in _split_into_chunks(text, cfg.rag.chunk_chars, cfg.rag.overlap_chars):
                 start_line, end_line = _offsets_to_line_numbers(text, start, end)

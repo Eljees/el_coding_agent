@@ -56,6 +56,18 @@ def default_capabilities() -> list[Capability]:
             cli_equivalent='python -m local_codex_lite run "<task>" --apply --exec',
         ),
         Capability(
+            id="review.code",
+            title="Review code changes",
+            description="Review diffs or pull requests without modifying files.",
+            examples=("обзор кода", "code review", "review pull request"),
+            keywords=("review", "code review", "pull request", "ревью", "обзор кода"),
+            required_inputs=(),
+            safety_level="safe",
+            requires_apply=False,
+            requires_exec=False,
+            cli_equivalent="python -m local_codex_lite review",
+        ),
+        Capability(
             id="logs.latest",
             title="Show latest logs",
             description="Inspect the latest run log output without rerunning the model.",

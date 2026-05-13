@@ -18,6 +18,7 @@ from .prompts import (
     command_prompt,
     evidence_context_block,
     patch_prompt,
+    review_prompt,
     patch_repair_prompt_for_issue,
     plan_prompt,
     runtime_fix_single_file_command_prompt,
@@ -37,6 +38,12 @@ class PlanResult:
     plan: dict
     diff: str
     commands: dict
+    context: str
+
+
+@dataclass(frozen=True)
+class ReviewResult:
+    review: dict
     context: str
 
 
@@ -446,6 +453,53 @@ def suggest_commands(
         ),
         prompt_builder=lambda context: command_prompt(task, json.dumps(plan, ensure_ascii=False, indent=2), _merge_context(context, extra_context)),
     )
+
+
+def make_review(
+    task: str,
+    diff_text: str,
+    workspace_root: Path,
+    config: AgentConfig,
+    run_dir: Path | None = None,
+    extra_context: str = "",
+) -> dict:
+    client = OpenAICompatibleClient(config.llm)
+    review_context = _merge_context(
+        compact_context(workspace_root, task, config.workspace, allow_sensitive_read=config.safety.allow_sensitive_read),
+        extra_context,
+    )
+    messages = review_prompt(diff_text, review_context)
+    budget = _budget_for_messages(messages, config.llm.max_tokens)
+    response = client.chat(messages, max_tokens=budget, status_label="Reviewing code changes")
+    try:
+        result = extract_json(response.text)
+        _log_llm_attempt(
+            run_dir,
+            "review",
+            1,
+            "success",
+            issue_type="unknown",
+            strategy="none",
+            max_tokens=budget,
+            context_chars=len(review_context) + len(diff_text),
+            response_text=response.text,
+        )
+        return result
+    except ValueError as exc:
+        repaired = repair_json_response(client, messages, response.text, max_tokens=min(768, budget))
+        _log_llm_attempt(
+            run_dir,
+            "review",
+            1,
+            "parse_error",
+            issue_type="malformed_json",
+            strategy="none",
+            error=str(exc),
+            max_tokens=budget,
+            context_chars=len(review_context) + len(diff_text),
+            response_text=response.text,
+        )
+        return repaired
 
 
 def revise_plan_with_assumptions(

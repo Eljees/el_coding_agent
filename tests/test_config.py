@@ -1,0 +1,66 @@
+"""Tests for local_codex_lite.config."""
+from __future__ import annotations
+
+import yaml
+from pathlib import Path
+
+import pytest
+
+from local_codex_lite.config import (
+    AgentConfig,
+    LLMConfig,
+    WorkspaceConfig,
+    SafetyConfig,
+    config_as_dict,
+    default_config,
+    load_config,
+    save_config,
+    config_path,
+)
+
+
+def test_default_config_has_expected_defaults() -> None:
+    cfg = default_config()
+    assert cfg.llm.base_url == "http://localhost:8015/v1"
+    assert cfg.llm.model == "qwen25-coder-14b-awq"
+    assert cfg.llm.temperature >= 0.0
+    assert cfg.llm.max_tokens > 0
+
+
+def test_config_as_dict_is_serialisable() -> None:
+    cfg = default_config()
+    d = config_as_dict(cfg)
+    assert isinstance(d, dict)
+    assert "llm" in d
+    assert isinstance(d["llm"]["base_url"], str)
+
+
+def test_save_and_load_config_roundtrip(tmp_path: Path) -> None:
+    cfg = default_config()
+    cfg.llm.model = "test-model-roundtrip"
+    path = tmp_path / ".local-codex-lite" / "config.yaml"
+    save_config(cfg, path)
+    assert path.exists()
+    loaded = load_config(path)
+    assert loaded.llm.model == "test-model-roundtrip"
+
+
+def test_load_config_missing_file_returns_default(tmp_path: Path) -> None:
+    path = tmp_path / "nonexistent" / "config.yaml"
+    cfg = load_config(path)
+    # Should silently return defaults when file is absent
+    assert isinstance(cfg, AgentConfig)
+    assert cfg.llm.base_url == "http://localhost:8015/v1"
+
+
+def test_config_path_uses_workspace_root(tmp_path: Path) -> None:
+    path = config_path(tmp_path)
+    assert path.parent.name == ".local-codex-lite"
+    assert path.name == "config.yaml"
+
+
+def test_safety_config_defaults_are_conservative() -> None:
+    cfg = default_config()
+    # apply and exec must default to False (require explicit opt-in)
+    assert cfg.safety.require_apply_flag is True
+    assert cfg.safety.require_exec_flag is True

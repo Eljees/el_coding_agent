@@ -9,6 +9,7 @@ def test_capability_registry_contains_expected_ids() -> None:
     assert "run.preview" in ids
     assert "run.apply" in ids
     assert "run.exec" in ids
+    assert "review.code" in ids
     assert "logs.latest" in ids
     assert "evidence.json_compare" in ids
     assert "evidence.artifacts.inspect" in ids
@@ -34,6 +35,13 @@ def test_recognize_bug_fix_maps_to_preview_flow() -> None:
     decision = recognize_intent("исправь баг в patcher.py", default_capabilities())
     assert decision.intent == "run.preview"
     assert decision.requires_apply is False
+
+
+def test_recognize_code_review_maps_to_review_flow() -> None:
+    decision = recognize_intent("сделай обзор кода для pull request", default_capabilities())
+    assert decision.intent == "review.code"
+    assert decision.requires_apply is False
+    assert decision.requires_exec is False
 
 
 def test_recognize_cve_scan_with_path() -> None:

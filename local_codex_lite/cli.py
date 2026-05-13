@@ -4,7 +4,9 @@ import argparse
 import json
 import os
 import sys
+from subprocess import CompletedProcess, run as subprocess_run
 from pathlib import Path
+from typing import Any
 
 from .config import AgentConfig, config_as_dict, config_path, default_config, load_config, save_config
 from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_rag_doctor
@@ -23,6 +25,7 @@ from .logging_utils import (
 from .patch_errors import PatchErrorClassification, classify_patch_apply, classify_patch_validation
 from .patcher import apply_patch, backup_paths, validate_diff
 from .planner import make_patch, make_plan, repair_patch_with_error, revise_plan_with_assumptions, suggest_commands
+from .planner import make_review
 from .project_workspace import resolve_task_workspace
 from .prompts import ask_prompt, evidence_question_prompt
 from .retrying import classify_httpx_exception, strategy_for_issue
@@ -41,7 +44,7 @@ from .rag import (
 )
 from .patcher import detect_runtime_fix_context
 from .ui import run_command_center_ui
-from .workspace import RankedWorkspaceFile, summarize_ranked_files
+from .workspace import RankedWorkspaceFile, read_file_chunks
 from .evidence import save_evidence
 
 # ── helpers from split modules (re-exported for backward compatibility) ───────
@@ -150,6 +153,39 @@ def cmd_preview(args: argparse.Namespace) -> int:
         console.print("[red]Preview failed[/red]")
         console.print(f"{exc.__class__.__name__}: {exc}")
         return 1
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    root = workspace_root()
+    cfg = load_config(root)
+    run_dir = session_dir(root)
+    evidence_bundle = create_evidence_bundle(run_dir, source="manual", task="code review", run_id=run_dir.name)
+    task = "Review the current code changes for bugs, regressions, missing tests, and maintainability issues."
+    diff_text, diff_label = _load_review_diff(root, args)
+    if not diff_text.strip():
+        console.print("[red]No diff found to review.[/red]")
+        return 1
+    dump_text(run_dir / "review.diff", diff_text)
+    save_raw_text(evidence_bundle, "review.diff", diff_text)
+    save_summary_text(evidence_bundle, "review.diff", f"Reviewed diff source: {diff_label}")
+    review_paths = _extract_review_paths(diff_text)
+    selected_files = read_file_chunks(root, review_paths, cfg.workspace.max_file_bytes, cfg.safety.allow_sensitive_read)
+    if selected_files:
+        selected_payload = [
+            {"path": item.path.relative_to(root).as_posix(), "content_excerpt": item.content[:2000]}
+            for item in selected_files
+        ]
+        save_summary_json(evidence_bundle, "review_context.json", selected_payload)
+        dump_json(run_dir / "review_context.json", selected_payload)
+    context = _build_review_context(root, diff_text, review_paths, selected_files)
+    review = make_review(task, diff_text, root, cfg, run_dir=run_dir, extra_context=context)
+    dump_json(run_dir / "review.json", review)
+    save_evidence(run_dir, "review", review)
+    save_summary_json(evidence_bundle, "review.json", review)
+    write_status(evidence_bundle, status="ok", error_code=None, message="review completed", evidence_complete=True)
+    console.print("[bold]Code review[/bold]")
+    console.print_json(json.dumps(review, ensure_ascii=False, indent=2))
+    return 0
 
 
 def _run_task(task: str, args: argparse.Namespace) -> int:
@@ -510,6 +546,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_preview.add_argument("--evidence-stdin", action="store_true")
     p_preview.add_argument("--rag", action="store_true")
 
+    p_review = sub.add_parser("review")
+    p_review.add_argument("--base", default="")
+    p_review.add_argument("--head", default="HEAD")
+    p_review.add_argument("--staged", action="store_true")
+    p_review.add_argument("--diff-file", action="append", default=[])
+    p_review.add_argument("--diff-stdin", action="store_true")
+
     p_rag = sub.add_parser("rag")
     rag_sub = p_rag.add_subparsers(dest="rag_command", required=True)
     p_rag_index = rag_sub.add_parser("index")
@@ -611,6 +654,8 @@ def main() -> int:
         return cmd_ask(args.question, args)
     if args.command == "preview":
         return cmd_preview(args)
+    if args.command == "review":
+        return cmd_review(args)
     if args.command == "rag":
         if args.rag_command == "index":
             return cmd_rag_index(args)
@@ -640,6 +685,74 @@ def main() -> int:
             return cmd_evidence_cve_scan(args)
     parser.print_help()
     return 1
+
+
+def _load_review_diff(root: Path, args: argparse.Namespace) -> tuple[str, str]:
+    if getattr(args, "diff_file", []):
+        parts: list[str] = []
+        for item in args.diff_file:
+            path = Path(item)
+            if not path.is_absolute():
+                path = root / path
+            if path.exists():
+                parts.append(path.read_text(encoding="utf-8", errors="replace"))
+        return ("\n\n".join(parts), "diff-file")
+    if getattr(args, "diff_stdin", False):
+        return (sys.stdin.read(), "stdin")
+    base = (getattr(args, "base", "") or "").strip()
+    head = (getattr(args, "head", "") or "HEAD").strip() or "HEAD"
+    if base:
+        diff = _git_diff(root, ["diff", "--no-ext-diff", "--unified=3", f"{base}...{head}"])
+        return (diff, f"{base}...{head}")
+    if getattr(args, "staged", False):
+        diff = _git_diff(root, ["diff", "--cached", "--no-ext-diff", "--unified=3"])
+        return (diff, "staged")
+    diff = _git_diff(root, ["diff", "--no-ext-diff", "--unified=3"])
+    return (diff, "working tree")
+
+
+def _git_diff(root: Path, git_args: list[str]) -> str:
+    completed: CompletedProcess[str] = subprocess_run(["git", *git_args], cwd=root, capture_output=True, text=True, check=False)
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or "git diff failed")
+    return completed.stdout
+
+
+def _extract_review_paths(diff_text: str) -> list[Path]:
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for line in diff_text.splitlines():
+        if not (line.startswith("+++ b/") or line.startswith("--- a/")):
+            continue
+        raw = line[6:].strip()
+        if raw == "/dev/null":
+            continue
+        normalized = raw.replace("\\", "/")
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        paths.append(Path(normalized))
+    return paths
+
+
+def _build_review_context(root: Path, diff_text: str, paths: list[Path], selected_files: list[Any]) -> str:
+    top_level = []
+    try:
+        top_level = [entry.name for entry in sorted(root.iterdir(), key=lambda item: item.name.lower())[:20]]
+    except OSError:
+        top_level = []
+    parts = ["# Review summary", f"Files touched: {len(paths)}"]
+    if top_level:
+        parts.extend(["", "# Top-level entries", *top_level])
+    if selected_files:
+        parts.append("")
+        parts.append("# Current file excerpts")
+        for item in selected_files:
+            parts.append(f"## {item.path.relative_to(root).as_posix()}")
+            parts.append(item.content[:2000])
+            parts.append("")
+    parts.extend(["", "# Diff", diff_text])
+    return "\n".join(parts).strip()
 
 
 if __name__ == "__main__":

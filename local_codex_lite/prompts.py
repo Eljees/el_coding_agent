@@ -303,6 +303,35 @@ def command_prompt(task: str, plan_json: str, context: str) -> list[dict[str, st
     ]
 
 
+def review_prompt(diff_text: str, context: str, base_ref: str = "working tree", head_ref: str = "HEAD") -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a senior code reviewer. Review the provided diff and workspace context only. "
+                "Focus on correctness, regressions, security, missing tests, maintainability, and rollout risk. "
+                "Return only valid JSON. "
+                "If a fact is not present, use UNKNOWN. "
+                "Do not invent file paths, line numbers, findings, or approvals. "
+                "If the diff is empty, report that there is nothing to review."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Review target:\n"
+                f"{base_ref}...{head_ref}\n\n"
+                "Diff:\n"
+                f"{diff_text}\n\n"
+                "Workspace context:\n"
+                f"{context}\n\n"
+                "Return JSON only with keys summary, overall_risk, findings, positives, missing_context, recommendation.\n"
+                "Each finding should be an object with keys severity, file, line, title, detail, suggestion."
+            ),
+        },
+    ]
+
+
 def runtime_fix_single_file_command_prompt(task: str, plan_json: str, target_path: str) -> list[dict[str, str]]:
     return [
         {

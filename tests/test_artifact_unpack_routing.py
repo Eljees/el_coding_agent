@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from local_codex_lite.artifact_unpack import inspect_artifacts, _resolve_extraction_root
-from local_codex_lite.cli import cmd_evidence_artifacts_inspect
+from local_codex_lite.cli_evidence import cmd_evidence_artifacts_inspect
 
 
 # ---------------------------------------------------------------------------

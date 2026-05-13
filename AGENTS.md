@@ -36,6 +36,38 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
   cases with more than one matching file
 - CI pipeline added: `.github/workflows/ci.yml` (ruff, mypy, pytest on Python 3.11 + 3.12)
 
+### GUI improvements (2026-05-13, session 2)
+
+`ui.py` was expanded from 676 → 1063 lines. All changes are backward-compatible.
+
+- **Scrollbars**: all 5 `tk.Text` widgets now have linked `ttk.Scrollbar` (task input, evidence,
+  IntentDecision JSON, command output, capability detail).
+- **Window init**: `minsize(900, 600)`, `resizable(True, True)`, `update_idletasks()` before
+  `mainloop()`.  Window geometry persists across sessions in `.local-codex-lite/ui_geometry.txt`.
+- **Status bar**: packed at bottom of root (before main, so it stays visible).  Labels: cve-bin-tool
+  version, LLM endpoint reachability, active workspace path — all probed in a daemon thread on startup.
+- **Notebook tabs**: content reorganised into `ttk.Notebook` with two tabs:
+  - **Agent** — the existing run/preview/apply workflow.
+  - **Chat** — direct Q&A panel backed by `OpenAICompatibleClient`. Conversation history is kept
+    in memory per session. Ctrl+Enter sends. Send button is disabled while the model is responding.
+- **Task history dropdown**: `ttk.Combobox` above the task input. Tasks are saved to
+  `.local-codex-lite/task_history.json` (up to 50 entries, deduplicated, most recent first)
+  whenever Analyze / Preview / Apply / Exec is triggered. Selecting an entry restores the task text.
+- **Progress bar + Stop**: indeterminate `ttk.Progressbar` starts when a background worker runs,
+  stops when it finishes. Stop button sets `_stop_triggered` flag; `_finish_background` shows
+  "Stopped by user." and skips the worker result.
+- **Hotkeys**: F5 = Analyze, Ctrl+Enter = Preview, Ctrl+Shift+Enter = Apply (bound on `task_text`;
+  return "break" so default newline is suppressed). Chat Ctrl+Enter remains isolated.
+- **Export button**: saves current command output to a user-chosen file via `filedialog`.
+
+### New test files (untracked, pending commit)
+
+- `tests/test_cli_evidence.py` — 5 tests: script resolution, capture_output, stderr capture,
+  missing-script exit code.
+- `tests/test_config.py` — 6 tests: defaults, serialization, roundtrip, missing file, path
+  structure, safety flags (`require_apply_flag`, `require_exec_flag`).
+- `tests/test_intent.py` — 13 tests: routing, path extraction, missing inputs, decision dict shape.
+
 ### Verification commands
 
 ```powershell
