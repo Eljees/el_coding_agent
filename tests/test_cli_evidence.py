@@ -30,12 +30,11 @@ def test_resolve_cve_skill_script_finds_repo_root_script() -> None:
 
 def test_resolve_cve_skill_script_raises_when_missing(tmp_path: Path) -> None:
     """FileNotFoundError with diagnostic message when script not found."""
-    # Point the workspace_root to a temp dir that has no skills/ subdirectory.
-    with patch("local_codex_lite.cli_evidence.workspace_root", return_value=tmp_path):
+    # Force all candidates to appear missing regardless of repo layout.
+    with patch("local_codex_lite.cli_evidence.Path.exists", return_value=False):
         # Also patch importlib.resources to raise so packaged path is skipped.
         with patch("local_codex_lite.cli_evidence.importlib.resources.files", side_effect=Exception):
             with pytest.raises(FileNotFoundError) as exc_info:
-                # Pass a root that also has no skills/
                 resolve_cve_skill_script(root=tmp_path)
     msg = str(exc_info.value)
     assert "run_cve_scan.py" in msg

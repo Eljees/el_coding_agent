@@ -38,16 +38,15 @@ def test_config_as_dict_is_serialisable() -> None:
 def test_save_and_load_config_roundtrip(tmp_path: Path) -> None:
     cfg = default_config()
     cfg.llm.model = "test-model-roundtrip"
-    path = tmp_path / ".local-codex-lite" / "config.yaml"
-    save_config(cfg, path)
+    path = save_config(tmp_path, cfg)
     assert path.exists()
-    loaded = load_config(path)
+    loaded = load_config(tmp_path)
     assert loaded.llm.model == "test-model-roundtrip"
 
 
 def test_load_config_missing_file_returns_default(tmp_path: Path) -> None:
-    path = tmp_path / "nonexistent" / "config.yaml"
-    cfg = load_config(path)
+    workspace = tmp_path / "nonexistent"
+    cfg = load_config(workspace)
     # Should silently return defaults when file is absent
     assert isinstance(cfg, AgentConfig)
     assert cfg.llm.base_url == "http://localhost:8015/v1"
