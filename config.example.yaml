@@ -37,3 +37,36 @@ safety:
   require_apply_flag: true
   require_exec_flag: true
   allow_sensitive_read: false
+  max_patch_attempts: 4
+rag:
+  provider: "keyword"
+  enabled: true
+  store_dir: ".local-codex-lite/rag/keyword"
+  top_k: 8
+  chunk_chars: 1800
+  overlap_chars: 250
+  max_context_chars: 12000
+  include_globs:
+    - "**/*.py"
+    - "**/*.md"
+    - "**/*.toml"
+    - "**/*.yaml"
+    - "**/*.yml"
+    - "**/*.json"
+    - "**/*.ps1"
+  exclude_globs:
+    - ".git/**"
+    - ".venv/**"
+    - "venv/**"
+    - "__pycache__/**"
+    - ".pytest_cache/**"
+    - ".mypy_cache/**"
+    - "node_modules/**"
+    - ".local-codex-lite/**"
+    - ".tmp/**"
+    - ".vscode/**"
+    - "__old/**"
+    - "**/.env"
+    - "**/*secret*"
+    - "**/*token*"
+    - "**/*private*"
