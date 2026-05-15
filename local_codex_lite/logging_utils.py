@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+import secrets
 from collections import deque
 from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
@@ -8,8 +10,57 @@ from pathlib import Path
 from typing import Any
 
 
+# Patterns that pair a secret-bearing key/header with its value so the value
+# itself can be replaced (not just prefixed) with <redacted>.
+_KEY_VALUE_REDACTORS: tuple[re.Pattern[str], ...] = (
+    # token=..., password=..., access_token=..., api_key=..., secret=..., ...
+    re.compile(
+        r"(\b(?:token|password|access_token|private_token|api_key|secret|credential)\b\s*[:=]\s*)"
+        r"\S+",
+        re.IGNORECASE,
+    ),
+    # Authorization: Bearer <...>, Authorization: Basic <...>
+    re.compile(r"(\bauthorization\s*:\s*(?:bearer|basic|token)\s+)\S+", re.IGNORECASE),
+    # X-Api-Key: <...>, X-Auth-Token: <...>
+    re.compile(r"(\bx-(?:api-key|auth-token)\s*:\s*)\S+", re.IGNORECASE),
+    # Url-embedded basic auth: https://user:token@host/...
+    re.compile(r"(https?://)[^/\s@]+:[^/\s@]+@", re.IGNORECASE),
+)
+
+
+def sanitize_log_text(value: str, limit: int = 600) -> str:
+    """Compact and redact *value* before it is persisted in logs.
+
+    - Collapses CR/LF and runs of whitespace into single spaces.
+    - Replaces the secret value following well-known credential keys/headers
+      (``token=``, ``password=``, ``Authorization: Basic ...`` ...) with
+      ``<redacted>``.  Unlike the prior implementation this masks the actual
+      secret, not just prefixes it.
+    - Trims the result to ``limit`` characters with an ellipsis suffix.
+    """
+    if not value:
+        return ""
+    compact = " ".join(value.replace("\r", "\n").split())
+    for pattern in _KEY_VALUE_REDACTORS:
+        if pattern.pattern.startswith("(https?://)"):
+            compact = pattern.sub(r"\1<redacted>:<redacted>@", compact)
+        else:
+            compact = pattern.sub(r"\1<redacted>", compact)
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3] + "..."
+
+
 def utc_timestamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    """Return a per-run timestamp that is collision-resistant within the
+    same second.  The format is ``YYYYMMDD-HHMMSS-uuuuuu-xxxxxx`` where
+    ``uuuuuu`` is the UTC microsecond component and ``xxxxxx`` is a 6-char
+    hex suffix.  The format is still lexicographically sortable, so
+    ``latest_session_dir`` keeps working and existing run directories with
+    the shorter ``YYYYMMDD-HHMMSS`` shape still compare correctly.
+    """
+    now = datetime.now(timezone.utc)
+    return now.strftime("%Y%m%d-%H%M%S-%f") + "-" + secrets.token_hex(3)
 
 
 def session_dir(workspace_root: Path, run_id: str | None = None) -> Path:

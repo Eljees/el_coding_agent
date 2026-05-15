@@ -325,8 +325,8 @@ def _run_task(task: str, args: argparse.Namespace) -> int:
                 raw = line[6:].strip()
                 if raw != "/dev/null":
                     touched.append(root / raw)
-        backup_paths(touched, root)
-        apply_result = apply_patch(patch, root)
+        backup_paths(touched, root, run_dir=run_dir)
+        apply_result = apply_patch(patch, root, run_dir=run_dir)
         result["apply_returncode"] = apply_result.returncode
         result["apply_stdout"] = apply_result.stdout
         result["apply_stderr"] = apply_result.stderr

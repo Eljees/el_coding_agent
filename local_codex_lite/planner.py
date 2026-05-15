@@ -12,7 +12,7 @@ import httpx
 
 from .config import AgentConfig
 from .llm_client import OpenAICompatibleClient, extract_diff, extract_json, repair_json_response
-from .logging_utils import append_jsonl
+from .logging_utils import append_jsonl, sanitize_log_text
 from .prompts import (
     assumption_prompt,
     command_prompt,
@@ -978,6 +978,12 @@ def _log_llm_attempt(
 ) -> None:
     if run_dir is None:
         return
+    # Sanitize raw model output and error text before it lands on disk so an
+    # accidentally pasted token or Authorization header does not leak into
+    # events.jsonl.  sanitize_log_text collapses whitespace, redacts known
+    # secret markers, and clamps length.
+    safe_error = sanitize_log_text(error) if error else None
+    safe_excerpt = sanitize_log_text(response_text, limit=1000) if response_text else None
     append_jsonl(
         run_dir / "events.jsonl",
         {
@@ -987,10 +993,10 @@ def _log_llm_attempt(
             "status": status,
             "issue_type": issue_type,
             "strategy": strategy,
-            "error": error,
+            "error": safe_error,
             "max_tokens": max_tokens,
             "context_chars": context_chars,
-            "response_excerpt": (response_text or "")[:1000] if response_text else None,
+            "response_excerpt": safe_excerpt,
         },
     )
 

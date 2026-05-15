@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import csv
 import json
 import os
+import re
 import shutil
 import subprocess
 from collections import Counter
@@ -14,6 +16,7 @@ from typing import Iterable
 from .container_errors import classify_container_error
 from .evidence import compare_json_values_as_dict, save_json_file
 from .evidence_mode import create_evidence_bundle, save_raw_json, save_report_text, save_summary_json, write_status
+from .logging_utils import sanitize_log_text
 
 
 DEFAULT_IMAGE = "trufflesecurity/trufflehog:3.94.1"
@@ -79,29 +82,61 @@ def parse_ndjson(text: str) -> dict[str, object]:
     }
 
 
+_AUTH_HEADER_ARG_RE = re.compile(r"^http\.extraHeader=Authorization:\s*", re.IGNORECASE)
+
+
+def _redact_subprocess_args(args: object) -> object:
+    """Return *args* with any Authorization-bearing git config option masked.
+
+    ``subprocess.CalledProcessError`` keeps the full argv around and prints it
+    when the exception is rendered.  Without this hook, raising on a failed
+    clone would surface the raw Basic-auth header (and therefore the token).
+    """
+    if not isinstance(args, (list, tuple)):
+        return args
+    redacted: list[object] = []
+    for item in args:
+        if isinstance(item, str) and _AUTH_HEADER_ARG_RE.match(item):
+            redacted.append("http.extraHeader=Authorization: <redacted>")
+        else:
+            redacted.append(item)
+    return type(args)(redacted)
+
+
 def clone_repo(url: str, dst: Path, user: str, token: str, depth: int) -> None:
+    """Clone *url* into *dst* using HTTP Basic auth supplied via
+    ``http.extraHeader`` rather than embedding ``user:token`` in the URL.
+
+    Embedding credentials in the URL makes them appear verbatim in any error
+    output git produces (``fatal: unable to access 'https://USER:TOKEN@...'``)
+    and in downstream tooling that records the cloned URL.  Passing them via
+    ``-c http.extraHeader`` keeps the URL clean and lets us redact the args
+    list before propagating a ``CalledProcessError``.
+    """
     if dst.exists():
         shutil.rmtree(dst)
-    auth_url = url.replace("https://", f"https://{user}:{token}@")
+    basic = base64.b64encode(f"{user}:{token}".encode("utf-8")).decode("ascii")
     cp = run(
         [
             "git",
-            "-c",
-            "credential.helper=",
-            "-c",
-            "core.askPass=",
-            "-c",
-            "http.sslVerify=false",
+            "-c", f"http.extraHeader=Authorization: Basic {basic}",
+            "-c", "credential.helper=",
+            "-c", "core.askPass=",
+            "-c", "http.sslVerify=false",
             "clone",
-            "--depth",
-            str(depth),
-            auth_url,
+            "--depth", str(depth),
+            url,
             str(dst),
         ],
         timeout=1800,
     )
     if cp.returncode != 0:
-        raise subprocess.CalledProcessError(cp.returncode, cp.args, output=cp.stdout, stderr=cp.stderr)
+        raise subprocess.CalledProcessError(
+            cp.returncode,
+            _redact_subprocess_args(cp.args),
+            output=cp.stdout,
+            stderr=cp.stderr,
+        )
 
 
 def scan_repo(repo_dir: Path, image: str = DEFAULT_IMAGE) -> dict[str, object]:
@@ -412,8 +447,16 @@ def _issue_payload(issue) -> dict[str, object]:  # noqa: ANN001
     }
 
 
+_AUTH_URL_RE = re.compile(r"(https?://)[^/\s@]+:[^/\s@]+@", re.IGNORECASE)
+_AUTH_HEADER_BODY_RE = re.compile(r"(authorization:\s*basic\s+)\S+", re.IGNORECASE)
+
+
 def _sanitize_error(text: str) -> str:
-    return " ".join(text.split())[:500]
+    """Redact common credential shapes (url-embedded basic auth, Authorization
+    headers) and delegate the rest to the project-wide log sanitizer."""
+    masked = _AUTH_URL_RE.sub(r"\1<redacted>:<redacted>@", text or "")
+    masked = _AUTH_HEADER_BODY_RE.sub(r"\1<redacted>", masked)
+    return sanitize_log_text(masked, limit=500)
 
 
 def _summary_csv_text(summary_rows: list[dict[str, object]]) -> str:

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from .config import AgentConfig
-from .logging_utils import append_jsonl
+from .logging_utils import append_jsonl, sanitize_log_text as _sanitize_log_text_impl
 from .patch_errors import PatchErrorClassification
 from .rag import RagProviderError, format_retrieved_context, retrieve_rag_context
 from .rich_compat import make_console
@@ -73,12 +73,12 @@ def log_patch_error(
 
 
 def sanitize_log_text(value: str, limit: int = 600) -> str:
-    compact = " ".join(value.replace("\r", "\n").split())
-    for marker in ("token=", "password=", "access_token=", "private_token="):
-        compact = compact.replace(marker, f"{marker}<redacted>")
-    if len(compact) <= limit:
-        return compact
-    return compact[: limit - 3] + "..."
+    """Backward-compatible alias for ``logging_utils.sanitize_log_text``.
+
+    Kept here because tests and other modules import
+    ``cli_utils.sanitize_log_text`` directly.
+    """
+    return _sanitize_log_text_impl(value, limit=limit)
 
 
 def selected_files(root: Path, task: str, cfg: AgentConfig) -> list[RankedWorkspaceFile]:

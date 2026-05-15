@@ -118,22 +118,49 @@ def _semantic_line(line: str) -> str:
     return "".join(line.split())
 
 
-def backup_paths(paths: list[Path], workspace_root: Path) -> Path:
-    backup_root = workspace_root / ".local-codex-lite" / "backups"
+def backup_paths(
+    paths: list[Path],
+    workspace_root: Path,
+    run_dir: Path | None = None,
+) -> Path:
+    """Copy *paths* into a backup directory and return that directory.
+
+    When ``run_dir`` is provided, backups go into ``<run_dir>/backups`` so
+    successive runs (and repair attempts within the same run) never overwrite
+    each other.  When ``run_dir`` is omitted we fall back to the legacy
+    ``.local-codex-lite/backups/current`` location so older callers and tests
+    keep working.
+    """
+    if run_dir is not None:
+        backup_root = run_dir / "backups"
+    else:
+        backup_root = workspace_root / ".local-codex-lite" / "backups" / "current"
     backup_root.mkdir(parents=True, exist_ok=True)
-    stamp = backup_root / "current"
-    stamp.mkdir(parents=True, exist_ok=True)
     for path in paths:
         if path.exists() and path.is_file():
             rel = path.relative_to(workspace_root)
-            target = stamp / rel
+            target = backup_root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
-    return stamp
+    return backup_root
 
 
-def apply_patch(diff_text: str, workspace_root: Path) -> subprocess.CompletedProcess[str]:
-    patch_file = workspace_root / ".local-codex-lite" / "patch.diff"
+def apply_patch(
+    diff_text: str,
+    workspace_root: Path,
+    run_dir: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Write *diff_text* to a patch file and shell out to ``git apply``.
+
+    When ``run_dir`` is provided, the patch file lives inside that run-dir
+    (``<run_dir>/patch.diff``) so concurrent runs do not race on a single
+    shared ``.local-codex-lite/patch.diff``.  When omitted, the legacy
+    workspace-level path is used for backward compatibility.
+    """
+    if run_dir is not None:
+        patch_file = run_dir / "patch.diff"
+    else:
+        patch_file = workspace_root / ".local-codex-lite" / "patch.diff"
     patch_file.parent.mkdir(parents=True, exist_ok=True)
     patch_file.write_text(diff_text, encoding="utf-8")
     git_root = _discover_git_root(workspace_root)
