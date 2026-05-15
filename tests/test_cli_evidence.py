@@ -30,9 +30,13 @@ def test_resolve_cve_skill_script_finds_repo_root_script() -> None:
 
 def test_resolve_cve_skill_script_raises_when_missing(tmp_path: Path) -> None:
     """FileNotFoundError with diagnostic message when script not found."""
-    # Force all candidates to appear missing regardless of repo layout.
-    with patch("local_codex_lite.cli_evidence.Path.exists", return_value=False):
-        # Also patch importlib.resources to raise so packaged path is skipped.
+    # Force every candidate to appear missing regardless of repo layout.
+    # We patch the module-level _candidate_exists helper instead of
+    # pathlib.Path.exists so the test does not depend on Path subclass
+    # internals (Path vs PosixPath vs WindowsPath MRO).
+    with patch("local_codex_lite.cli_evidence._candidate_exists", return_value=False):
+        # Also patch importlib.resources to raise so the packaged-resources
+        # candidate is skipped instead of resolving to a real file.
         with patch("local_codex_lite.cli_evidence.importlib.resources.files", side_effect=Exception):
             with pytest.raises(FileNotFoundError) as exc_info:
                 resolve_cve_skill_script(root=tmp_path)

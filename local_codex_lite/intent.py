@@ -168,6 +168,30 @@ def _looks_like_artifact_path(text: str) -> bool:
 _PATH_INPUTS = {"input_root", "left", "right"}
 # Inputs that require two JSON-like filenames (not necessarily Windows paths).
 _JSON_PATH_INPUTS = {"left_path", "right_path"}
+# Inputs that accept either a repo URL or a local file path holding a repo list.
+_REPO_URL_OR_FILE_INPUTS = {"repo_url_or_file"}
+
+
+_URL_RE = re.compile(r"\bhttps?://\S+", re.IGNORECASE)
+_REPO_LIST_FILE_RE = re.compile(r"\S+\.(?:txt|list|lst)\b", re.IGNORECASE)
+
+
+def _looks_like_repo_input(text: str) -> bool:
+    """Return True when *text* contains something that can be used as the
+    `--repo-url` or `--repo-file` argument for the TruffleHog scan capability.
+
+    The check is intentionally permissive: a plain http(s) URL, a Windows-style
+    path, or a tokenized .txt/.list filename all qualify.  False positives on
+    this routing layer are cheap (CLI re-validates), false negatives let the
+    UI claim a missing-input task can run.
+    """
+    if _URL_RE.search(text):
+        return True
+    if extract_artifact_paths(text):
+        return True
+    if _REPO_LIST_FILE_RE.search(text):
+        return True
+    return False
 
 
 def _missing_inputs(capability: Capability, text: str) -> list[str]:
@@ -188,5 +212,8 @@ def _missing_inputs(capability: Capability, text: str) -> list[str]:
             path_idx += 1
         elif required in _JSON_PATH_INPUTS:
             if not _looks_like_two_json_paths(text.lower()):
+                missing.append(required)
+        elif required in _REPO_URL_OR_FILE_INPUTS:
+            if not _looks_like_repo_input(text):
                 missing.append(required)
     return missing

@@ -109,3 +109,41 @@ def test_cve_scan_capability_requires_input_root() -> None:
     assert decision.intent == "evidence.cve_scan"
     assert "input_root" in decision.missing_inputs
     assert decision.can_do == "needs_input"
+
+
+# ---------------------------------------------------------------------------
+# evidence.trufflehog.scan: repo_url_or_file validation
+# ---------------------------------------------------------------------------
+
+
+def test_trufflehog_scan_without_url_or_file_reports_missing_input() -> None:
+    decision = recognize_intent("запусти trufflehog scan", CAPS)
+    assert decision.intent == "evidence.trufflehog.scan"
+    assert "repo_url_or_file" in decision.missing_inputs
+    assert decision.can_do == "needs_input"
+
+
+def test_trufflehog_scan_with_https_url_is_satisfied() -> None:
+    decision = recognize_intent(
+        "запусти trufflehog scan для https://gitlab.example.com/group/project.git",
+        CAPS,
+    )
+    assert decision.intent == "evidence.trufflehog.scan"
+    assert decision.missing_inputs == []
+    assert decision.can_do == "yes"
+
+
+def test_trufflehog_scan_with_repo_list_file_is_satisfied() -> None:
+    decision = recognize_intent("запусти trufflehog scan по repos.txt", CAPS)
+    assert decision.intent == "evidence.trufflehog.scan"
+    assert decision.missing_inputs == []
+    assert decision.can_do == "yes"
+
+
+def test_trufflehog_scan_with_windows_repo_list_path_is_satisfied() -> None:
+    decision = recognize_intent(
+        r"запусти trufflehog scan по D:\repos\baseline.list", CAPS
+    )
+    assert decision.intent == "evidence.trufflehog.scan"
+    assert decision.missing_inputs == []
+    assert decision.can_do == "yes"

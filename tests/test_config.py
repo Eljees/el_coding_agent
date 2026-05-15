@@ -36,12 +36,21 @@ def test_config_as_dict_is_serialisable() -> None:
 
 
 def test_save_and_load_config_roundtrip(tmp_path: Path) -> None:
-    cfg = default_config()
-    cfg.llm.model = "test-model-roundtrip"
+    base = default_config()
+    # Build the updated config via model_copy so the test does not rely on
+    # in-place mutation of nested pydantic models (which is allowed today but
+    # would break the moment we set frozen=True or validate_assignment=True).
+    cfg = base.model_copy(
+        update={"llm": base.llm.model_copy(update={"model": "test-model-roundtrip"})}
+    )
     path = save_config(tmp_path, cfg)
     assert path.exists()
     loaded = load_config(tmp_path)
     assert loaded.llm.model == "test-model-roundtrip"
+    # Sanity-check the rag section also survives a save/load round trip so a
+    # future drift between config.example.yaml and AgentConfig is caught here.
+    assert loaded.rag.enabled is True
+    assert loaded.rag.provider == "keyword"
 
 
 def test_load_config_missing_file_returns_default(tmp_path: Path) -> None:

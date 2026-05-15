@@ -22,6 +22,13 @@ from .trufflehog import analyze_output_root, compare_trufflehog_outputs, scan_re
 from .cli_utils import console, load_urls, workspace_root
 
 
+def _candidate_exists(path: Path) -> bool:
+    """Indirection used by resolve_cve_skill_script so tests can patch the
+    existence check at a stable, module-level name regardless of pathlib's
+    Path/PosixPath/WindowsPath internals."""
+    return path.exists()
+
+
 def resolve_cve_skill_script(root: Path | None = None) -> Path:
     """Return the path to run_cve_scan.py, or raise FileNotFoundError with diagnostics."""
     candidates: list[Path] = []
@@ -39,7 +46,7 @@ def resolve_cve_skill_script(root: Path | None = None) -> Path:
     except Exception:
         pass
     for candidate in candidates:
-        if candidate.exists():
+        if _candidate_exists(candidate):
             return candidate
     searched = "\n  ".join(str(c) for c in candidates)
     raise FileNotFoundError(
