@@ -99,6 +99,6 @@ def test_new_file_already_exists_idempotency_is_not_broken(tmp_path: Path, monke
         ),
     )
 
-    result = cli._run_task("create foo.py", argparse.Namespace(dry_run=False, apply=True, exec=False, assume_clarification=False))
+    result = cli._run_task("create foo.py", argparse.Namespace(dry_run=False, apply=True, execute=False, assume_clarification=False))
 
     assert result == 0

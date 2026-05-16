@@ -129,14 +129,14 @@ def test_trufflehog_scan_with_https_url_is_satisfied() -> None:
         CAPS,
     )
     assert decision.intent == "evidence.trufflehog.scan"
-    assert decision.missing_inputs == []
+    assert decision.missing_inputs == ()
     assert decision.can_do == "yes"
 
 
 def test_trufflehog_scan_with_repo_list_file_is_satisfied() -> None:
     decision = recognize_intent("запусти trufflehog scan по repos.txt", CAPS)
     assert decision.intent == "evidence.trufflehog.scan"
-    assert decision.missing_inputs == []
+    assert decision.missing_inputs == ()
     assert decision.can_do == "yes"
 
 
@@ -145,5 +145,5 @@ def test_trufflehog_scan_with_windows_repo_list_path_is_satisfied() -> None:
         r"запусти trufflehog scan по D:\repos\baseline.list", CAPS
     )
     assert decision.intent == "evidence.trufflehog.scan"
-    assert decision.missing_inputs == []
+    assert decision.missing_inputs == ()
     assert decision.can_do == "yes"

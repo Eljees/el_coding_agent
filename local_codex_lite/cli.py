@@ -8,11 +8,10 @@ from subprocess import CompletedProcess, run as subprocess_run
 from pathlib import Path
 from typing import Any
 
-from .config import AgentConfig, config_as_dict, config_path, default_config, load_config, save_config
+from .config import config_as_dict, config_path, default_config, load_config, save_config
 from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_rag_doctor
 from .evidence_mode import create_evidence_bundle, save_raw_text, save_summary_json, save_summary_text, write_status
 from .logging_utils import (
-    append_jsonl,
     dump_json,
     dump_text,
     latest_events_path,
@@ -22,29 +21,26 @@ from .logging_utils import (
     session_dir,
     tail_events_text,
 )
-from .patch_errors import PatchErrorClassification, classify_patch_apply, classify_patch_validation
+from .patch_errors import classify_patch_apply, classify_patch_validation
 from .patcher import apply_patch, backup_paths, validate_diff
 from .planner import make_patch, make_plan, repair_patch_with_error, revise_plan_with_assumptions, suggest_commands
 from .planner import make_review
 from .project_workspace import resolve_task_workspace
-from .prompts import ask_prompt, evidence_question_prompt
+from .prompts import ask_prompt
 from .retrying import classify_httpx_exception, strategy_for_issue
-from .rich_compat import make_console
 from .capabilities import default_capabilities
 from .safety import run_command
 from .intent import decision_as_dict, recognize_intent
 from .llm_client import OpenAICompatibleClient
 from .rag import (
     RagProviderError,
-    ensure_rag_provider_supported,
     format_retrieved_context,
     index_workspace as rag_index_workspace,
     query_index as rag_query_index,
-    retrieve_rag_context,
 )
 from .patcher import detect_runtime_fix_context
 from .ui import run_command_center_ui
-from .workspace import RankedWorkspaceFile, read_file_chunks
+from .workspace import read_file_chunks
 from .evidence import save_evidence
 
 # ── helpers from split modules (re-exported for backward compatibility) ───────
@@ -230,7 +226,7 @@ def _run_task(task: str, args: argparse.Namespace) -> int:
     console.print("[bold]Planning done[/bold]")
     _print_plan_summary(plan)
     dump_text(run_dir / "selected_context.txt", "see plan/prompt context in session")
-    result = {"dry_run": bool(args.dry_run), "apply": bool(args.apply), "exec": bool(args.exec)}
+    result = {"dry_run": bool(args.dry_run), "apply": bool(args.apply), "exec": bool(args.execute)}
 
     if plan.get("needs_clarification"):
         questions = plan.get("clarifying_questions") if isinstance(plan.get("clarifying_questions"), list) else []
@@ -373,7 +369,7 @@ def _run_task(task: str, args: argparse.Namespace) -> int:
     console.print("\n[bold]Commands[/bold]")
     console.print_json(json.dumps(commands, ensure_ascii=False, indent=2))
 
-    if args.exec and commands.get("commands"):
+    if args.execute and commands.get("commands"):
         exec_outputs = []
         for item in commands["commands"]:
             cmd = item["cmd"]
@@ -529,7 +525,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("task")
     p_run.add_argument("--dry-run", action="store_true")
     p_run.add_argument("--apply", action="store_true")
-    p_run.add_argument("--exec", action="store_true")
+    p_run.add_argument("--exec", dest="execute", action="store_true",
+                       help="run suggested commands after a successful apply")
     p_run.add_argument("--assume-clarification", action="store_true")
     p_run.add_argument("--evidence-file", action="append", default=[])
     p_run.add_argument("--evidence-stdin", action="store_true")

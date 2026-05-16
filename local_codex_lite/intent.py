@@ -13,15 +13,19 @@ class IntentDecision:
     confidence: float
     human_summary: str
     safe_next_action: str
-    required_inputs: list[str]
-    missing_inputs: list[str]
+    # The following sequence fields are immutable (tuples) on purpose so that
+    # IntentDecision instances stay genuinely frozen -- list fields on a
+    # ``frozen=True`` dataclass can still be mutated in place which silently
+    # breaks identity assumptions in callers.
+    required_inputs: tuple[str, ...]
+    missing_inputs: tuple[str, ...]
     requires_apply: bool
     requires_exec: bool
     requires_external_help: bool
-    risks: list[str]
+    risks: tuple[str, ...]
     cli_equivalent: str
     capability_id: str
-    matched_keywords: list[str]
+    matched_keywords: tuple[str, ...]
 
 
 def decision_as_dict(decision: IntentDecision) -> dict:
@@ -101,15 +105,15 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         confidence=round(confidence, 2),
         human_summary=summary,
         safe_next_action=safe_next_action,
-        required_inputs=list(capability.required_inputs),
-        missing_inputs=missing_inputs,
+        required_inputs=tuple(capability.required_inputs),
+        missing_inputs=tuple(missing_inputs),
         requires_apply=capability.requires_apply,
         requires_exec=capability.requires_exec,
         requires_external_help=False,
-        risks=risks,
+        risks=tuple(risks),
         cli_equivalent=capability.cli_equivalent,
         capability_id=capability.id,
-        matched_keywords=matched_keywords,
+        matched_keywords=tuple(matched_keywords),
     )
 
 
@@ -120,15 +124,15 @@ def _fallback_decision(can_do: str, intent: str, summary: str, next_action: str)
         confidence=0.2,
         human_summary=summary,
         safe_next_action=next_action,
-        required_inputs=[],
-        missing_inputs=[],
+        required_inputs=(),
+        missing_inputs=(),
         requires_apply=False,
         requires_exec=False,
         requires_external_help=False,
-        risks=[],
+        risks=(),
         cli_equivalent="",
         capability_id=intent,
-        matched_keywords=[],
+        matched_keywords=(),
     )
 
 

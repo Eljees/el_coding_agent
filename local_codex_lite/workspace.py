@@ -23,6 +23,27 @@ class RankedWorkspaceFile:
     reasons: tuple[str, ...]
 
 
+# --- ranking score weights -------------------------------------------------
+# These weights tune how aggressively rank_workspace_files prefers files that
+# match the task.  The exact numbers were tuned by hand; the names exist so
+# changes have to be justified instead of dropped into a magic-number jungle.
+SCORE_TARGET_PATH_EXACT       = 260   # exact match of the resolved task target
+SCORE_TARGET_BASENAME         = 220   # basename matches the task target
+SCORE_TASK_MENTIONS_PATH      = 140   # full rel-path appears verbatim in the task
+SCORE_TASK_MENTIONS_TESTS     = 140   # task talks about tests + file is a test
+SCORE_TASK_MENTIONS_BASENAME  = 110   # basename appears in the task text
+SCORE_TASK_MENTIONS_STEM      = 90    # stem (basename minus extension) appears
+SCORE_IMPORTANT_BASENAME      = 28    # well-known project file (pyproject.toml, ...)
+SCORE_CONFIG_FILE             = 18    # .toml/.yaml/.json/.ini config flavor
+SCORE_PY_SOURCE               = 14    # generic python source bonus
+SCORE_DOC_FILE                = 8     # .md/.rst documentation
+SCORE_TESTS_DIR               = 16    # lives under tests/
+SCORE_TOKEN_EXACT             = 35    # task token equals basename or stem
+SCORE_TOKEN_PARTIAL           = 10    # task token is a substring of the path
+SCORE_SAME_DIR_BOOST          = 8     # neighbour of a high-scoring file
+SCORE_STRONG_DIR_THRESHOLD    = 70    # min score for a directory to "pull in" peers
+
+
 _IMPORTANT_BASENAMES = {
     "pyproject.toml",
     "readme.md",
@@ -87,7 +108,7 @@ def rank_workspace_files(root: Path, task: str, config: WorkspaceConfig) -> list
             score = item.score
             reasons = list(item.reasons)
             if item.path.parent in strong_dirs:
-                score += 8
+                score += SCORE_SAME_DIR_BOOST
                 reasons.append("same directory as strong match")
             boosted.append(RankedWorkspaceFile(path=item.path, score=score, reasons=tuple(reasons)))
         ranked = boosted
@@ -166,55 +187,55 @@ def _score_workspace_file(rel: str, task_lower: str, intended_target: str | None
         target_lower = intended_target.lower()
         target_basename = Path(target_lower).name
         if rel_lower == target_lower:
-            score += 260
+            score += SCORE_TARGET_PATH_EXACT
             reasons.append("task target path")
         elif basename == target_basename:
-            score += 220
+            score += SCORE_TARGET_BASENAME
             reasons.append("task target filename")
 
     if rel_lower in task_lower:
-        score += 140
+        score += SCORE_TASK_MENTIONS_PATH
         reasons.append("task mentions path")
     elif basename in task_lower:
-        score += 110
+        score += SCORE_TASK_MENTIONS_BASENAME
         reasons.append("task mentions filename")
     elif stem and stem in task_lower:
-        score += 90
+        score += SCORE_TASK_MENTIONS_STEM
         reasons.append("task mentions stem")
 
     if _task_mentions_tests(task_lower):
         if "tests" in rel_lower or basename.startswith("test_") or basename.endswith("_test.py"):
-            score += 140
+            score += SCORE_TASK_MENTIONS_TESTS
             reasons.append("task mentions tests")
 
     if basename in _IMPORTANT_BASENAMES:
-        score += 28
+        score += SCORE_IMPORTANT_BASENAME
         reasons.append("important project file")
 
     if basename.startswith("config.") or basename.startswith("settings.") or basename.endswith((".toml", ".yaml", ".yml", ".json", ".ini")):
-        score += 18
+        score += SCORE_CONFIG_FILE
         reasons.append("config file")
 
     if basename.endswith(".py"):
-        score += 14
+        score += SCORE_PY_SOURCE
         reasons.append("python source")
     elif basename.endswith((".md", ".rst")):
-        score += 8
+        score += SCORE_DOC_FILE
         reasons.append("documentation file")
 
     if parts and parts[0] == "tests":
-        score += 16
+        score += SCORE_TESTS_DIR
         reasons.append("tests directory")
 
     for token in _task_tokens(task_lower):
         if len(token) < 3:
             continue
         if token == basename or token == stem:
-            score += 35
+            score += SCORE_TOKEN_EXACT
             reasons.append(f"matched token {token}")
             break
         if token in rel_lower:
-            score += 10
+            score += SCORE_TOKEN_PARTIAL
             reasons.append(f"matched token {token}")
             break
 
@@ -239,7 +260,7 @@ def _find_strong_dirs(ranked: list[RankedWorkspaceFile]) -> set[Path]:
         current = by_dir.get(item.path.parent, -1)
         if item.score > current:
             by_dir[item.path.parent] = item.score
-    return {directory for directory, score in by_dir.items() if score >= 70}
+    return {directory for directory, score in by_dir.items() if score >= SCORE_STRONG_DIR_THRESHOLD}
 
 
 def _path_matches(rel_path: Path, pattern: str) -> bool:

@@ -71,6 +71,24 @@ class PatchValidationResult:
     errors: list[str]
 
 
+@dataclass(frozen=True)
+class ApplyResult:
+    """Outcome of ``apply_patch`` — duck-compatible with
+    ``subprocess.CompletedProcess`` on the three attributes callers actually
+    use (returncode/stdout/stderr) plus a ``strategy`` field that records
+    which git-apply strategy was selected.
+
+    We return this instead of mutating a ``CompletedProcess`` with
+    ``setattr`` because ``CompletedProcess`` is a stdlib class that may
+    grow ``__slots__`` or get other restrictions; storing strategy on a
+    purpose-built dataclass is sturdier and self-documenting.
+    """
+    returncode: int
+    stdout: str
+    stderr: str
+    strategy: str = "git_root_relative"
+
+
 def validate_diff(diff_text: str, workspace_root: Path, allow_sensitive_read: bool = False) -> PatchValidationResult:
     errors: list[str] = []
     if not diff_text.strip():
@@ -149,13 +167,16 @@ def apply_patch(
     diff_text: str,
     workspace_root: Path,
     run_dir: Path | None = None,
-) -> subprocess.CompletedProcess[str]:
+) -> ApplyResult:
     """Write *diff_text* to a patch file and shell out to ``git apply``.
 
     When ``run_dir`` is provided, the patch file lives inside that run-dir
     (``<run_dir>/patch.diff``) so concurrent runs do not race on a single
     shared ``.local-codex-lite/patch.diff``.  When omitted, the legacy
     workspace-level path is used for backward compatibility.
+
+    Returns an :class:`ApplyResult` whose ``returncode``/``stdout``/``stderr``
+    fields are drop-in compatible with ``subprocess.CompletedProcess``.
     """
     if run_dir is not None:
         patch_file = run_dir / "patch.diff"
@@ -164,40 +185,39 @@ def apply_patch(
     patch_file.parent.mkdir(parents=True, exist_ok=True)
     patch_file.write_text(diff_text, encoding="utf-8")
     git_root = _discover_git_root(workspace_root)
-    if git_root is not None:
-        directory_arg: list[str] = []
-        strategy = "git_root_relative"
-        if git_root != workspace_root:
-            try:
-                rel_dir = workspace_root.relative_to(git_root).as_posix()
-            except ValueError:
-                rel_dir = ""
-            if rel_dir:
-                # The model is asked (see prompts.py) to include the workspace
-                # prefix in diff paths when nested under a larger repo. If it
-                # honored that instruction we MUST NOT also pass --directory or
-                # the prefix gets applied twice and git apply fails with
-                # "no such file in working directory".
-                if _diff_paths_already_prefixed(diff_text, rel_dir):
-                    strategy = "in_diff_prefix"
-                else:
-                    directory_arg = ["--directory", rel_dir]
-                    strategy = "directory_prefix"
-        result = subprocess.run(
-            ["git", "apply", "--whitespace=nowarn", *directory_arg, str(patch_file)],
-            cwd=git_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        # Surface the chosen strategy on the returned object so callers (cli.py)
-        # can persist it into events.jsonl without changing the public signature.
+    if git_root is None:
+        raise RuntimeError("git repo required for patch apply in MVP")
+    directory_arg: list[str] = []
+    strategy = "git_root_relative"
+    if git_root != workspace_root:
         try:
-            setattr(result, "git_apply_strategy", strategy)
-        except (AttributeError, TypeError):
-            pass
-        return result
-    raise RuntimeError("git repo required for patch apply in MVP")
+            rel_dir = workspace_root.relative_to(git_root).as_posix()
+        except ValueError:
+            rel_dir = ""
+        if rel_dir:
+            # The model is asked (see prompts.py) to include the workspace
+            # prefix in diff paths when nested under a larger repo. If it
+            # honored that instruction we MUST NOT also pass --directory or
+            # the prefix gets applied twice and git apply fails with
+            # "no such file in working directory".
+            if _diff_paths_already_prefixed(diff_text, rel_dir):
+                strategy = "in_diff_prefix"
+            else:
+                directory_arg = ["--directory", rel_dir]
+                strategy = "directory_prefix"
+    completed = subprocess.run(
+        ["git", "apply", "--whitespace=nowarn", *directory_arg, str(patch_file)],
+        cwd=git_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return ApplyResult(
+        returncode=completed.returncode,
+        stdout=completed.stdout or "",
+        stderr=completed.stderr or "",
+        strategy=strategy,
+    )
 
 
 _DIFF_PATH_RE = re.compile(r"^(?:---|\+\+\+) [ab]/(?P<path>.+?)\s*$", re.MULTILINE)
