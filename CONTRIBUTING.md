@@ -79,6 +79,26 @@ enforces:
   `tests/test_planner_retry.py` is a good template).
 - Tests must not depend on `.local-codex-lite/runs/` from previous runs.
 
+## Mutation testing (optional)
+
+The four safety-critical modules -- ``safety.py``, ``patcher.py``,
+``patch_errors.py``, ``llm_client.py`` -- are wired into ``mutmut`` so any
+gap in the test suite shows up as a surviving mutation.  Run it locally
+on demand:
+
+```powershell
+pip install -e ".[dev]"
+mutmut run
+mutmut results
+mutmut html        # writes html/index.html with a clickable survivor list
+mutmut show <id>   # inspect a specific mutant by id
+```
+
+CI runs ``mutmut`` weekly via ``.github/workflows/mutmut.yml``; PRs are
+deliberately **not** gated on the mutation score.  Treat survivors as
+follow-up issues to file, not blockers.  When you add or harden tests
+that kill survivors, mention the dropped count in the commit message.
+
 ## Reporting issues
 
 Open an issue with:
