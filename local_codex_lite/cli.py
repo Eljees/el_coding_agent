@@ -68,6 +68,7 @@ from .cli_evidence import (  # noqa: F401
     cmd_evidence_trufflehog_analyze,
     cmd_evidence_trufflehog_compare,
     cmd_evidence_cve_scan,
+    cmd_evidence_cve_scan_history,
 )
 
 
@@ -475,6 +476,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_th_compare.add_argument("right")
     p_th_compare.add_argument("--out")
 
+    p_cve_history = evidence_sub.add_parser(
+        "cve-scan-history",
+        help="list past cve-bin-tool scans by walking a directory tree",
+    )
+    p_cve_history.add_argument("path", nargs="?", default=None,
+                               help="root to walk; defaults to .local-codex-lite/runs")
+
     p_cve = evidence_sub.add_parser("cve-scan", help="CVE scan tool runner")
     p_cve.add_argument("action_or_input", nargs="?", help="status | install | update-db | scan | <input_root>")
     p_cve.add_argument("input_root", nargs="?", help="Path to artifacts directory (may contain archives)")
@@ -553,6 +561,8 @@ def main() -> int:
                 return cmd_evidence_trufflehog_compare(args)
         if args.evidence_command == "cve-scan":
             return cmd_evidence_cve_scan(args)
+        if args.evidence_command == "cve-scan-history":
+            return cmd_evidence_cve_scan_history(args)
     parser.print_help()
     return 1
 

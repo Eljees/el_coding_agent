@@ -251,3 +251,70 @@ def cmd_evidence_cve_scan(args: argparse.Namespace) -> int:
     if result.stderr:
         console.print(result.stderr, end="", highlight=False)
     return result.returncode
+
+
+def collect_cve_scan_history(search_root: Path) -> list[dict]:
+    """Walk *search_root* recursively for ``cve_summary.json`` files and
+    return a chronologically ordered list of summaries.
+
+    Pure: does not touch the workspace.  Used both by the CLI handler
+    below and by tests that inject a fake history tree.
+    """
+    history: list[dict] = []
+    if not search_root.exists():
+        return history
+    for path in sorted(search_root.rglob("cve_summary.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        severity_counts = data.get("severity_counts") or {}
+        history.append(
+            {
+                "summary_path": str(path),
+                "generated_at": data.get("generated_at") or data.get("updated_at") or "",
+                "artifact": data.get("artifact") or data.get("input_root") or "",
+                "total_findings": data.get("total_findings", 0),
+                "critical": severity_counts.get("CRITICAL", 0),
+                "high": severity_counts.get("HIGH", 0),
+                "medium": severity_counts.get("MEDIUM", 0),
+                "status": data.get("status") or "",
+            }
+        )
+    # Stable sort by generated_at so newest runs land at the bottom.
+    history.sort(key=lambda item: item.get("generated_at") or "")
+    return history
+
+
+def cmd_evidence_cve_scan_history(args: argparse.Namespace) -> int:
+    """Render an evidence-first history of past cve-bin-tool scans.
+
+    Walks the directory in args.path (default ``<workspace>/.local-codex-lite/runs``)
+    and prints one row per ``cve_summary.json`` found.  Returns 0 when at
+    least one entry was rendered, 1 when nothing was found or the
+    search root does not exist.
+    """
+    root = workspace_root()
+    search_root = Path(args.path) if getattr(args, "path", None) else root / ".local-codex-lite" / "runs"
+    if not search_root.exists():
+        console.print(f"[red]No such directory:[/red] {search_root}")
+        return 1
+    history = collect_cve_scan_history(search_root)
+    if not history:
+        console.print(f"No cve_summary.json found under {search_root}.")
+        return 1
+    console.print(f"[bold]CVE scan history under {search_root}[/bold]")
+    for entry in history:
+        console.print(
+            "- "
+            f"{entry['generated_at'] or '—':<32} "
+            f"total={entry['total_findings']:>4} "
+            f"CRITICAL={entry['critical']:>3} "
+            f"HIGH={entry['high']:>3} "
+            f"MEDIUM={entry['medium']:>3} "
+            f"status={entry['status'] or '—':<8} "
+            f"| {entry['artifact'] or '—'}"
+        )
+        console.print(f"  evidence: {entry['summary_path']}")
+    console.print(f"\n{len(history)} scan(s) total.")
+    return 0
