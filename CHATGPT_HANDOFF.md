@@ -6,6 +6,52 @@
 
 ---
 
+## Daily summary 2026-05-16
+
+### Completed (evidenced by git history + working tree)
+
+- CLI feature expansion + admin ergonomics:
+  - `runs archive` / `runs prune` for aging out `.local-codex-lite/runs/` (dry-run by default; `--apply` required).
+  - `runs export <run> [--out ...]` to create an on-demand zip bundle for a single run (bug-report friendly).
+  - `run --dry-run --json` for machine-readable dry-run output.
+  - `logs diff` for side-by-side comparison of two runs.
+  - `undo` to restore workspace files from a run’s `backups/`.
+  - `doctor full` aggregates core + dependency + RAG + tool probes.
+  - `--max-patch-attempts` CLI override for patch repair retries.
+- Config/profile usability:
+  - `--profile` selects an LLM profile from `llm_profiles` per invocation (does not change defaults).
+- Safety hardening:
+  - Post-apply AST syntax gate for touched `*.py` files (fails closed on syntax errors before proceeding).
+- Tooling/docs hygiene:
+  - Added ruff config + formatting, stricter mypy, pre-commit, and CI workflow updates.
+  - Added project-facing docs: `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`.
+- Tests:
+  - Expanded CLI smoke coverage, diff edge cases, UI utils coverage.
+  - Fixed `tests/test_ui_utils.py` (completed `test_save_geometry_writes_string_returned_by_root`).
+  - Normalized `tests/test_runs_admin.py` to be Windows newline tolerant when verifying zipped text content.
+
+### Files / modules touched (high-level)
+
+- Core CLI/runtime: `local_codex_lite/cli.py`, `local_codex_lite/runner.py`, `local_codex_lite/doctor.py`, `local_codex_lite/undo.py`, `local_codex_lite/runs_admin.py`.
+- Safety/patching: `local_codex_lite/patcher.py`, `local_codex_lite/patch_errors.py`, `local_codex_lite/safety.py`.
+- Evidence: `local_codex_lite/cli_evidence.py` (added `cve-scan-history` walking past `cve-bin-tool` runs).
+- Tooling/docs: `.github/workflows/ci.yml`, `pyproject.toml`, `.pre-commit-config.yaml`, `README.md`, plus doc files listed above.
+- Tests: multiple `tests/test_*.py` including `test_cli_smoke.py`, `test_dry_run_json.py`, `test_logs_diff.py`, `test_post_apply_syntax.py`, `test_profile.py`, `test_runs_admin.py`, `test_ui_utils.py`, `test_undo.py`.
+
+### Verification (2026-05-16)
+
+- `python -m pytest -q` → `286 passed, 1 skipped` (`hypothesis` is optional; skip is expected when absent).
+
+### User-facing behavior changes
+
+- New/expanded CLI subcommands: `runs archive|prune|export`, `logs diff`, `undo`, `doctor full`.
+- New CLI flags: `run --dry-run --json`, global `--profile`, global `--max-patch-attempts`.
+- Stricter safety: if a patch touches Python files, the post-apply syntax check can now stop the flow on invalid Python.
+
+### Known issues / follow-ups
+
+- Consider documenting the optional `hypothesis` dependency more explicitly in developer docs if the skip is surprising.
+
 ## Daily summary 2026-05-13
 
 ### Completed / in progress (evidenced in working tree)

@@ -70,7 +70,8 @@ def test_archive_run_produces_readable_zip(tmp_path: Path) -> None:
         names = sorted(zf.namelist())
         # Names are relative to runs/ so they include the run-id prefix.
         assert names == sorted(["abc/foo.txt", "abc/sub/bar.txt"])
-        assert zf.read("abc/foo.txt") == b"hello\n"
+        text = zf.read("abc/foo.txt").decode("utf-8").replace("\r\n", "\n")
+        assert text == "hello\n"
 
 
 # ---------------------------------------------------------------------------

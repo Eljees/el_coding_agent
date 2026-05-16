@@ -211,4 +211,10 @@ def test_load_geometry_returns_none_for_blank_file(tmp_path: Path) -> None:
 
 
 def test_save_geometry_writes_string_returned_by_root(tmp_path: Path) -> None:
-    fa
+    fake = types.SimpleNamespace(
+        _base_workspace_root=tmp_path,
+        root=types.SimpleNamespace(geometry=lambda: "1024x768+10+20"),
+    )
+    ui.CommandCenterUI._save_geometry(fake)
+    geo = tmp_path / ".local-codex-lite" / "ui_geometry.txt"
+    assert geo.read_text(encoding="utf-8") == "1024x768+10+20"
