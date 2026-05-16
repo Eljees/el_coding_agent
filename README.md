@@ -27,6 +27,36 @@ el_coding_agent/
 - run TruffleHog scans through Docker for GitLab repositories
 - show run logs with `logs latest`
 
+## Developer tooling
+
+The `[dev]` extra in `pyproject.toml` pulls in everything needed to lint,
+type-check, and run the test suite:
+
+```powershell
+pip install -e ".[dev]"
+ruff check local_codex_lite/ tests/
+ruff format --check local_codex_lite/ tests/
+mypy local_codex_lite/
+pytest -q
+```
+
+Set up `pre-commit` once and the same checks run automatically on each
+commit:
+
+```powershell
+pre-commit install
+pre-commit run --all-files   # one-off full pass
+```
+
+The hooks are pinned in `.pre-commit-config.yaml` (ruff + ruff-format,
+mypy, plus trailing-whitespace / end-of-file-fixer / check-yaml /
+check-toml / check-merge-conflict / check-added-large-files).
+
+CI (`.github/workflows/ci.yml`) runs ruff lint, `ruff format --check`,
+mypy without `--ignore-missing-imports`, `pytest --cov`, plus a Windows
+job and a no-LLM CLI smoke job (`doctor deps` / `config show` /
+`recognize`).
+
 ## Quick start
 
 PowerShell:
