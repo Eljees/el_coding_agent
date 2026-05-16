@@ -46,6 +46,28 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
+## Proxy for `pip install` (optional)
+
+If `pip` on your machine has to go through a local proxy (for example
+[v2rayN](https://github.com/2dust/v2rayN) listening on `127.0.0.1:10809`),
+the repo ships a small helper instead of hard-coding the proxy:
+
+```powershell
+cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
+copy tools\proxy.local.ps1.example tools\proxy.local.ps1
+notepad tools\proxy.local.ps1   # set the actual port
+.\setup.ps1 -WithPipIni
+```
+
+`tools\proxy.local.ps1` is `.gitignored` (machine-specific).  When it
+exists, `setup.ps1` dot-sources it before `pip install`, which routes the
+install through your proxy.  Passing `-WithPipIni` also copies
+`tools\pip.ini.template` to `.venv\pip.ini`, so subsequent `pip install`
+calls inside the venv reuse the proxy automatically.
+
+If your shell already has `HTTP_PROXY`/`HTTPS_PROXY` set, you do not need
+this helper - pip will pick those up directly.
+
 ## Local model
 
 The default configuration expects:

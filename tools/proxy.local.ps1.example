@@ -1,0 +1,14 @@
+<#
+Copy this file to tools\proxy.local.ps1 and edit it with your real proxy
+endpoint.  setup.ps1 dot-sources tools\proxy.local.ps1 if it exists, so the
+proxy environment is applied before the pip install step.
+
+tools\proxy.local.ps1 is gitignored - it is meant to be machine-specific.
+#>
+
+# v2rayN HTTP listener (look in v2rayN -> Settings -> Local listening port).
+$ProxyPort = 10809
+$ProxyUrl  = "http://127.0.0.1:$ProxyPort"
+
+# Dot-source the template helper so it actually exports the env vars.
+. "$PSScriptRoot\proxy.ps1" -HttpProxy $ProxyUrl

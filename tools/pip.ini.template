@@ -1,0 +1,16 @@
+; Template for a per-venv pip configuration that routes installs through a
+; local proxy (typically v2rayN).  setup.ps1 -WithProxy copies this file to
+; .venv\pip.ini and substitutes ${PROXY_URL} with $env:HTTPS_PROXY (which
+; tools\proxy.ps1 sets).  If you prefer to edit by hand, just replace the
+; placeholder with your actual proxy URL.
+[global]
+proxy = ${PROXY_URL}
+timeout = 60
+retries = 3
+
+[install]
+; Trust the public index hosts only — leave this empty unless your proxy
+; rewrites TLS (man-in-the-middle).  v2rayN does not.
+;trusted-host =
+;    pypi.org
+;    files.pythonhosted.org

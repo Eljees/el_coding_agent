@@ -13,3 +13,5 @@ pytest_tmp/
 *.pyc
 *.egg-info/
 output.cve-bin-tool.*.json
+# Per-developer proxy override loaded by setup.ps1; ship .example only.
+tools/proxy.local.ps1
