@@ -35,6 +35,7 @@ from .rag import (
     query_index as rag_query_index,
 )
 from .patcher import detect_runtime_fix_context
+from .replay import cmd_replay
 from .runs_admin import cmd_runs_archive, cmd_runs_export, cmd_runs_prune
 from .undo import cmd_undo
 from .ui import run_command_center_ui
@@ -473,6 +474,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_runs_export.add_argument("--out", default=None,
                                help="output zip path or directory (default: next to the run)")
 
+    p_replay = sub.add_parser("replay", help="re-run a saved task without calling the LLM")
+    p_replay.add_argument("run_id", help="run id, path, or 'latest'")
+    p_replay.add_argument("--dry-run", action="store_true",
+                          help="print the cached plan + patch and exit")
+    p_replay.add_argument("--apply", action="store_true",
+                          help="re-apply the saved patch to the current workspace")
+    p_replay.add_argument("--profile", default=None,
+                          help="select an llm_profiles entry (affects only post-apply config, no LLM call)")
+
     p_undo = sub.add_parser("undo", help="restore workspace files from a run's backups/")
     p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
     p_undo.add_argument("--apply", action="store_true", help="actually overwrite the workspace; default is dry-run")
@@ -591,6 +601,8 @@ def main() -> int:
             return cmd_runs_prune(args)
         if args.runs_command == "export":
             return cmd_runs_export(args)
+    if args.command == "replay":
+        return cmd_replay(args)
     if args.command == "undo":
         return cmd_undo(args)
     if args.command == "rag":
