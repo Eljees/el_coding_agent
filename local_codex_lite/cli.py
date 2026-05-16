@@ -35,6 +35,7 @@ from .rag import (
     query_index as rag_query_index,
 )
 from .patcher import detect_runtime_fix_context
+from .runs_admin import cmd_runs_archive, cmd_runs_prune
 from .undo import cmd_undo
 from .ui import run_command_center_ui
 from .workspace import read_file_chunks
@@ -419,6 +420,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag_query.add_argument("query")
     p_rag_query.add_argument("--top-k", type=int, default=None)
 
+    p_runs = sub.add_parser("runs", help="manage .local-codex-lite/runs lifecycle")
+    runs_sub = p_runs.add_subparsers(dest="runs_command", required=True)
+    for runs_action in ("archive", "prune"):
+        sp = runs_sub.add_parser(
+            runs_action,
+            help=("archive" if runs_action == "archive" else "archive + remove")
+                 + " runs older than N days",
+        )
+        sp.add_argument("--older-than", dest="older_than", type=float, default=30.0,
+                        help="age threshold in days (default: 30)")
+        sp.add_argument("--apply", action="store_true",
+                        help="actually archive/remove; default is dry-run")
+        if runs_action == "archive":
+            sp.add_argument("--remove", action="store_true",
+                            help="delete the run dir after archiving (= 'prune')")
+
     p_undo = sub.add_parser("undo", help="restore workspace files from a run's backups/")
     p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
     p_undo.add_argument("--apply", action="store_true", help="actually overwrite the workspace; default is dry-run")
@@ -530,6 +547,11 @@ def main() -> int:
         return cmd_preview(args)
     if args.command == "review":
         return cmd_review(args)
+    if args.command == "runs":
+        if args.runs_command == "archive":
+            return cmd_runs_archive(args)
+        if args.runs_command == "prune":
+            return cmd_runs_prune(args)
     if args.command == "undo":
         return cmd_undo(args)
     if args.command == "rag":
