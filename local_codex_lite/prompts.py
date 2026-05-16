@@ -72,7 +72,32 @@ def plan_prompt(task: str, context: str) -> list[dict[str, str]]:
     ]
 
 
-def runtime_fix_single_file_plan_prompt(task: str, target_path: str, traceback_text: str, current_text: str) -> list[dict[str, str]]:
+
+
+def _runtime_fix_related_block(related_files: list[tuple[str, str]] | tuple[tuple[str, str], ...]) -> str:
+    """Render a 'Related files (read-only context)' block for the runtime-fix
+    prompts.  The model is told to patch only the primary target file; these
+    related files exist so it can reason about the call chain.
+
+    Each related file is truncated to ~2 KB so the prompt budget stays under
+    control even when the traceback spans several modules.
+    """
+    if not related_files:
+        return ""
+    parts = ["", "Related files (read-only context; do NOT patch these):"]
+    for rel_path, text in related_files:
+        snippet = text if len(text) <= 2000 else text[:2000] + "\n... (truncated)"
+        parts.append(f"\n--- {rel_path} ---\n{snippet}")
+    return "\n".join(parts)
+
+
+def runtime_fix_single_file_plan_prompt(
+    task: str,
+    target_path: str,
+    traceback_text: str,
+    current_text: str,
+    related_files: tuple[tuple[str, str], ...] = (),
+) -> list[dict[str, str]]:
     return [
         {
             "role": "system",
@@ -94,7 +119,9 @@ def runtime_fix_single_file_plan_prompt(task: str, target_path: str, traceback_t
                 f"Task:\n{task}\n\n"
                 f"Target file:\n{target_path}\n\n"
                 f"Traceback:\n{traceback_text}\n\n"
-                f"Current file content:\n{current_text}\n\n"
+                f"Current file content:\n{current_text}\n"
+                + _runtime_fix_related_block(related_files)
+                + "\n\n"
                 "Return JSON only with keys summary, files_to_inspect, implementation_steps, risks, "
                 "needs_clarification, clarifying_questions.\n"
                 "Important:\n"
@@ -139,6 +166,7 @@ def runtime_fix_single_file_patch_prompt(
     target_path: str,
     traceback_text: str,
     current_text: str,
+    related_files: tuple[tuple[str, str], ...] = (),
 ) -> list[dict[str, str]]:
     return [
         {
@@ -164,7 +192,9 @@ def runtime_fix_single_file_patch_prompt(
                 f"Plan JSON:\n{plan_json}\n\n"
                 f"Target file:\n{target_path}\n\n"
                 f"Traceback:\n{traceback_text}\n\n"
-                f"Current file content:\n{current_text}\n\n"
+                f"Current file content:\n{current_text}\n"
+                + _runtime_fix_related_block(related_files)
+                + "\n\n"
                 "Return only unified diff.\n"
                 "Proof requirement: after the patch, the exact traceback above should no longer occur for the same reason.\n"
             ),

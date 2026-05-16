@@ -22,6 +22,11 @@ class RuntimeFixContext:
     target_path: Path
     traceback_text: str
     current_text: str
+    # Additional in-workspace .py files mentioned in the traceback (call chain).
+    # The agent reads but does not patch these -- they are *context*, not extra
+    # targets.  We cap the list at two entries so the prompt budget stays sane;
+    # the model's reply is still a single-file diff.
+    secondary_files: tuple[tuple[Path, str], ...] = ()
 
 
 def detect_runtime_fix_context(task: str, evidence_text: str, workspace_root: Path) -> RuntimeFixContext | None:
@@ -55,10 +60,18 @@ def detect_runtime_fix_context(task: str, evidence_text: str, workspace_root: Pa
     # most recently raised frame and therefore the most relevant fix target.
     target_path = candidates[0]
     current_text = target_path.read_text(encoding="utf-8", errors="replace")
+    secondary: list[tuple[Path, str]] = []
+    for extra in candidates[1:3]:
+        try:
+            extra_text = extra.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        secondary.append((extra, extra_text))
     return RuntimeFixContext(
         target_path=target_path,
         traceback_text=evidence_text.strip(),
         current_text=current_text,
+        secondary_files=tuple(secondary),
     )
 
 

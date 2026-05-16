@@ -69,6 +69,10 @@ def make_plan(
             runtime_fix.target_path.relative_to(workspace_root).as_posix(),
             runtime_fix.traceback_text,
             runtime_fix.current_text,
+            related_files=tuple(
+                (p.relative_to(workspace_root).as_posix(), text)
+                for p, text in runtime_fix.secondary_files
+            ),
         )
         budget = _budget_for_messages(messages, config.llm.max_tokens)
         response = client.chat(messages, max_tokens=budget, status_label="Planning")
@@ -129,6 +133,10 @@ def make_patch(
                     target_path,
                     runtime_fix.traceback_text,
                     runtime_fix.current_text,
+                    related_files=tuple(
+                        (p.relative_to(workspace_root).as_posix(), text)
+                        for p, text in runtime_fix.secondary_files
+                    ),
                 )
                 status_label = "Generating patch"
             else:
@@ -708,11 +716,23 @@ def _build_repair_fallback_context(
 
 def _runtime_fix_context_block(runtime_fix: RuntimeFixContext, workspace_root: Path) -> str:
     rel_path = runtime_fix.target_path.relative_to(workspace_root).as_posix()
+    related = ""
+    if runtime_fix.secondary_files:
+        related_parts = ["", "Related files (read-only context; do NOT patch):"]
+        for p, text in runtime_fix.secondary_files:
+            try:
+                p_rel = p.relative_to(workspace_root).as_posix()
+            except ValueError:
+                p_rel = str(p)
+            snippet = text if len(text) <= 2000 else text[:2000] + "\n... (truncated)"
+            related_parts.append(f"--- {p_rel} ---\n{snippet}")
+        related = "\n".join(related_parts)
     return (
         "# Single-file runtime repair context\n"
         f"Target file: {rel_path}\n\n"
         f"Traceback:\n{runtime_fix.traceback_text}\n\n"
         f"Current file content:\n{runtime_fix.current_text}"
+        + (related and ("\n" + related))
     )
 
 
