@@ -272,6 +272,54 @@ def cmd_logs_show(args: argparse.Namespace) -> int:
             console.print(f"- {artifact}")
     return 0
 
+def cmd_logs_diff(args: argparse.Namespace) -> int:
+    """Print a side-by-side comparison of two run directories."""
+    root = workspace_root()
+    left_dir = resolve_run_dir(root, args.left)
+    right_dir = resolve_run_dir(root, args.right)
+    if left_dir is None:
+        console.print(f"[red]Left run not found:[/red] {args.left}")
+        return 1
+    if right_dir is None:
+        console.print(f"[red]Right run not found:[/red] {args.right}")
+        return 1
+
+    left = run_summary(left_dir)
+    right = run_summary(right_dir)
+
+    console.print(f"[bold]Left :[/bold] {left['run_dir']}")
+    console.print(f"[bold]Right:[/bold] {right['run_dir']}")
+    console.print("")
+
+    rows: list[tuple[str, str, str]] = []
+    def add(label: str, lkey: str, rkey: str | None = None) -> None:
+        rkey = rkey or lkey
+        rows.append((label, str(left.get(lkey) or ""), str(right.get(rkey) or "")))
+
+    add("status", "status")
+    add("task", "task")
+    add("plan summary", "plan_summary")
+    add("selected files", "selected_files_count")
+    add("patch error", "patch_error_code")
+
+    left_es = (left.get("evidence_status") or {})
+    right_es = (right.get("evidence_status") or {})
+    rows.append(("evidence", f"{left_es.get('status')}/{left_es.get('error_code') or 'ok'}",
+                 f"{right_es.get('status')}/{right_es.get('error_code') or 'ok'}"))
+
+    left_artifacts = set(left.get("artifacts") or [])
+    right_artifacts = set(right.get("artifacts") or [])
+    only_left = sorted(left_artifacts - right_artifacts)
+    only_right = sorted(right_artifacts - left_artifacts)
+    rows.append(("artifacts only left", "\n".join(only_left) or "-", ""))
+    rows.append(("artifacts only right", "", "\n".join(only_right) or "-"))
+
+    for label, lval, rval in rows:
+        console.print(f"[bold]{label}[/bold]")
+        console.print(f"  L: {lval if lval else '-'}")
+        console.print(f"  R: {rval if rval else '-'}")
+    return 0
+
 
 def cmd_rag_index(args: argparse.Namespace) -> int:
     root = workspace_root()
@@ -382,6 +430,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs_tail.add_argument("--run", default="latest")
     p_logs_show = logs_sub.add_parser("show")
     p_logs_show.add_argument("run_id")
+    p_logs_diff = logs_sub.add_parser("diff", help="compare two runs side-by-side")
+    p_logs_diff.add_argument("left", help="left run id, path, or 'latest'")
+    p_logs_diff.add_argument("right", help="right run id, path, or 'latest'")
 
     p_evidence = sub.add_parser("evidence")
     evidence_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
@@ -485,6 +536,8 @@ def main() -> int:
             return cmd_logs_tail(args)
         if args.logs_command == "show":
             return cmd_logs_show(args)
+        if args.logs_command == "diff":
+            return cmd_logs_diff(args)
     if args.command == "evidence":
         if args.evidence_command == "json-compare":
             return cmd_evidence_json_compare(args)
