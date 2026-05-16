@@ -20,7 +20,7 @@ import contextlib
 import json
 import sys
 
-from .config import load_config
+from .config import UnknownProfileError, apply_profile, load_config
 from .evidence import save_evidence
 from .evidence_mode import (
     create_evidence_bundle,
@@ -79,6 +79,11 @@ def _run_task_body(
     if root != base_root:
         console.print(f"Project workspace: {root}")
     cfg = load_config(root)
+    try:
+        cfg = apply_profile(cfg, getattr(args, "profile", None))
+    except UnknownProfileError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
     evidence_text = _load_evidence_block(
         getattr(args, "evidence_file", []),
         use_stdin=getattr(args, "evidence_stdin", False),

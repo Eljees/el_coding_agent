@@ -97,6 +97,11 @@ class AgentConfig(BaseModel):
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     safety: SafetyConfig = Field(default_factory=SafetyConfig)
     rag: RagConfig = Field(default_factory=RagConfig)
+    # Optional named LLM profiles.  When set, the CLI ``--profile <name>``
+    # flag swaps ``cfg.llm`` for ``cfg.llm_profiles[name]`` for a single
+    # invocation.  Empty by default so the existing single-endpoint setup
+    # keeps working unchanged.
+    llm_profiles: dict[str, LLMConfig] = Field(default_factory=dict)
 
 
 def _config_dir(workspace_root: Path) -> Path:
@@ -159,3 +164,25 @@ def _is_sensitive_key(key: str) -> bool:
         "key",
     )
     return any(term in lower for term in sensitive_terms)
+
+
+class UnknownProfileError(KeyError):
+    """Raised when --profile names a profile not present in config.yaml."""
+
+
+def apply_profile(config: AgentConfig, profile_name: str | None) -> AgentConfig:
+    """Return *config* with ``llm`` swapped for the named profile.
+
+    If *profile_name* is falsy, ``config`` is returned unchanged.  If it
+    names a profile that does not exist, raises ``UnknownProfileError``
+    listing the available names so the CLI can surface a helpful error.
+    """
+    if not profile_name:
+        return config
+    profile = config.llm_profiles.get(profile_name)
+    if profile is None:
+        available = sorted(config.llm_profiles.keys()) or ["(none configured)"]
+        raise UnknownProfileError(
+            f"Unknown LLM profile '{profile_name}'. Available: {', '.join(available)}"
+        )
+    return config.model_copy(update={"llm": profile})

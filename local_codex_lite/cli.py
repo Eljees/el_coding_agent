@@ -8,7 +8,7 @@ from subprocess import CompletedProcess, run as subprocess_run
 from pathlib import Path
 from typing import Any
 
-from .config import config_as_dict, config_path, default_config, load_config, save_config
+from .config import UnknownProfileError, apply_profile, config_as_dict, config_path, default_config, load_config, save_config
 from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_full_doctor, run_rag_doctor
 from .evidence_mode import create_evidence_bundle, save_raw_text, save_summary_json, save_summary_text, write_status
 from .logging_utils import (
@@ -115,6 +115,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
     if root != base_root:
         console.print(f"Project workspace: {root}")
     cfg = load_config(root)
+    try:
+        cfg = apply_profile(cfg, getattr(args, "profile", None))
+    except UnknownProfileError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
     evidence_text = _load_evidence_block(args.evidence_file, use_stdin=args.evidence_stdin)
     runtime_fix = detect_runtime_fix_context(args.task, evidence_text, root)
     rag_context_text = _load_rag_context(root, cfg, args.task) if getattr(args, "rag", False) else ""
@@ -153,6 +158,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
 def cmd_review(args: argparse.Namespace) -> int:
     root = workspace_root()
     cfg = load_config(root)
+    try:
+        cfg = apply_profile(cfg, getattr(args, "profile", None))
+    except UnknownProfileError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
     run_dir = session_dir(root)
     evidence_bundle = create_evidence_bundle(run_dir, source="manual", task="code review", run_id=run_dir.name)
     task = "Review the current code changes for bugs, regressions, missing tests, and maintainability issues."
@@ -192,6 +202,11 @@ from .runner import run_task as _run_task  # noqa: E402,F401
 def cmd_ask(question: str, args: argparse.Namespace) -> int:
     root = workspace_root()
     cfg = load_config(root)
+    try:
+        cfg = apply_profile(cfg, getattr(args, "profile", None))
+    except UnknownProfileError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return 1
     context = f"Workspace root: {root}\nConfig path: {config_path(root)}"
     evidence_text = _load_evidence_block(args.evidence_file, use_stdin=args.evidence_stdin)
     try:
@@ -385,6 +400,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--assume-clarification", action="store_true")
     p_run.add_argument("--evidence-file", action="append", default=[])
     p_run.add_argument("--evidence-stdin", action="store_true")
+    p_run.add_argument("--profile", default=None,
+                       help="select an llm_profiles entry from config.yaml for this invocation")
     p_run.add_argument(
         "--max-patch-attempts",
         dest="max_patch_attempts",
@@ -403,12 +420,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("question")
     p_ask.add_argument("--evidence-file", action="append", default=[])
     p_ask.add_argument("--evidence-stdin", action="store_true")
+    p_ask.add_argument("--profile", default=None,
+                       help="select an llm_profiles entry from config.yaml for this invocation")
     p_ask.add_argument("--rag", action="store_true")
 
     p_preview = sub.add_parser("preview")
     p_preview.add_argument("task")
     p_preview.add_argument("--evidence-file", action="append", default=[])
     p_preview.add_argument("--evidence-stdin", action="store_true")
+    p_preview.add_argument("--profile", default=None,
+                       help="select an llm_profiles entry from config.yaml for this invocation")
     p_preview.add_argument("--rag", action="store_true")
 
     p_review = sub.add_parser("review")
@@ -417,6 +438,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_review.add_argument("--staged", action="store_true")
     p_review.add_argument("--diff-file", action="append", default=[])
     p_review.add_argument("--diff-stdin", action="store_true")
+    p_review.add_argument("--profile", default=None,
+                          help="select an llm_profiles entry from config.yaml for this invocation")
 
     p_rag = sub.add_parser("rag")
     rag_sub = p_rag.add_subparsers(dest="rag_command", required=True)
