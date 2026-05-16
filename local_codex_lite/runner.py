@@ -149,7 +149,11 @@ def run_task(task: str, args: argparse.Namespace) -> int:
         return 1
 
     patch_attempts = 0
-    max_patch_attempts = cfg.safety.max_patch_attempts
+    # Allow a CLI-level override so --max-patch-attempts wins over the config
+    # default for a single run; getattr keeps the call signature back-
+    # compatible with older Namespaces that don't carry the field.
+    override = getattr(args, "max_patch_attempts", None)
+    max_patch_attempts = int(override) if override else cfg.safety.max_patch_attempts
     while True:
         patch_attempts += 1
         dump_text(run_dir / "patch.diff", patch)

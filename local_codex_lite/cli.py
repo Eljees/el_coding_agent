@@ -333,6 +333,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--assume-clarification", action="store_true")
     p_run.add_argument("--evidence-file", action="append", default=[])
     p_run.add_argument("--evidence-stdin", action="store_true")
+    p_run.add_argument(
+        "--max-patch-attempts",
+        dest="max_patch_attempts",
+        type=int,
+        default=None,
+        help="override cfg.safety.max_patch_attempts for this run only",
+    )
 
     p_ask = sub.add_parser("ask")
     p_ask.add_argument("question")

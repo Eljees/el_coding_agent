@@ -154,3 +154,18 @@ def test_build_parser_exec_dest_is_execute() -> None:
     ns = parser.parse_args(["run", "task", "--apply", "--exec"])
     assert getattr(ns, "execute", None) is True
     assert not hasattr(ns, "exec")
+
+
+def test_build_parser_max_patch_attempts_override() -> None:
+    """The --max-patch-attempts flag must populate args.max_patch_attempts."""
+    parser = cli.build_parser()
+    ns = parser.parse_args(["run", "task", "--apply", "--max-patch-attempts", "9"])
+    assert ns.max_patch_attempts == 9
+
+
+def test_build_parser_max_patch_attempts_default_is_none() -> None:
+    """Without --max-patch-attempts the runner must fall back to the config
+    default, which is signaled by the attribute being None."""
+    parser = cli.build_parser()
+    ns = parser.parse_args(["run", "task", "--apply"])
+    assert ns.max_patch_attempts is None
