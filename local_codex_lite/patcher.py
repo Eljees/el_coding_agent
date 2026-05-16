@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import shutil
 import subprocess
 import re
@@ -256,3 +257,65 @@ def _discover_git_root(workspace_root: Path) -> Path | None:
         return None
     root = result.stdout.strip()
     return Path(root) if root else None
+
+
+# ---------------------------------------------------------------------------
+# Post-apply validation: catch a model that produced syntactically invalid
+# Python so we can repair instead of declaring the run successful.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SyntaxIssue:
+    path: Path
+    detail: str  # short human-readable error message ("line 12: invalid syntax")
+
+
+def validate_python_syntax(paths: list[Path]) -> list[SyntaxIssue]:
+    """Parse each ``.py`` path with ``ast.parse`` and collect failures.
+
+    Non-Python paths and unreadable files are silently skipped: this hook is
+    a *post-condition* check on the agent's own output, not a workspace-wide
+    audit.  Callers should run it only on files that the most recent
+    ``apply_patch`` claimed to touch.
+    """
+    issues: list[SyntaxIssue] = []
+    for path in paths:
+        if path.suffix.lower() != ".py":
+            continue
+        if not path.is_file():
+            continue
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        try:
+            ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            line = exc.lineno or "?"
+            issues.append(
+                SyntaxIssue(path=path, detail=f"line {line}: {exc.msg}")
+            )
+    return issues
+
+
+def restore_from_run_backups(paths: list[Path], workspace_root: Path, run_dir: Path) -> int:
+    """Copy each entry's backup from ``<run_dir>/backups/<rel>`` back over
+    its workspace location.  Returns the count restored.  Missing backups
+    are skipped silently (no backup means the file did not exist before
+    the apply, in which case we already created a brand-new file and the
+    caller's recovery strategy may differ).
+    """
+    backups_dir = run_dir / "backups"
+    restored = 0
+    for path in paths:
+        try:
+            rel = path.resolve().relative_to(workspace_root.resolve())
+        except ValueError:
+            continue
+        backup_path = backups_dir / rel
+        if backup_path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(backup_path, path)
+            restored += 1
+    return restored

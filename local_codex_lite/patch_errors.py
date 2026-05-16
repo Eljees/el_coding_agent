@@ -11,6 +11,7 @@ PatchErrorCode = Literal[
     "path_mismatch",
     "unsafe_path",
     "empty_patch",
+    "python_syntax_error",
     "unknown",
 ]
 
@@ -54,6 +55,11 @@ _PATCH_ERROR_DETAILS: dict[PatchErrorCode, tuple[str, bool, str]] = {
         "Empty patch",
         True,
         "Ask for a non-empty patch or treat the task as a no-op without applying changes.",
+    ),
+    "python_syntax_error": (
+        "Python syntax error after apply",
+        True,
+        "Ask the model for a corrected diff that produces syntactically valid Python.",
     ),
     "unknown": (
         "Unknown patch error",
@@ -113,3 +119,11 @@ def _short_detail(value: str, limit: int = 500) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3] + "..."
+
+
+def classify_python_syntax_error(detail: str) -> PatchErrorClassification:
+    """Build a PatchErrorClassification for a post-apply Python syntax
+    failure.  Kept separate from the diff/apply classifiers because it
+    is triggered by a different check (ast.parse on the resulting file
+    content, not git apply stderr)."""
+    return _classification("python_syntax_error", detail)

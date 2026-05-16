@@ -30,8 +30,8 @@ from .evidence_mode import (
     write_status,
 )
 from .logging_utils import dump_json, dump_text, session_dir
-from .patch_errors import classify_patch_apply, classify_patch_validation
-from .patcher import apply_patch, backup_paths, detect_runtime_fix_context, validate_diff
+from .patch_errors import classify_patch_apply, classify_patch_validation, classify_python_syntax_error
+from .patcher import apply_patch, backup_paths, detect_runtime_fix_context, restore_from_run_backups, validate_diff, validate_python_syntax
 from .planner import (
     make_patch,
     make_plan,
@@ -237,6 +237,43 @@ def _run_task_body(
         if apply_result.returncode == 0 or (already_present and all(path.exists() for path in touched)):
             if already_present and apply_result.returncode != 0:
                 console.print("[yellow]Patch target already exists; continuing as applied.[/yellow]")
+            # Post-apply AST gate: if any touched .py file no longer parses,
+            # the model gave us a syntactically broken patch. Restore the
+            # backups and run the repair loop instead of declaring success.
+            syntax_issues = validate_python_syntax(touched)
+            if syntax_issues:
+                restored = restore_from_run_backups(touched, root, run_dir)
+                detail = "; ".join(f"{issue.path.name}: {issue.detail}" for issue in syntax_issues)
+                console.print(
+                    f"[red]Python syntax error after apply[/red] in {len(syntax_issues)} file(s); "
+                    f"restored {restored} from backups."
+                )
+                syntax_error = classify_python_syntax_error(detail)
+                result["applied"] = False
+                result["patch_error"] = syntax_error
+                dump_json(run_dir / "result.json", result)
+                _print_patch_error(syntax_error, patch_attempts)
+                _log_patch_error(run_dir, "post_apply_syntax", patch_attempts, syntax_error, detail)
+                if patch_attempts < max_patch_attempts:
+                    console.print("[yellow]Repairing patch and retrying after syntax error...[/yellow]")
+                    patch = repair_patch_with_error(
+                        task, plan, patch, detail, syntax_error.code, root, cfg,
+                        extra_context=evidence_text, repair_attempt=patch_attempts,
+                        runtime_fix=runtime_fix,
+                    )
+                    dump_json(run_dir / "apply_issue.json", {"patch_error": syntax_error, "detail": detail})
+                    continue
+                dump_json(
+                    run_dir / "failure.json",
+                    {"stage": "post_apply_syntax", "patch_error": syntax_error, "detail": detail},
+                )
+                write_status(
+                    evidence_bundle, status="failed", error_code=syntax_error.code,
+                    message=syntax_error.detail, evidence_complete=False,
+                    extra={"suggested_action": syntax_error.suggested_action},
+                )
+                console.print(f"Run logs: {run_dir}")
+                return 1
             result["apply_returncode"] = 0
             result["applied"] = True
             result["patch_error"] = apply_error
