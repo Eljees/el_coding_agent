@@ -392,6 +392,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="override cfg.safety.max_patch_attempts for this run only",
     )
+    p_run.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="emit one JSON document on stdout (dry-run only); useful for scripting",
+    )
 
     p_ask = sub.add_parser("ask")
     p_ask.add_argument("question")

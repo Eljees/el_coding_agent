@@ -16,7 +16,9 @@ and any external code that imported the underscore name keep working.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import sys
 
 from .config import load_config
 from .evidence import save_evidence
@@ -55,6 +57,23 @@ from .cli_utils import (
 
 
 def run_task(task: str, args: argparse.Namespace) -> int:
+    json_mode = bool(getattr(args, "json_output", False))
+    real_stdout = sys.stdout
+    # When --json is on we want stdout to carry only the final JSON document
+    # so the agent can be wrapped from scripts.  Route every rich print and
+    # other incidental writes to stderr for the duration of run_task.
+    redirect = contextlib.redirect_stdout(sys.stderr) if json_mode else contextlib.nullcontext()
+    with redirect:
+        return _run_task_body(task, args, json_mode=json_mode, real_stdout=real_stdout)
+
+
+def _run_task_body(
+    task: str,
+    args: argparse.Namespace,
+    *,
+    json_mode: bool = False,
+    real_stdout=None,
+) -> int:
     base_root = workspace_root()
     root = resolve_task_workspace(base_root, task)
     if root != base_root:
@@ -124,6 +143,18 @@ def run_task(task: str, args: argparse.Namespace) -> int:
         console.print("[dim]Dry-run mode: skipping patch and commands[/dim]")
         dump_json(run_dir / "result.json", result)
         write_status(evidence_bundle, status="ok", error_code=None, message="dry-run completed", evidence_complete=True)
+        if json_mode:
+            payload = {
+                "task": task,
+                "run_id": run_dir.name,
+                "run_dir": str(run_dir),
+                "selected_files": selected_payload,
+                "plan": plan,
+                "result": result,
+            }
+            target = real_stdout if real_stdout is not None else sys.__stdout__
+            target.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            target.flush()
         return 0
 
     if cfg.safety.require_apply_flag and not args.apply:
