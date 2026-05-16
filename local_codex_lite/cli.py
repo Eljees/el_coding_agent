@@ -35,6 +35,7 @@ from .rag import (
     query_index as rag_query_index,
 )
 from .patcher import detect_runtime_fix_context
+from .undo import cmd_undo
 from .ui import run_command_center_ui
 from .workspace import read_file_chunks
 from .evidence import save_evidence
@@ -369,6 +370,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag_query.add_argument("query")
     p_rag_query.add_argument("--top-k", type=int, default=None)
 
+    p_undo = sub.add_parser("undo", help="restore workspace files from a run's backups/")
+    p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
+    p_undo.add_argument("--apply", action="store_true", help="actually overwrite the workspace; default is dry-run")
+
     p_logs = sub.add_parser("logs")
     logs_sub = p_logs.add_subparsers(dest="logs_command", required=True)
     logs_sub.add_parser("latest")
@@ -466,6 +471,8 @@ def main() -> int:
         return cmd_preview(args)
     if args.command == "review":
         return cmd_review(args)
+    if args.command == "undo":
+        return cmd_undo(args)
     if args.command == "rag":
         if args.rag_command == "index":
             return cmd_rag_index(args)
