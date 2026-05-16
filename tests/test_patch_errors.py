@@ -4,7 +4,7 @@ import argparse
 import subprocess
 from pathlib import Path
 
-from local_codex_lite import cli
+from local_codex_lite import cli, runner
 from local_codex_lite.config import AgentConfig
 from local_codex_lite.patch_errors import classify_patch_apply, classify_patch_validation
 from local_codex_lite.prompts import patch_repair_prompt_for_issue
@@ -70,10 +70,10 @@ def test_repair_prompt_includes_error_class() -> None:
 def test_new_file_already_exists_idempotency_is_not_broken(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "foo.py").write_text("print('ok')\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(cli, "load_config", lambda root: AgentConfig())
-    monkeypatch.setattr(cli, "make_plan", lambda *args, **kwargs: {"summary": "create foo", "needs_clarification": False})
+    monkeypatch.setattr(runner, "load_config", lambda root: AgentConfig())
+    monkeypatch.setattr(runner, "make_plan", lambda *args, **kwargs: {"summary": "create foo", "needs_clarification": False})
     monkeypatch.setattr(
-        cli,
+        runner,
         "make_patch",
         lambda *args, **kwargs: "\n".join(
             [
@@ -86,10 +86,10 @@ def test_new_file_already_exists_idempotency_is_not_broken(tmp_path: Path, monke
             ]
         ),
     )
-    monkeypatch.setattr(cli, "suggest_commands", lambda *args, **kwargs: {"commands": []})
-    monkeypatch.setattr(cli, "backup_paths", lambda *args, **kwargs: tmp_path / "backup")
+    monkeypatch.setattr(runner, "suggest_commands", lambda *args, **kwargs: {"commands": []})
+    monkeypatch.setattr(runner, "backup_paths", lambda *args, **kwargs: tmp_path / "backup")
     monkeypatch.setattr(
-        cli,
+        runner,
         "apply_patch",
         lambda *args, **kwargs: subprocess.CompletedProcess(
             args=["git", "apply"],
