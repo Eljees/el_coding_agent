@@ -153,3 +153,84 @@ def test_build_parser_runs_prune_defaults() -> None:
     assert ns.runs_command == "prune"
     assert ns.older_than == 30.0
     assert ns.apply is False
+
+
+
+# ---------------------------------------------------------------------------
+# cmd_runs_export
+# ---------------------------------------------------------------------------
+
+def test_cmd_export_returns_1_for_missing_run(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_export(argparse.Namespace(run="not-there", out=None))
+    assert rc == 1
+
+
+def test_cmd_export_default_writes_next_to_run(tmp_path: Path, monkeypatch) -> None:
+    """When --out is omitted the zip lands beside the run directory."""
+    run_dir = _make_run(tmp_path, "20260516-101010-000000-abc",
+                       files={"task.txt": "x", "events.jsonl": "{}"})
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=None))
+    assert rc == 0
+    assert (run_dir.parent / f"{run_dir.name}.zip").exists()
+    assert run_dir.exists()  # source not removed
+    import zipfile
+    with zipfile.ZipFile(run_dir.parent / f"{run_dir.name}.zip") as zf:
+        names = sorted(zf.namelist())
+    assert any(n.endswith("task.txt") for n in names)
+    assert any(n.endswith("events.jsonl") for n in names)
+
+
+def test_cmd_export_explicit_out_file(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _make_run(tmp_path, "20260516-aaaaaa", files={"task.txt": "x"})
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    out = tmp_path / "deliveries" / "bug-report.zip"
+    rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=str(out)))
+    assert rc == 0
+    assert out.exists()
+
+
+def test_cmd_export_explicit_out_directory(tmp_path: Path, monkeypatch) -> None:
+    """--out pointing at an existing directory should drop <run_id>.zip into it."""
+    run_dir = _make_run(tmp_path, "20260516-bbbbbb", files={"task.txt": "x"})
+    out_dir = tmp_path / "drop-here"
+    out_dir.mkdir()
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=str(out_dir)))
+    assert rc == 0
+    assert (out_dir / f"{run_dir.name}.zip").exists()
+
+
+def test_cmd_export_overwrites_existing_zip(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _make_run(tmp_path, "20260516-cccccc", files={"task.txt": "first"})
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=None))
+    # Replace content and re-export
+    (run_dir / "task.txt").write_text("second", encoding="utf-8")
+    rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=None))
+    assert rc == 0
+    import zipfile
+    with zipfile.ZipFile(run_dir.parent / f"{run_dir.name}.zip") as zf:
+        contents = {n: zf.read(n) for n in zf.namelist() if n.endswith("task.txt")}
+    assert any(v == b"second" for v in contents.values())
+
+
+# ---------------------------------------------------------------------------
+# argparse wiring for runs export
+# ---------------------------------------------------------------------------
+
+def test_build_parser_runs_export_defaults() -> None:
+    parser = cli.build_parser()
+    ns = parser.parse_args(["runs", "export"])
+    assert ns.command == "runs"
+    assert ns.runs_command == "export"
+    assert ns.run == "latest"
+    assert ns.out is None
+
+
+def test_build_parser_runs_export_explicit() -> None:
+    parser = cli.build_parser()
+    ns = parser.parse_args(["runs", "export", "--run", "20260516-111", "--out", "/tmp/x.zip"])
+    assert ns.run == "20260516-111"
+    assert ns.out == "/tmp/x.zip"

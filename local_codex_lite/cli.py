@@ -35,7 +35,7 @@ from .rag import (
     query_index as rag_query_index,
 )
 from .patcher import detect_runtime_fix_context
-from .runs_admin import cmd_runs_archive, cmd_runs_prune
+from .runs_admin import cmd_runs_archive, cmd_runs_export, cmd_runs_prune
 from .undo import cmd_undo
 from .ui import run_command_center_ui
 from .workspace import read_file_chunks
@@ -441,6 +441,14 @@ def build_parser() -> argparse.ArgumentParser:
         if runs_action == "archive":
             sp.add_argument("--remove", action="store_true",
                             help="delete the run dir after archiving (= 'prune')")
+    p_runs_export = runs_sub.add_parser(
+        "export",
+        help="zip a single run on demand (bug-report friendly)",
+    )
+    p_runs_export.add_argument("--run", default="latest",
+                               help="run id under .local-codex-lite/runs/, path, or 'latest'")
+    p_runs_export.add_argument("--out", default=None,
+                               help="output zip path or directory (default: next to the run)")
 
     p_undo = sub.add_parser("undo", help="restore workspace files from a run's backups/")
     p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
@@ -558,6 +566,8 @@ def main() -> int:
             return cmd_runs_archive(args)
         if args.runs_command == "prune":
             return cmd_runs_prune(args)
+        if args.runs_command == "export":
+            return cmd_runs_export(args)
     if args.command == "undo":
         return cmd_undo(args)
     if args.command == "rag":

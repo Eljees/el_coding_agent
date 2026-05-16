@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .cli_utils import console, workspace_root
+from .logging_utils import resolve_run_dir
 
 
 @dataclass(frozen=True)
@@ -132,3 +133,34 @@ def cmd_runs_prune(args: argparse.Namespace) -> int:
         remove=True,
     )
     return cmd_runs_archive(args)
+
+
+def cmd_runs_export(args: argparse.Namespace) -> int:
+    """Export a single run directory as a self-contained zip.
+
+    Unlike ``runs archive`` this is age-agnostic and on-demand; intended
+    for bug reports.  Writes ``<run_id>.zip`` next to the run unless
+    ``--out`` is given.
+    """
+    workspace = workspace_root()
+    run_ref = getattr(args, "run", None) or "latest"
+    run_dir = resolve_run_dir(workspace, run_ref)
+    if run_dir is None:
+        console.print(f"[red]No matching run:[/red] {run_ref}")
+        return 1
+    out_arg = getattr(args, "out", None)
+    if out_arg:
+        out_path = Path(out_arg)
+        if out_path.is_dir():
+            out_path = out_path / f"{run_dir.name}.zip"
+    else:
+        out_path = run_dir.parent / f"{run_dir.name}.zip"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if out_path.exists():
+        out_path.unlink()
+    with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in run_dir.rglob("*"):
+            if path.is_file():
+                zf.write(path, arcname=path.relative_to(run_dir.parent))
+    console.print(f"[green]exported[/green] {run_dir.name} -> {out_path}")
+    return 0
