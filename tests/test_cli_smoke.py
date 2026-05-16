@@ -169,3 +169,29 @@ def test_build_parser_max_patch_attempts_default_is_none() -> None:
     parser = cli.build_parser()
     ns = parser.parse_args(["run", "task", "--apply"])
     assert ns.max_patch_attempts is None
+
+
+
+def test_build_parser_doctor_full() -> None:
+    """``doctor full`` must route to the aggregate health-check command."""
+    parser = cli.build_parser()
+    ns = parser.parse_args(["doctor", "full"])
+    assert ns.command == "doctor"
+    assert ns.doctor_command == "full"
+
+
+def test_main_doctor_full_invokes_run_full_doctor(tmp_path: Path, monkeypatch) -> None:
+    """``main()`` -> doctor dispatch -> run_full_doctor with the workspace root.
+
+    We monkeypatch run_full_doctor to a sentinel so the test stays offline
+    (real doctor hits the LLM endpoint and shells out to git / docker).
+    """
+    monkeypatch.setattr(cli, "workspace_root", lambda: tmp_path)
+    called = {}
+    def fake_full(root):
+        called["root"] = root
+        return 0
+    monkeypatch.setattr(cli, "run_full_doctor", fake_full)
+    monkeypatch.setattr("sys.argv", ["local-codex-lite", "doctor", "full"])
+    assert cli.main() == 0
+    assert called["root"] == tmp_path

@@ -290,3 +290,52 @@ def preview_patch(workspace_root: Path, diff_text: str) -> int:
     console.print("[red]Patch preview failed[/red]")
     console.print(result.stderr)
     return result.returncode
+
+
+def run_full_doctor(workspace_root: Path) -> int:
+    """Aggregated health check: config, workspace, git, LLM endpoint, JSON
+    sanity, runtime dependencies, RAG fixture, plus optional probes for
+    docker, cve-bin-tool, and a 7z extractor.
+
+    Each section reuses the existing doctor functions and prints its own
+    table.  The overall return code is non-zero if any required section
+    failed; optional probes report status but do not fail the run.
+    """
+    console = make_console(legacy_windows=False)
+    overall_ok = True
+
+    console.print("[bold cyan]== Core doctor ==[/bold cyan]")
+    if run_doctor(workspace_root) != 0:
+        overall_ok = False
+    console.print("")
+
+    console.print("[bold cyan]== Dependencies ==[/bold cyan]")
+    if run_dependency_doctor(workspace_root) != 0:
+        overall_ok = False
+    console.print("")
+
+    console.print("[bold cyan]== RAG ==[/bold cyan]")
+    if run_rag_doctor(workspace_root) != 0:
+        overall_ok = False
+    console.print("")
+
+    console.print("[bold cyan]== Optional tools ==[/bold cyan]")
+    table = make_table(title="external tools")
+    table.add_column("Tool")
+    table.add_column("Status")
+    table.add_column("Detail")
+    for name in ("git", "docker"):
+        path = shutil.which(name)
+        table.add_row(name, "OK" if path else "MISSING", path or "not in PATH")
+    seven = (
+        shutil.which("7z")
+        or shutil.which("7za")
+        or shutil.which("7zz")
+        or shutil.which("7z.exe")
+    )
+    table.add_row("7z", "OK" if seven else "MISSING", seven or "needed for .7z/.rar/.rpm extraction")
+    cve = shutil.which("cve-bin-tool") or shutil.which("cve-bin-tool.exe")
+    table.add_row("cve-bin-tool", "OK" if cve else "MISSING", cve or "pip install cve-bin-tool")
+    console.print(table)
+
+    return 0 if overall_ok else 1

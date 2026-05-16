@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import config_as_dict, config_path, default_config, load_config, save_config
-from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_rag_doctor
+from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_full_doctor, run_rag_doctor
 from .evidence_mode import create_evidence_bundle, save_raw_text, save_summary_json, save_summary_text, write_status
 from .logging_utils import (
     dump_json,
@@ -320,6 +320,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor.set_defaults(doctor_command="run")
     doctor_sub.add_parser("deps")
     doctor_sub.add_parser("rag")
+    doctor_sub.add_parser("full", help="aggregate core + deps + rag + tool probes")
     config_parser = sub.add_parser("config")
     config_sub = config_parser.add_subparsers(dest="config_command", required=True)
     config_sub.add_parser("show")
@@ -451,6 +452,8 @@ def main() -> int:
             return cmd_doctor_deps(args)
         if getattr(args, "doctor_command", "run") == "rag":
             return run_rag_doctor(workspace_root())
+        if getattr(args, "doctor_command", "run") == "full":
+            return run_full_doctor(workspace_root())
         return cmd_doctor(args)
     if args.command == "config":
         if args.config_command == "show":
