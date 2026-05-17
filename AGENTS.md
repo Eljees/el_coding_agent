@@ -439,6 +439,14 @@ on id collisions** -- a plugin cannot redefine `run.apply`,
 with a `logging.warning` so a broken plugin cannot take the agent
 down.
 
+A ready-to-install reference implementation lives in
+``examples/sample_capability_plugin/``: copy that directory, rename
+the package, swap the ``Capability`` definitions, and ``pip install -e .``
+in the same venv where ``local-codex-lite`` is installed.
+``tests/test_sample_plugin_example.py`` keeps the example in sync
+with the contract -- when the ``Capability`` dataclass changes, the
+example breaks first.
+
 ### Mutation testing
 
 `mutmut` is wired through `pyproject.toml` `[tool.mutmut]` against
