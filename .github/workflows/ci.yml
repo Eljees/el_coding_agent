@@ -13,9 +13,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  stdlib-smoke:
+    # Fast no-deps gate: runs the safety-critical core (safety, capabilities,
+    # intent, patch_errors, ...) with only the Python stdlib via
+    # tools/stdlib_smoke.py.  Catches obvious regressions in <2s before the
+    # full matrix spins up pip+pydantic+httpx wheels.
+    name: stdlib smoke (no deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Stdlib smoke
+        run: python tools/stdlib_smoke.py
+
   lint-and-test:
     name: lint+tests py${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    needs: stdlib-smoke
     strategy:
       fail-fast: false
       matrix:

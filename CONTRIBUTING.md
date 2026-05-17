@@ -72,6 +72,10 @@ enforces:
 
 - Hit `pytest -q` locally before opening a PR.  CI runs the same suite
   with coverage on Ubuntu (3.11, 3.12) and Windows (3.12).
+- For a quick sanity check without spinning up the full dev stack,
+  ``python tools/stdlib_smoke.py`` runs the stdlib-only core (~60
+  tests, sub-second) with no third-party imports required.  CI runs it
+  as a fast pre-job before the main matrix.
 - New behaviour needs a test; bug fixes need a regression test that fails
   on the un-patched code.
 - Avoid hitting the real LLM endpoint in tests.  Stub

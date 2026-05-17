@@ -9,6 +9,13 @@ straight into `## [Unreleased]`.
 ## [Unreleased]
 
 ### Added
+- `tools/stdlib_smoke.py`: zero-dependency smoke runner for the
+  safety-critical core (`safety`, `patch_errors`, `capabilities`,
+  `intent`, `targeting`, `path_filters`, `container_errors`, `prompts`,
+  `evidence`, sample plugin).  Runs 59 tests via a tiny stdlib-only
+  pytest shim with `tmp_path`/`monkeypatch` support, and is wired as a
+  pre-job in `.github/workflows/ci.yml` so the heavy matrix only spins
+  up when the core is green.
 - `tools/proxy.ps1`, `tools/proxy.local.ps1.example` and
   `tools/pip.ini.template` plus a `setup.ps1 -WithPipIni` flag for
   developers who need `pip install` to route through a local proxy
