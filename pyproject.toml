@@ -175,4 +175,4 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["local_codex_lite*"]
-exclude = ["tests*", "tools*", "scan_runs*", "tmp_trufflehog*"]
+exclude = ["tests*", "tools*", "examples*", "scan_runs*", "tmp_trufflehog*"]

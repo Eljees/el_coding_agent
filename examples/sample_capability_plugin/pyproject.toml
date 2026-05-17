@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lcl-sample-capability-plugin"
+version = "0.1.0"
+description = "Reference implementation of a local-codex-lite capability plugin"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+# Real plugins should depend on local-codex-lite so the Capability dataclass
+# is importable.  We declare it here as an extras-friendly dependency.
+dependencies = [
+  "local-codex-lite>=0.1.0",
+]
+
+# This is the bit that makes the plugin discoverable.  The agent's
+# discover_capabilities() walks this entry-point group and merges the
+# returned Capability objects into the in-memory list.
+#
+# Built-in capabilities always win on id collisions, so a plugin trying to
+# define `run.apply` or any other reserved id is silently dropped.
+[project.entry-points."local_codex_lite.capabilities"]
+sample_capabilities = "sample_capability_plugin.capabilities:provide"
+
+[tool.setuptools.packages.find]
+include = ["sample_capability_plugin*"]

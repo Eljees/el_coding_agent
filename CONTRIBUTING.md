@@ -99,6 +99,16 @@ deliberately **not** gated on the mutation score.  Treat survivors as
 follow-up issues to file, not blockers.  When you add or harden tests
 that kill survivors, mention the dropped count in the commit message.
 
+## Capability plugins (entry-points)
+
+Third-party packages can extend the agent's capability list without
+forking the repo.  See ``examples/sample_capability_plugin/`` for a
+ready-to-install reference plugin -- copy the layout, rename the
+package, swap the ``Capability`` definitions, and ``pip install -e .``
+in the same venv where ``local-codex-lite`` lives.  Built-in
+capabilities always win on id collisions, so namespace your ids
+(``my_team.foo``) to stay out of the safety-critical core.
+
 ## Reporting issues
 
 Open an issue with:
