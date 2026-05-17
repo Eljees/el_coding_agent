@@ -22,7 +22,7 @@ except Exception as exc:  # noqa: BLE001
 else:
     _TK_IMPORT_ERROR = None
 
-from .capabilities import capability_brief_lines, default_capabilities
+from .capabilities import capability_brief_lines, default_capabilities, discover_capabilities
 from .project_workspace import create_project_workspace, should_use_project_workspace
 from .skill_registry import discover_skills, skill_brief_lines
 from .tool_registry import default_tools, tool_brief_lines
@@ -75,7 +75,7 @@ def temporary_cwd(path: Path):
 class CommandCenterUI:
     def __init__(self, root: "tk.Tk") -> None:
         self.root = root
-        self.capabilities = default_capabilities()
+        self.capabilities = discover_capabilities()
         self.tools = default_tools()
         self.skills = discover_skills(Path.cwd())
         self._command_output_cache = ""

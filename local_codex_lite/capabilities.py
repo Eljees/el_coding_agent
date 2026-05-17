@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from importlib import metadata as _metadata
 
 
 @dataclass(frozen=True)
@@ -214,3 +216,83 @@ def default_capabilities() -> list[Capability]:
 
 def capability_brief_lines(capabilities: list[Capability]) -> list[str]:
     return [f"{item.id} - {item.title}" for item in capabilities]
+
+
+# Entry-point group name for third-party capability plugins.  A plugin
+# registers a callable that returns either a Capability or a list of
+# Capability:
+#
+#   # in the plugin's pyproject.toml:
+#   [project.entry-points."local_codex_lite.capabilities"]
+#   my_team_helpers = "my_team_lcl_plugins.capabilities:provide"
+#
+#   # in my_team_lcl_plugins/capabilities.py:
+#   def provide() -> list[Capability]:
+#       return [Capability(id="my_team.foo", ...)]
+#
+# Built-in capabilities always win on id collisions; plugins cannot
+# override the safety-critical names like run.apply or evidence.cve_scan.
+CAPABILITY_ENTRY_POINT_GROUP = "local_codex_lite.capabilities"
+
+_LOG = logging.getLogger(__name__)
+
+
+def _load_plugin_capabilities() -> list[Capability]:
+    """Walk the entry_points group and load every registered provider.
+
+    A provider that raises, returns a non-Capability, or otherwise
+    misbehaves is skipped with a warning -- a broken plugin must not
+    take the agent down.
+    """
+    discovered: list[Capability] = []
+    try:
+        eps = _metadata.entry_points(group=CAPABILITY_ENTRY_POINT_GROUP)
+    except TypeError:  # pragma: no cover -- Python <3.10 selectable API
+        eps = _metadata.entry_points().get(CAPABILITY_ENTRY_POINT_GROUP, [])
+    for ep in eps:
+        try:
+            provider = ep.load()
+            items = provider() if callable(provider) else provider
+        except Exception as exc:  # noqa: BLE001
+            _LOG.warning("Capability plugin %r failed to load: %s", ep.name, exc)
+            continue
+        if isinstance(items, Capability):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            _LOG.warning(
+                "Capability plugin %r returned %r (expected Capability or list); ignoring.",
+                ep.name, type(items).__name__,
+            )
+            continue
+        for item in items:
+            if isinstance(item, Capability):
+                discovered.append(item)
+            else:
+                _LOG.warning(
+                    "Capability plugin %r yielded %r; expected Capability instance.",
+                    ep.name, type(item).__name__,
+                )
+    return discovered
+
+
+def discover_capabilities() -> list[Capability]:
+    """Return built-in capabilities plus any registered via entry_points.
+
+    Built-ins take precedence on id collisions: a third-party plugin that
+    happens to use ``run.apply`` (or any other safety-critical id) is
+    silently dropped in favour of the built-in.
+    """
+    builtins = default_capabilities()
+    builtin_ids = {cap.id for cap in builtins}
+    merged = list(builtins)
+    for extra in _load_plugin_capabilities():
+        if extra.id in builtin_ids:
+            _LOG.info(
+                "Capability plugin tried to register reserved id %r; "
+                "ignoring in favour of built-in.",
+                extra.id,
+            )
+            continue
+        merged.append(extra)
+        builtin_ids.add(extra.id)
+    return merged

@@ -25,7 +25,7 @@ from .planner import make_patch, make_plan
 from .planner import make_review
 from .project_workspace import resolve_task_workspace
 from .prompts import ask_prompt
-from .capabilities import default_capabilities
+from .capabilities import default_capabilities, discover_capabilities
 from .intent import decision_as_dict, recognize_intent
 from .llm_client import OpenAICompatibleClient
 from .rag import (
@@ -101,7 +101,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_recognize(args: argparse.Namespace) -> int:
-    decision = recognize_intent(args.task, default_capabilities())
+    decision = recognize_intent(args.task, discover_capabilities())
     console.print_json(json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2))
     return 0
 
