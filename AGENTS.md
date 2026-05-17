@@ -353,3 +353,123 @@ Long-running evidence workflows such as CVE scans must show visible progress or 
 - Do not change the default model or base URL without an explicit instruction.
 - Do not remove any safety gate.
 - Do not add skills that call external services or execute untrusted binaries.
+
+
+---
+
+## Post-cleanup state (2026-05-16+)
+
+The stage 0-6 cleanup and the 14 feature commits that followed changed
+several invariants the older sections above describe.  When the two
+sections disagree, this one wins.
+
+### New / renamed modules
+
+- `local_codex_lite/runner.py` -- houses `run_task(task, args)`.
+  `cli._run_task` is a one-line re-export, so tests / callers that
+  imported `cli._run_task` keep working, but new code should
+  monkey-patch `runner.*` rather than `cli.*`.
+- `local_codex_lite/replay.py` -- `cmd_replay` re-runs a saved
+  task/plan/patch without touching the LLM.
+- `local_codex_lite/runs_admin.py` -- `cmd_runs_archive`,
+  `cmd_runs_prune`, `cmd_runs_export` plus helpers
+  `list_run_entries`, `select_for_archival`, `archive_run`.
+- `local_codex_lite/undo.py` -- `cmd_undo` restores files from
+  `<run_dir>/backups/` with sensitive-path filtering.
+- `local_codex_lite/cli_evidence.py` gained
+  `cmd_evidence_cve_scan_history` + `collect_cve_scan_history`.
+- `local_codex_lite/patcher.py` gained `ApplyResult`,
+  `SyntaxIssue`, `validate_python_syntax`,
+  `restore_from_run_backups`, and the new `secondary_files` field on
+  `RuntimeFixContext`.
+
+### New CLI surface
+
+```powershell
+python -m local_codex_lite doctor full
+python -m local_codex_lite run "<task>" --apply --max-patch-attempts 8
+python -m local_codex_lite run "<task>" --dry-run --json
+python -m local_codex_lite run "<task>" --profile fast
+python -m local_codex_lite preview "<task>" --profile review
+python -m local_codex_lite undo --run latest --apply
+python -m local_codex_lite replay <run_id> --apply
+python -m local_codex_lite logs diff <run_a> <run_b>
+python -m local_codex_lite runs archive --older-than 30 --apply
+python -m local_codex_lite runs prune --older-than 30 --apply
+python -m local_codex_lite runs export <run> --out bug-report.zip
+python -m local_codex_lite evidence cve-scan-history
+```
+
+### Safety: post-apply AST gate
+
+After every successful `git apply`, `runner.run_task` walks the
+touched `.py` files and runs `ast.parse` on each.  On
+`SyntaxError` it restores the files from `<run_dir>/backups/`,
+emits a `python_syntax_error` `PatchErrorClassification`, and
+re-enters the repair loop (subject to `max_patch_attempts`).  No
+syntactically invalid Python ever lands in the workspace.  The
+same gate runs inside `replay --apply`.
+
+### LLM profiles
+
+`AgentConfig.llm_profiles: dict[str, LLMConfig]` (default `{}`)
+holds named alternate endpoints.  `apply_profile(cfg, name)`
+returns a `model_copy` with `cfg.llm` swapped for the chosen
+profile; an unknown name raises `UnknownProfileError` listing the
+available profile names.  Built-in `cfg.llm` stays the fallback
+when `--profile` is not given.
+
+### Capability plugin contract
+
+Third-party packages can register additional capabilities under
+entry-point group `local_codex_lite.capabilities`:
+
+```toml
+# in the plugin's pyproject.toml
+[project.entry-points."local_codex_lite.capabilities"]
+my_team_helpers = "my_team_lcl_plugins.capabilities:provide"
+```
+
+`provide()` returns a `Capability` or a list of them.  The CLI
+(`cmd_recognize`) and the GUI use `discover_capabilities()` which
+merges built-ins with plugin contributions.  **Built-ins always win
+on id collisions** -- a plugin cannot redefine `run.apply`,
+`run.exec`, `evidence.cve_scan`, etc.  Misbehaving plugins
+(raising, wrong return type, non-`Capability` items) are skipped
+with a `logging.warning` so a broken plugin cannot take the agent
+down.
+
+### Mutation testing
+
+`mutmut` is wired through `pyproject.toml` `[tool.mutmut]` against
+`safety.py`, `patcher.py`, `patch_errors.py`, `llm_client.py`.
+`.github/workflows/mutmut.yml` runs weekly (Monday 04:00 UTC) and
+on `workflow_dispatch`.  PRs are **not** gated on the mutation
+score.
+
+### Things that moved or were dropped
+
+- `cli.py` lost the `_run_task` body (moved to `runner.py`) and
+  the dead imports (`AgentConfig`, `evidence_question_prompt`,
+  `make_console`, `RankedWorkspaceFile`,
+  `ensure_rag_provider_supported`, `retrieve_rag_context`,
+  `PatchErrorClassification`, `append_jsonl`).
+- `safety.DISALLOWED_PATTERNS` is now a tuple of
+  human-readable summaries; the real check is a tuple of
+  pre-compiled regexes (`_DANGEROUS_COMMAND_PATTERNS`) using
+  word boundaries.
+- `IntentDecision` sequence fields are `tuple[str, ...]`, not
+  `list[str]`.
+- `apply_patch` returns an `ApplyResult` dataclass with
+  `returncode`/`stdout`/`stderr`/`strategy` instead of a
+  `subprocess.CompletedProcess` decorated by `setattr`.
+- Patch files and backups live under `<run_dir>/` (`patch.diff`,
+  `backups/<rel>`) instead of the shared
+  `.local-codex-lite/patch.diff` and `backups/current/`.
+- `logging_utils.utc_timestamp()` returns
+  `YYYYMMDD-HHMMSS-uuuuuu-xxxxxx` (microseconds + 6 hex chars)
+  so two concurrent runs cannot collide.
+- `args.exec` was renamed to `args.execute` (argparse `dest`);
+  the `--exec` flag is unchanged.
+- `result["exec"]` in `result.json` is kept for downstream
+  compatibility.
