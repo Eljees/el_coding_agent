@@ -19,6 +19,23 @@ class Capability:
     cli_equivalent: str
 
 
+@dataclass(frozen=True)
+class CapabilitySource:
+    """Where a Capability came from.
+
+    ``kind == "builtin"`` -- shipped in ``default_capabilities()``.
+    ``kind == "plugin"`` -- contributed via an entry_points provider;
+    ``name`` carries the entry-point name (i.e. the key from the
+    consumer's ``pyproject.toml``).
+    """
+    kind: str
+    name: str = ""
+
+
+def _builtin_source() -> CapabilitySource:
+    return CapabilitySource(kind="builtin", name="")
+
+
 def default_capabilities() -> list[Capability]:
     return [
         Capability(
@@ -237,19 +254,21 @@ CAPABILITY_ENTRY_POINT_GROUP = "local_codex_lite.capabilities"
 _LOG = logging.getLogger(__name__)
 
 
-def _load_plugin_capabilities() -> list[Capability]:
-    """Walk the entry_points group and load every registered provider.
+def _load_plugin_capabilities_with_source() -> list[tuple[CapabilitySource, Capability]]:
+    """Walk the entry_points group and load every registered provider,
+    tagging each result with its source plugin name.
 
     A provider that raises, returns a non-Capability, or otherwise
     misbehaves is skipped with a warning -- a broken plugin must not
     take the agent down.
     """
-    discovered: list[Capability] = []
+    discovered: list[tuple[CapabilitySource, Capability]] = []
     try:
         eps = _metadata.entry_points(group=CAPABILITY_ENTRY_POINT_GROUP)
     except TypeError:  # pragma: no cover -- Python <3.10 selectable API
         eps = _metadata.entry_points().get(CAPABILITY_ENTRY_POINT_GROUP, [])
     for ep in eps:
+        source = CapabilitySource(kind="plugin", name=ep.name)
         try:
             provider = ep.load()
             items = provider() if callable(provider) else provider
@@ -266,13 +285,44 @@ def _load_plugin_capabilities() -> list[Capability]:
             continue
         for item in items:
             if isinstance(item, Capability):
-                discovered.append(item)
+                discovered.append((source, item))
             else:
                 _LOG.warning(
                     "Capability plugin %r yielded %r; expected Capability instance.",
                     ep.name, type(item).__name__,
                 )
     return discovered
+
+
+def _load_plugin_capabilities() -> list[Capability]:
+    """Backward-compatible alias used by callers that don't need source
+    metadata.  See ``_load_plugin_capabilities_with_source``."""
+    return [cap for _src, cap in _load_plugin_capabilities_with_source()]
+
+
+def discover_capabilities_with_source() -> list[tuple[CapabilitySource, Capability]]:
+    """Like ``discover_capabilities``, but each Capability is paired with
+    its ``CapabilitySource``.  Used by ``local-codex-lite plugins list``
+    to show users where a capability came from.
+
+    Built-ins always win on id collisions.  A plugin that tries to
+    redefine a reserved id (e.g. ``run.apply``) is dropped with a log
+    message and never appears in the output.
+    """
+    builtins = [(_builtin_source(), cap) for cap in default_capabilities()]
+    builtin_ids = {cap.id for _src, cap in builtins}
+    merged: list[tuple[CapabilitySource, Capability]] = list(builtins)
+    for src, extra in _load_plugin_capabilities_with_source():
+        if extra.id in builtin_ids:
+            _LOG.info(
+                "Capability plugin %r tried to register reserved id %r; "
+                "ignoring in favour of built-in.",
+                src.name, extra.id,
+            )
+            continue
+        merged.append((src, extra))
+        builtin_ids.add(extra.id)
+    return merged
 
 
 def discover_capabilities() -> list[Capability]:
@@ -282,17 +332,4 @@ def discover_capabilities() -> list[Capability]:
     happens to use ``run.apply`` (or any other safety-critical id) is
     silently dropped in favour of the built-in.
     """
-    builtins = default_capabilities()
-    builtin_ids = {cap.id for cap in builtins}
-    merged = list(builtins)
-    for extra in _load_plugin_capabilities():
-        if extra.id in builtin_ids:
-            _LOG.info(
-                "Capability plugin tried to register reserved id %r; "
-                "ignoring in favour of built-in.",
-                extra.id,
-            )
-            continue
-        merged.append(extra)
-        builtin_ids.add(extra.id)
-    return merged
+    return [cap for _src, cap in discover_capabilities_with_source()]

@@ -35,6 +35,7 @@ from .rag import (
     query_index as rag_query_index,
 )
 from .patcher import detect_runtime_fix_context
+from .plugins_cmd import cmd_plugins_list
 from .replay import cmd_replay
 from .runs_admin import cmd_runs_archive, cmd_runs_export, cmd_runs_prune
 from .undo import cmd_undo
@@ -487,6 +488,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
     p_undo.add_argument("--apply", action="store_true", help="actually overwrite the workspace; default is dry-run")
 
+    p_plugins = sub.add_parser(
+        "plugins",
+        help="inspect capability plugins discovered via entry_points",
+    )
+    plugins_sub = p_plugins.add_subparsers(dest="plugins_command", required=True)
+    p_plugins_list = plugins_sub.add_parser(
+        "list",
+        help="show every Capability the agent currently sees and its source",
+    )
+    p_plugins_list.add_argument(
+        "--plugins-only",
+        dest="plugins_only",
+        action="store_true",
+        help="show only entry-point contributed capabilities (drops built-ins)",
+    )
+    p_plugins_list.add_argument(
+        "--json",
+        dest="json_output",
+        action="store_true",
+        help="emit machine-readable JSON instead of the text table",
+    )
+
     p_logs = sub.add_parser("logs")
     logs_sub = p_logs.add_subparsers(dest="logs_command", required=True)
     logs_sub.add_parser("latest")
@@ -605,6 +628,9 @@ def main() -> int:
         return cmd_replay(args)
     if args.command == "undo":
         return cmd_undo(args)
+    if args.command == "plugins":
+        if args.plugins_command == "list":
+            return cmd_plugins_list(args)
     if args.command == "rag":
         if args.rag_command == "index":
             return cmd_rag_index(args)

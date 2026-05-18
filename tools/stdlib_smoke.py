@@ -38,6 +38,7 @@ DEFAULT_FILES = (
     "tests/test_prompts.py",
     "tests/test_evidence.py",
     "tests/test_sample_plugin_example.py",
+    "tests/test_plugins_cmd.py",
 )
 
 

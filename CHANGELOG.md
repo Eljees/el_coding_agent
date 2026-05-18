@@ -9,6 +9,11 @@ straight into `## [Unreleased]`.
 ## [Unreleased]
 
 ### Added
+- `local-codex-lite plugins list` -- shows every Capability the agent
+  sees and its source (`builtin` or the entry-point name of the
+  plugin that contributed it).  Supports `--plugins-only` and `--json`
+  for scripting.  New module `local_codex_lite/plugins_cmd.py`, new
+  `discover_capabilities_with_source()` / `CapabilitySource` API.
 - `tools/stdlib_smoke.py`: zero-dependency smoke runner for the
   safety-critical core (`safety`, `patch_errors`, `capabilities`,
   `intent`, `targeting`, `path_filters`, `container_errors`, `prompts`,
