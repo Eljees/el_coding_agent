@@ -33,6 +33,16 @@ without reinstalling.)
 ## Verify the plugin is picked up
 
 ```powershell
+python -m local_codex_lite plugins list --plugins-only
+```
+
+A row tagged `plugin / sample_capabilities / sample.echo` should
+appear.  If nothing is printed under `--plugins-only`, the plugin
+hasn't been installed into the active venv.
+
+To confirm the routing layer also sees it:
+
+```powershell
 python -m local_codex_lite recognize "echo hello world"
 ```
 

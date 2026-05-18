@@ -447,6 +447,19 @@ in the same venv where ``local-codex-lite`` is installed.
 with the contract -- when the ``Capability`` dataclass changes, the
 example breaks first.
 
+To verify a plugin is actually picked up:
+
+```powershell
+python -m local_codex_lite plugins list
+python -m local_codex_lite plugins list --plugins-only          # drops built-ins
+python -m local_codex_lite plugins list --plugins-only --json   # for scripting
+```
+
+The text output prints a fixed-width table tagged with the source
+(`builtin` vs the entry-point name).  If your plugin doesn't show up
+there, ``recognize`` won't see it either -- so this is the first
+diagnostic to run after a fresh ``pip install``.
+
 ### Mutation testing
 
 `mutmut` is wired through `pyproject.toml` `[tool.mutmut]` against
