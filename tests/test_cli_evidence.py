@@ -1,4 +1,5 @@
 """Tests for local_codex_lite.cli_evidence."""
+
 from __future__ import annotations
 
 import argparse
@@ -15,10 +16,10 @@ from local_codex_lite.cli_evidence import (
     resolve_cve_skill_script,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_cve_skill_script
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_cve_skill_script_finds_repo_root_script() -> None:
     """The script at <repo>/skills/cve-bin-tool/run_cve_scan.py must be found."""
@@ -37,7 +38,9 @@ def test_resolve_cve_skill_script_raises_when_missing(tmp_path: Path) -> None:
     with patch("local_codex_lite.cli_evidence._candidate_exists", return_value=False):
         # Also patch importlib.resources to raise so the packaged-resources
         # candidate is skipped instead of resolving to a real file.
-        with patch("local_codex_lite.cli_evidence.importlib.resources.files", side_effect=Exception):
+        with patch(
+            "local_codex_lite.cli_evidence.importlib.resources.files", side_effect=Exception
+        ):
             with pytest.raises(FileNotFoundError) as exc_info:
                 resolve_cve_skill_script(root=tmp_path)
     msg = str(exc_info.value)
@@ -49,14 +52,17 @@ def test_resolve_cve_skill_script_raises_when_missing(tmp_path: Path) -> None:
 # cmd_evidence_cve_scan — subprocess output captured and routed to console
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_evidence_cve_scan_captures_stdout(tmp_path: Path) -> None:
     """stdout from the skill subprocess must reach console (redirect_stdout)."""
-    import io
     import contextlib
+    import io
 
     # Fake a minimal skill script that just prints to stdout.
     fake_script = tmp_path / "run_cve_scan.py"
-    fake_script.write_text("import sys; print('SCAN_OUTPUT_MARKER'); sys.exit(0)\n", encoding="utf-8")
+    fake_script.write_text(
+        "import sys; print('SCAN_OUTPUT_MARKER'); sys.exit(0)\n", encoding="utf-8"
+    )
 
     args = argparse.Namespace(
         action_or_input="status",
@@ -82,7 +88,8 @@ def test_cmd_evidence_cve_scan_captures_stdout(tmp_path: Path) -> None:
 
 def test_cmd_evidence_cve_scan_returns_1_when_script_missing(tmp_path: Path) -> None:
     """Returns exit code 1 when the skill script cannot be found."""
-    import io, contextlib
+    import contextlib
+    import io
 
     args = argparse.Namespace(
         action_or_input="status",
@@ -110,7 +117,8 @@ def test_cmd_evidence_cve_scan_returns_1_when_script_missing(tmp_path: Path) -> 
 
 def test_cmd_evidence_cve_scan_stderr_captured(tmp_path: Path) -> None:
     """stderr from subprocess is captured and printed (not lost to the void)."""
-    import io, contextlib
+    import contextlib
+    import io
 
     fake_script = tmp_path / "run_cve_scan.py"
     fake_script.write_text(

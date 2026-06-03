@@ -36,12 +36,16 @@ def test_rank_workspace_files_prefers_tests_for_validation_task(tmp_path: Path) 
 
 def test_rank_workspace_files_keeps_explicit_target_above_tests(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "calculator.py").write_text("def add(a, b): return a + b\n", encoding="utf-8")
+    (tmp_path / "src" / "calculator.py").write_text(
+        "def add(a, b): return a + b\n", encoding="utf-8"
+    )
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_calculator.py").write_text("assert True", encoding="utf-8")
     config = WorkspaceConfig(root=tmp_path)
 
-    ranked = rank_workspace_files(tmp_path, "add tests for calculator.py and fix calculator.py", config)
+    ranked = rank_workspace_files(
+        tmp_path, "add tests for calculator.py and fix calculator.py", config
+    )
 
     assert ranked[0].path.relative_to(tmp_path).as_posix() == "src/calculator.py"
     assert any("target" in reason.lower() for reason in ranked[0].reasons)
@@ -69,8 +73,12 @@ def test_summarize_ranked_files_is_deterministic(tmp_path: Path) -> None:
     (tmp_path / "src" / "workspace.py").write_text("print('workspace')", encoding="utf-8")
     config = WorkspaceConfig(root=tmp_path)
 
-    first = summarize_ranked_files(tmp_path, "workspace ranking", config, allow_sensitive_read=False)
-    second = summarize_ranked_files(tmp_path, "workspace ranking", config, allow_sensitive_read=False)
+    first = summarize_ranked_files(
+        tmp_path, "workspace ranking", config, allow_sensitive_read=False
+    )
+    second = summarize_ranked_files(
+        tmp_path, "workspace ranking", config, allow_sensitive_read=False
+    )
 
     assert [item.path for item in first] == [item.path for item in second]
     assert first[0].reasons

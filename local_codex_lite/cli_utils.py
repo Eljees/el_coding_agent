@@ -1,4 +1,5 @@
 """Shared utilities used across CLI command modules."""
+
 from __future__ import annotations
 
 import re
@@ -6,7 +7,8 @@ import sys
 from pathlib import Path
 
 from .config import AgentConfig
-from .logging_utils import append_jsonl, sanitize_log_text as _sanitize_log_text_impl
+from .logging_utils import append_jsonl
+from .logging_utils import sanitize_log_text as _sanitize_log_text_impl
 from .patch_errors import PatchErrorClassification
 from .rag import RagProviderError, format_retrieved_context, retrieve_rag_context
 from .rich_compat import make_console
@@ -139,9 +141,13 @@ def looks_like_shell_command(cmd: str) -> bool:
         return False
     if lower.startswith(("sed ", "bash ", "chmod ", "notepad.exe", "code ")):
         return False
-    if re.search(r"[.!?]$", cmd) and " " in cmd and not any(
-        marker in lower
-        for marker in ("python", "pytest", "git", "pwsh", ".py", ".ps1", ".bat", "\\", "/")
+    if (
+        re.search(r"[.!?]$", cmd)
+        and " " in cmd
+        and not any(
+            marker in lower
+            for marker in ("python", "pytest", "git", "pwsh", ".py", ".ps1", ".bat", "\\", "/")
+        )
     ):
         return False
     return True

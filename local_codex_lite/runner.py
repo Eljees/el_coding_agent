@@ -13,6 +13,7 @@ Public surface:
 ``cli`` re-exports the function as ``cli._run_task`` so existing call sites
 and any external code that imported the underscore name keep working.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,31 @@ import contextlib
 import json
 import sys
 
+from .cli_utils import (
+    console,
+    workspace_root,
+)
+from .cli_utils import (
+    load_evidence_block as _load_evidence_block,
+)
+from .cli_utils import (
+    log_patch_error as _log_patch_error,
+)
+from .cli_utils import (
+    normalize_suggested_commands as _normalize_suggested_commands,
+)
+from .cli_utils import (
+    print_patch_error as _print_patch_error,
+)
+from .cli_utils import (
+    print_plan_summary as _print_plan_summary,
+)
+from .cli_utils import (
+    print_selected_files as _print_selected_files,
+)
+from .cli_utils import (
+    selected_files as _selected_files,
+)
 from .config import UnknownProfileError, apply_profile, load_config
 from .evidence import save_evidence
 from .evidence_mode import (
@@ -30,8 +56,19 @@ from .evidence_mode import (
     write_status,
 )
 from .logging_utils import dump_json, dump_text, session_dir
-from .patch_errors import classify_patch_apply, classify_patch_validation, classify_python_syntax_error
-from .patcher import apply_patch, backup_paths, detect_runtime_fix_context, restore_from_run_backups, validate_diff, validate_python_syntax
+from .patch_errors import (
+    classify_patch_apply,
+    classify_patch_validation,
+    classify_python_syntax_error,
+)
+from .patcher import (
+    apply_patch,
+    backup_paths,
+    detect_runtime_fix_context,
+    restore_from_run_backups,
+    validate_diff,
+    validate_python_syntax,
+)
 from .planner import (
     make_patch,
     make_plan,
@@ -42,18 +79,6 @@ from .planner import (
 from .project_workspace import resolve_task_workspace
 from .retrying import classify_httpx_exception, strategy_for_issue
 from .safety import run_command
-
-from .cli_utils import (
-    console,
-    load_evidence_block as _load_evidence_block,
-    log_patch_error as _log_patch_error,
-    normalize_suggested_commands as _normalize_suggested_commands,
-    print_patch_error as _print_patch_error,
-    print_plan_summary as _print_plan_summary,
-    print_selected_files as _print_selected_files,
-    selected_files as _selected_files,
-    workspace_root,
-)
 
 
 def run_task(task: str, args: argparse.Namespace) -> int:
@@ -90,7 +115,9 @@ def _run_task_body(
     )
     runtime_fix = detect_runtime_fix_context(task, evidence_text, root)
     run_dir = session_dir(root)
-    evidence_bundle = create_evidence_bundle(run_dir, source="manual", task=task, run_id=run_dir.name)
+    evidence_bundle = create_evidence_bundle(
+        run_dir, source="manual", task=task, run_id=run_dir.name
+    )
     dump_text(run_dir / "task.txt", task)
     save_raw_text(evidence_bundle, "task.txt", task)
     if evidence_text:
@@ -113,7 +140,9 @@ def _run_task_body(
     save_summary_json(evidence_bundle, "selected_files.json", selected_payload)
     save_evidence(run_dir, "selected_files", selected_payload)
     console.print("[bold]Planning...[/bold]")
-    plan = make_plan(task, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix)
+    plan = make_plan(
+        task, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix
+    )
     dump_json(run_dir / "plan.json", plan)
     save_evidence(run_dir, "plan", plan)
     save_summary_json(evidence_bundle, "plan.json", plan)
@@ -123,21 +152,33 @@ def _run_task_body(
     result = {"dry_run": bool(args.dry_run), "apply": bool(args.apply), "exec": bool(args.execute)}
 
     if plan.get("needs_clarification"):
-        questions = plan.get("clarifying_questions") if isinstance(plan.get("clarifying_questions"), list) else []
+        questions = (
+            plan.get("clarifying_questions")
+            if isinstance(plan.get("clarifying_questions"), list)
+            else []
+        )
         if questions:
             console.print("[yellow]Plan needs clarification.[/yellow]")
             for question in questions:
                 console.print(f"- {question}")
         if args.assume_clarification:
             console.print("[yellow]Assuming reasonable defaults and continuing...[/yellow]")
-            plan = revise_plan_with_assumptions(task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text)
+            plan = revise_plan_with_assumptions(
+                task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text
+            )
             dump_json(run_dir / "plan.json", plan)
             save_summary_json(evidence_bundle, "plan.json", plan)
             console.print("[bold]Revised plan[/bold]")
             console.print_json(json.dumps(plan, ensure_ascii=False, indent=2))
         else:
             dump_json(run_dir / "result.json", result)
-            write_status(evidence_bundle, status="partial", error_code=None, message="awaiting clarification", evidence_complete=False)
+            write_status(
+                evidence_bundle,
+                status="partial",
+                error_code=None,
+                message="awaiting clarification",
+                evidence_complete=False,
+            )
             console.print("Use --assume-clarification to continue with reasonable defaults.")
             return 0
 
@@ -147,7 +188,13 @@ def _run_task_body(
     if args.dry_run:
         console.print("[dim]Dry-run mode: skipping patch and commands[/dim]")
         dump_json(run_dir / "result.json", result)
-        write_status(evidence_bundle, status="ok", error_code=None, message="dry-run completed", evidence_complete=True)
+        write_status(
+            evidence_bundle,
+            status="ok",
+            error_code=None,
+            message="dry-run completed",
+            evidence_complete=True,
+        )
         if json_mode:
             payload = {
                 "task": task,
@@ -165,20 +212,45 @@ def _run_task_body(
     if cfg.safety.require_apply_flag and not args.apply:
         result["applied"] = False
         dump_json(run_dir / "result.json", result)
-        write_status(evidence_bundle, status="partial", error_code=None, message="apply flag required", evidence_complete=False)
+        write_status(
+            evidence_bundle,
+            status="partial",
+            error_code=None,
+            message="apply flag required",
+            evidence_complete=False,
+        )
         console.print("Use --apply to write changes.")
         return 0
 
     console.print("[bold]Generating patch...[/bold]")
     try:
-        patch = make_patch(task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix)
-    except Exception as exc:  # noqa: BLE001
+        patch = make_patch(
+            task,
+            plan,
+            root,
+            cfg,
+            run_dir=run_dir,
+            extra_context=evidence_text,
+            runtime_fix=runtime_fix,
+        )
+    except Exception as exc:
         issue = classify_httpx_exception(exc)
-        failure = {"stage": "patch", "issue_type": issue, "strategy": strategy_for_issue(issue), "error": str(exc)}
+        failure = {
+            "stage": "patch",
+            "issue_type": issue,
+            "strategy": strategy_for_issue(issue),
+            "error": str(exc),
+        }
         result["failure"] = failure
         dump_json(run_dir / "result.json", result)
         dump_json(run_dir / "failure.json", failure)
-        write_status(evidence_bundle, status="failed", error_code="patch_generation_failed", message=str(exc), evidence_complete=False)
+        write_status(
+            evidence_bundle,
+            status="failed",
+            error_code="patch_generation_failed",
+            message=str(exc),
+            evidence_complete=False,
+        )
         console.print("[red]Patch generation failed[/red]")
         console.print_json(json.dumps(failure, ensure_ascii=False, indent=2))
         console.print(f"Run logs: {run_dir}")
@@ -193,30 +265,69 @@ def _run_task_body(
     while True:
         patch_attempts += 1
         dump_text(run_dir / "patch.diff", patch)
-        validation = validate_diff(patch, root, allow_sensitive_read=cfg.safety.allow_sensitive_read)
+        validation = validate_diff(
+            patch, root, allow_sensitive_read=cfg.safety.allow_sensitive_read
+        )
         result["diff_valid"] = validation.ok
         result["validation_errors"] = validation.errors
         if not validation.ok:
             classification = classify_patch_validation(validation.errors)
             _print_patch_error(classification, patch_attempts)
-            _log_patch_error(run_dir, "validation", patch_attempts, classification, "\n".join(validation.errors))
+            _log_patch_error(
+                run_dir, "validation", patch_attempts, classification, "\n".join(validation.errors)
+            )
             if not classification.retryable:
                 result["patch_error"] = classification
                 dump_json(run_dir / "result.json", result)
-                dump_json(run_dir / "failure.json", {"stage": "validation", "patch_error": classification})
-                write_status(evidence_bundle, status="failed", error_code=classification.code, message=classification.detail, evidence_complete=False, extra={"suggested_action": classification.suggested_action})
+                dump_json(
+                    run_dir / "failure.json", {"stage": "validation", "patch_error": classification}
+                )
+                write_status(
+                    evidence_bundle,
+                    status="failed",
+                    error_code=classification.code,
+                    message=classification.detail,
+                    evidence_complete=False,
+                    extra={"suggested_action": classification.suggested_action},
+                )
                 console.print(f"Run logs: {run_dir}")
                 return 1
             if patch_attempts < max_patch_attempts:
-                console.print("[yellow]Patch validation failed; repairing diff and retrying...[/yellow]")
+                console.print(
+                    "[yellow]Patch validation failed; repairing diff and retrying...[/yellow]"
+                )
                 for error in validation.errors:
                     console.print(f"- {error}")
-                patch = repair_patch_with_error(task, plan, patch, "\n".join(validation.errors), classification.code, root, cfg, extra_context=evidence_text, repair_attempt=patch_attempts, runtime_fix=runtime_fix)
-                dump_json(run_dir / "validation_issue.json", {"patch_error": classification, "errors": validation.errors})
+                patch = repair_patch_with_error(
+                    task,
+                    plan,
+                    patch,
+                    "\n".join(validation.errors),
+                    classification.code,
+                    root,
+                    cfg,
+                    extra_context=evidence_text,
+                    repair_attempt=patch_attempts,
+                    runtime_fix=runtime_fix,
+                )
+                dump_json(
+                    run_dir / "validation_issue.json",
+                    {"patch_error": classification, "errors": validation.errors},
+                )
                 continue
             dump_json(run_dir / "result.json", result)
-            dump_json(run_dir / "failure.json", {"stage": "validation", "patch_error": classification, "errors": validation.errors})
-            write_status(evidence_bundle, status="failed", error_code=classification.code, message=classification.detail, evidence_complete=False, extra={"suggested_action": classification.suggested_action})
+            dump_json(
+                run_dir / "failure.json",
+                {"stage": "validation", "patch_error": classification, "errors": validation.errors},
+            )
+            write_status(
+                evidence_bundle,
+                status="failed",
+                error_code=classification.code,
+                message=classification.detail,
+                evidence_complete=False,
+                extra={"suggested_action": classification.suggested_action},
+            )
             console.print("[red]Patch validation failed[/red]")
             for error in validation.errors:
                 console.print(f"- {error}")
@@ -239,9 +350,13 @@ def _run_task_body(
         result["patch_attempts"] = patch_attempts
         apply_error = classify_patch_apply(apply_result.stderr or "", apply_result.stdout or "")
         already_present = apply_error.code == "file_already_exists"
-        if apply_result.returncode == 0 or (already_present and all(path.exists() for path in touched)):
+        if apply_result.returncode == 0 or (
+            already_present and all(path.exists() for path in touched)
+        ):
             if already_present and apply_result.returncode != 0:
-                console.print("[yellow]Patch target already exists; continuing as applied.[/yellow]")
+                console.print(
+                    "[yellow]Patch target already exists; continuing as applied.[/yellow]"
+                )
             # Post-apply AST gate: if any touched .py file no longer parses,
             # the model gave us a syntactically broken patch. Restore the
             # backups and run the repair loop instead of declaring success.
@@ -260,21 +375,36 @@ def _run_task_body(
                 _print_patch_error(syntax_error, patch_attempts)
                 _log_patch_error(run_dir, "post_apply_syntax", patch_attempts, syntax_error, detail)
                 if patch_attempts < max_patch_attempts:
-                    console.print("[yellow]Repairing patch and retrying after syntax error...[/yellow]")
+                    console.print(
+                        "[yellow]Repairing patch and retrying after syntax error...[/yellow]"
+                    )
                     patch = repair_patch_with_error(
-                        task, plan, patch, detail, syntax_error.code, root, cfg,
-                        extra_context=evidence_text, repair_attempt=patch_attempts,
+                        task,
+                        plan,
+                        patch,
+                        detail,
+                        syntax_error.code,
+                        root,
+                        cfg,
+                        extra_context=evidence_text,
+                        repair_attempt=patch_attempts,
                         runtime_fix=runtime_fix,
                     )
-                    dump_json(run_dir / "apply_issue.json", {"patch_error": syntax_error, "detail": detail})
+                    dump_json(
+                        run_dir / "apply_issue.json",
+                        {"patch_error": syntax_error, "detail": detail},
+                    )
                     continue
                 dump_json(
                     run_dir / "failure.json",
                     {"stage": "post_apply_syntax", "patch_error": syntax_error, "detail": detail},
                 )
                 write_status(
-                    evidence_bundle, status="failed", error_code=syntax_error.code,
-                    message=syntax_error.detail, evidence_complete=False,
+                    evidence_bundle,
+                    status="failed",
+                    error_code=syntax_error.code,
+                    message=syntax_error.detail,
+                    evidence_complete=False,
                     extra={"suggested_action": syntax_error.suggested_action},
                 )
                 console.print(f"Run logs: {run_dir}")
@@ -283,34 +413,83 @@ def _run_task_body(
             result["applied"] = True
             result["patch_error"] = apply_error
             dump_json(run_dir / "result.json", result)
-            write_status(evidence_bundle, status="ok", error_code=apply_error.code, message="patch applied", evidence_complete=True, extra={"suggested_action": apply_error.suggested_action})
+            write_status(
+                evidence_bundle,
+                status="ok",
+                error_code=apply_error.code,
+                message="patch applied",
+                evidence_complete=True,
+                extra={"suggested_action": apply_error.suggested_action},
+            )
             break
         result["applied"] = False
         result["patch_error"] = apply_error
         dump_json(run_dir / "result.json", result)
         _print_patch_error(apply_error, patch_attempts)
-        _log_patch_error(run_dir, "apply", patch_attempts, apply_error, apply_result.stderr or apply_result.stdout or "apply failed")
+        _log_patch_error(
+            run_dir,
+            "apply",
+            patch_attempts,
+            apply_error,
+            apply_result.stderr or apply_result.stdout or "apply failed",
+        )
         if not apply_error.retryable:
-            dump_json(run_dir / "failure.json", {"stage": "apply", "patch_error": apply_error, "stderr": apply_result.stderr})
-            write_status(evidence_bundle, status="failed", error_code=apply_error.code, message=apply_error.detail, evidence_complete=False, extra={"suggested_action": apply_error.suggested_action})
+            dump_json(
+                run_dir / "failure.json",
+                {"stage": "apply", "patch_error": apply_error, "stderr": apply_result.stderr},
+            )
+            write_status(
+                evidence_bundle,
+                status="failed",
+                error_code=apply_error.code,
+                message=apply_error.detail,
+                evidence_complete=False,
+                extra={"suggested_action": apply_error.suggested_action},
+            )
             console.print(f"Run logs: {run_dir}")
             return apply_result.returncode or 1
         if patch_attempts < max_patch_attempts:
             console.print("[yellow]Patch apply failed; repairing diff and retrying...[/yellow]")
             if apply_result.stderr:
                 console.print(apply_result.stderr)
-            patch = repair_patch_with_error(task, plan, patch, apply_result.stderr or apply_result.stdout or "apply failed", apply_error.code, root, cfg, extra_context=evidence_text, repair_attempt=patch_attempts, runtime_fix=runtime_fix)
-            dump_json(run_dir / "apply_issue.json", {"patch_error": apply_error, "stderr": apply_result.stderr})
+            patch = repair_patch_with_error(
+                task,
+                plan,
+                patch,
+                apply_result.stderr or apply_result.stdout or "apply failed",
+                apply_error.code,
+                root,
+                cfg,
+                extra_context=evidence_text,
+                repair_attempt=patch_attempts,
+                runtime_fix=runtime_fix,
+            )
+            dump_json(
+                run_dir / "apply_issue.json",
+                {"patch_error": apply_error, "stderr": apply_result.stderr},
+            )
             continue
         if apply_result.stderr:
             console.print(apply_result.stderr)
-        dump_json(run_dir / "failure.json", {"stage": "apply", "patch_error": apply_error, "stderr": apply_result.stderr})
-        write_status(evidence_bundle, status="failed", error_code=apply_error.code, message=apply_error.detail, evidence_complete=False, extra={"suggested_action": apply_error.suggested_action})
+        dump_json(
+            run_dir / "failure.json",
+            {"stage": "apply", "patch_error": apply_error, "stderr": apply_result.stderr},
+        )
+        write_status(
+            evidence_bundle,
+            status="failed",
+            error_code=apply_error.code,
+            message=apply_error.detail,
+            evidence_complete=False,
+            extra={"suggested_action": apply_error.suggested_action},
+        )
         console.print(f"Run logs: {run_dir}")
         return apply_result.returncode
 
     console.print("[bold]Suggesting commands...[/bold]")
-    commands = suggest_commands(task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix)
+    commands = suggest_commands(
+        task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix
+    )
     commands = _normalize_suggested_commands(commands)
     dump_json(run_dir / "commands.json", commands)
     console.print("\n[bold]Commands[/bold]")
@@ -322,9 +501,24 @@ def _run_task_body(
             cmd = item["cmd"]
             try:
                 completed = run_command(cmd, cwd=root, timeout=120)
-                exec_outputs.append({"cmd": cmd, "returncode": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr})
+                exec_outputs.append(
+                    {
+                        "cmd": cmd,
+                        "returncode": completed.returncode,
+                        "stdout": completed.stdout,
+                        "stderr": completed.stderr,
+                    }
+                )
             except ValueError as exc:
-                exec_outputs.append({"cmd": cmd, "returncode": 126, "stdout": "", "stderr": str(exc)})
+                exec_outputs.append(
+                    {"cmd": cmd, "returncode": 126, "stdout": "", "stderr": str(exc)}
+                )
         dump_json(run_dir / "test_outputs.json", exec_outputs)
-    write_status(evidence_bundle, status="ok", error_code=None, message="run completed", evidence_complete=True)
+    write_status(
+        evidence_bundle,
+        status="ok",
+        error_code=None,
+        message="run completed",
+        evidence_complete=True,
+    )
     return 0

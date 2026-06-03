@@ -16,7 +16,9 @@ def test_analyze_output_root_reads_baseline_dir(tmp_path: Path) -> None:
         '{"findings": 2, "verified": 0, "unknown": 0, "unverified": 2, "repos": 1, "failures": 0}',
         encoding="utf-8",
     )
-    (baseline / "manifest.json").write_text('{"timestamp": "t", "image": "img", "urls": ["u"]}', encoding="utf-8")
+    (baseline / "manifest.json").write_text(
+        '{"timestamp": "t", "image": "img", "urls": ["u"]}', encoding="utf-8"
+    )
     (baseline / "baseline_summary.csv").write_text(
         "repo,url,findings,verified,unknown,unverified,clone_status,scan_status,top_detectors\n"
         "repo-a,u,2,0,0,2,ok,ok,{'AWSKey': 2}\n",
@@ -33,11 +35,13 @@ def test_analyze_output_root_reads_baseline_dir(tmp_path: Path) -> None:
 def test_scan_repo_urls_writes_evidence(tmp_path: Path, monkeypatch) -> None:
     calls: list[tuple[str, object]] = []
 
-    def fake_clone(url: str, dst: Path, user: str, token: str, depth: int) -> None:  # noqa: ARG001
+    def fake_clone(url: str, dst: Path, user: str, token: str, depth: int) -> None:
         calls.append(("clone", url))
         dst.mkdir(parents=True, exist_ok=True)
 
-    def fake_scan(repo_dir: Path, image: str = "trufflesecurity/trufflehog:3.94.1") -> dict[str, object]:
+    def fake_scan(
+        repo_dir: Path, image: str = "trufflesecurity/trufflehog:3.94.1"
+    ) -> dict[str, object]:
         calls.append(("scan", repo_dir.name))
         return {
             "findings": 1,

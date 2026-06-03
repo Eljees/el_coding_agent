@@ -9,26 +9,20 @@ whether `git apply` will be invoked on the model's reply at all.
 These tests bracket both: hand-rolled edge cases plus a hypothesis-based
 property pass when the optional dependency is available.
 """
+
 from __future__ import annotations
 
 import pytest
 
 from local_codex_lite.llm_client import extract_diff, normalize_unified_diff
 
-
-SIMPLE_DIFF = (
-    "diff --git a/foo.py b/foo.py\n"
-    "--- a/foo.py\n"
-    "+++ b/foo.py\n"
-    "@@ -1 +1 @@\n"
-    "-old\n"
-    "+new\n"
-)
+SIMPLE_DIFF = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new\n"
 
 
 # ---------------------------------------------------------------------------
 # extract_diff: shaping the raw LLM reply into a usable diff
 # ---------------------------------------------------------------------------
+
 
 def test_extract_diff_plain_input() -> None:
     out = extract_diff(SIMPLE_DIFF)
@@ -89,6 +83,7 @@ def test_extract_diff_drops_leading_blank_lines_inside_fence() -> None:
 # normalize_unified_diff: rewriting hunk headers
 # ---------------------------------------------------------------------------
 
+
 def test_normalize_idempotent_on_simple_diff() -> None:
     once = normalize_unified_diff(SIMPLE_DIFF)
     twice = normalize_unified_diff(once)
@@ -121,7 +116,7 @@ def test_normalize_promotes_empty_context_line_to_single_space() -> None:
         "+++ b/foo.py\n"
         "@@ -1,3 +1,3 @@\n"
         " a\n"
-        "\n"            # bare empty - context for an empty source line
+        "\n"  # bare empty - context for an empty source line
         "-b\n"
         "+c\n"
     )
@@ -190,8 +185,8 @@ def test_normalize_handles_two_hunks() -> None:
 # ---------------------------------------------------------------------------
 
 hypothesis = pytest.importorskip("hypothesis", reason="hypothesis is optional")
-from hypothesis import given, settings  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 
 def _format_range(start: int, count: int) -> str:
@@ -205,7 +200,9 @@ def _format_range(start: int, count: int) -> str:
     added=st.integers(min_value=0, max_value=6),
 )
 def test_normalize_recomputes_header_from_body_property(
-    ctx: int, removed: int, added: int,
+    ctx: int,
+    removed: int,
+    added: int,
 ) -> None:
     """For any (context, removed, added) combination, normalize must rewrite
     the hunk header so it matches the body, regardless of what the model
@@ -223,17 +220,13 @@ def test_normalize_recomputes_header_from_body_property(
         "diff --git a/x.py b/x.py\n"
         "--- a/x.py\n"
         "+++ b/x.py\n"
-        "@@ -1,99 +1,99 @@\n"  # intentionally wrong counts
-        + "\n".join(body_lines) + "\n"
+        "@@ -1,99 +1,99 @@\n" + "\n".join(body_lines) + "\n"  # intentionally wrong counts
     )
     out = normalize_unified_diff(raw)
     # Header should now reflect the actual body counts.
     expected_old = ctx + removed
     expected_new = ctx + added
-    expected_header = (
-        f"@@ -{_format_range(1, expected_old)} "
-        f"+{_format_range(1, expected_new)} @@"
-    )
+    expected_header = f"@@ -{_format_range(1, expected_old)} +{_format_range(1, expected_new)} @@"
     assert expected_header in out
     # And normalize is idempotent.
     assert normalize_unified_diff(out) == out

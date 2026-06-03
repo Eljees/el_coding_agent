@@ -5,25 +5,21 @@ came from (``builtin`` or the entry-point name of the plugin that
 contributed it).  Handy after ``pip install`` of a third-party plugin
 to verify the agent actually picked it up.
 """
+
 from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict
 
 from .capabilities import discover_capabilities_with_source
 
 
 def _render_text(entries: list[tuple]) -> str:
     """Format ``(source, capability)`` rows as a fixed-width table."""
-    rows = [
-        (src.kind, src.name or "-", cap.id, cap.title)
-        for src, cap in entries
-    ]
+    rows = [(src.kind, src.name or "-", cap.id, cap.title) for src, cap in entries]
     header = ("source", "plugin", "id", "title")
     widths = [
-        max(len(h), *(len(r[i]) for r in rows)) if rows else len(h)
-        for i, h in enumerate(header)
+        max(len(h), *(len(r[i]) for r in rows)) if rows else len(h) for i, h in enumerate(header)
     ]
     fmt = "  ".join("{:<" + str(w) + "}" for w in widths)
     out = [fmt.format(*header), fmt.format(*("-" * w for w in widths))]

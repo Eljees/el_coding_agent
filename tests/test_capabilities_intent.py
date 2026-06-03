@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from local_codex_lite.capabilities import default_capabilities
-from local_codex_lite.intent import extract_artifact_input_path, extract_artifact_output_path, recognize_intent
+from local_codex_lite.intent import (
+    extract_artifact_input_path,
+    extract_artifact_output_path,
+    recognize_intent,
+)
 
 
 def test_capability_registry_contains_expected_ids() -> None:
@@ -45,12 +49,16 @@ def test_recognize_code_review_maps_to_review_flow() -> None:
 
 
 def test_recognize_cve_scan_with_path() -> None:
-    decision = recognize_intent(r"проверь на cve артефакты из D:\artifacts\bundle", default_capabilities())
+    decision = recognize_intent(
+        r"проверь на cve артефакты из D:\artifacts\bundle", default_capabilities()
+    )
     assert decision.intent == "evidence.cve_scan"
     assert decision.can_do == "yes"
 
 
 def test_recognize_unknown_task_returns_partial() -> None:
-    decision = recognize_intent("расскажи что-нибудь странное про абстрактные галактики", default_capabilities())
+    decision = recognize_intent(
+        "расскажи что-нибудь странное про абстрактные галактики", default_capabilities()
+    )
     assert decision.can_do == "partial"
     assert decision.intent == "unknown"

@@ -28,6 +28,7 @@ class CapabilitySource:
     ``name`` carries the entry-point name (i.e. the key from the
     consumer's ``pyproject.toml``).
     """
+
     kind: str
     name: str = ""
 
@@ -115,7 +116,7 @@ def default_capabilities() -> list[Capability]:
             title="Inspect and unpack artifact archives",
             description="Inventory supported archive files and optionally extract them into an evidence bundle.",
             examples=(
-                r'проведи анализ артефактов отсюда D:\path\to\artifacts',
+                r"проведи анализ артефактов отсюда D:\path\to\artifacts",
                 "проверь архивы и разархивируй",
             ),
             keywords=(
@@ -211,16 +212,24 @@ def default_capabilities() -> list[Capability]:
                 "Saves raw JSON, severity summary, and Markdown report as evidence."
             ),
             examples=(
-                r'проверь на cve артефакты из D:\\path\\to\\artifacts',
+                r"проверь на cve артефакты из D:\\path\\to\\artifacts",
                 "scan artifacts for CVEs",
                 "run cve-bin-tool on extracted binaries",
                 "найди уязвимости в архивах",
             ),
             keywords=(
-                "cve", "cve-bin-tool", "vulnerability", "vulnerabilities",
-                "уязвимост", "уязвим", "cve-scan",
-                "security scan", "binary scan",
-                "проверь на cve", "найди уязвимости", "сканируй на cve",
+                "cve",
+                "cve-bin-tool",
+                "vulnerability",
+                "vulnerabilities",
+                "уязвимост",
+                "уязвим",
+                "cve-scan",
+                "security scan",
+                "binary scan",
+                "проверь на cve",
+                "найди уязвимости",
+                "сканируй на cve",
             ),
             required_inputs=("input_root",),
             safety_level="safe",
@@ -272,7 +281,7 @@ def _load_plugin_capabilities_with_source() -> list[tuple[CapabilitySource, Capa
         try:
             provider = ep.load()
             items = provider() if callable(provider) else provider
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             _LOG.warning("Capability plugin %r failed to load: %s", ep.name, exc)
             continue
         if isinstance(items, Capability):
@@ -280,7 +289,8 @@ def _load_plugin_capabilities_with_source() -> list[tuple[CapabilitySource, Capa
         if not isinstance(items, (list, tuple)):
             _LOG.warning(
                 "Capability plugin %r returned %r (expected Capability or list); ignoring.",
-                ep.name, type(items).__name__,
+                ep.name,
+                type(items).__name__,
             )
             continue
         for item in items:
@@ -289,7 +299,8 @@ def _load_plugin_capabilities_with_source() -> list[tuple[CapabilitySource, Capa
             else:
                 _LOG.warning(
                     "Capability plugin %r yielded %r; expected Capability instance.",
-                    ep.name, type(item).__name__,
+                    ep.name,
+                    type(item).__name__,
                 )
     return discovered
 
@@ -317,7 +328,8 @@ def discover_capabilities_with_source() -> list[tuple[CapabilitySource, Capabili
             _LOG.info(
                 "Capability plugin %r tried to register reserved id %r; "
                 "ignoring in favour of built-in.",
-                src.name, extra.id,
+                src.name,
+                extra.id,
             )
             continue
         merged.append((src, extra))

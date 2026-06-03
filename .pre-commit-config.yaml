@@ -14,15 +14,18 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=512]
 
+  # Keep these revs in lockstep with the pinned versions in
+  # pyproject.toml [project.optional-dependencies].dev so local hooks and CI
+  # produce identical results.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.15.15
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
+    rev: v1.14.1
     hooks:
       - id: mypy
         files: ^local_codex_lite/

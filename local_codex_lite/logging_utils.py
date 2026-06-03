@@ -5,10 +5,9 @@ import re
 import secrets
 from collections import deque
 from dataclasses import asdict, is_dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # Patterns that pair a secret-bearing key/header with its value so the value
 # itself can be replaced (not just prefixed) with <redacted>.
@@ -59,7 +58,7 @@ def utc_timestamp() -> str:
     ``latest_session_dir`` keeps working and existing run directories with
     the shorter ``YYYYMMDD-HHMMSS`` shape still compare correctly.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return now.strftime("%Y%m%d-%H%M%S-%f") + "-" + secrets.token_hex(3)
 
 
@@ -197,5 +196,7 @@ def _read_text_if_exists(path: Path) -> str | None:
 def _collect_artifacts(run_dir: Path) -> list[str]:
     if not run_dir.exists():
         return []
-    artifacts = [path.relative_to(run_dir).as_posix() for path in run_dir.rglob("*") if path.is_file()]
+    artifacts = [
+        path.relative_to(run_dir).as_posix() for path in run_dir.rglob("*") if path.is_file()
+    ]
     return sorted(artifacts)

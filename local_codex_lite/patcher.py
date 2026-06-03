@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import ast
+import re
 import shutil
 import subprocess
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from .safety import is_inside_workspace, is_sensitive_path
-
 
 # ---------------------------------------------------------------------------
 # Runtime-fix context (formerly runtime_fix.py)
@@ -29,7 +28,9 @@ class RuntimeFixContext:
     secondary_files: tuple[tuple[Path, str], ...] = ()
 
 
-def detect_runtime_fix_context(task: str, evidence_text: str, workspace_root: Path) -> RuntimeFixContext | None:
+def detect_runtime_fix_context(
+    task: str, evidence_text: str, workspace_root: Path
+) -> RuntimeFixContext | None:
     if not evidence_text.strip():
         return None
     if "traceback" not in evidence_text.lower():
@@ -79,6 +80,7 @@ def detect_runtime_fix_context(task: str, evidence_text: str, workspace_root: Pa
 # Patch validation and application
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class PatchValidationResult:
     ok: bool
@@ -97,13 +99,16 @@ class ApplyResult:
     grow ``__slots__`` or get other restrictions; storing strategy on a
     purpose-built dataclass is sturdier and self-documenting.
     """
+
     returncode: int
     stdout: str
     stderr: str
     strategy: str = "git_root_relative"
 
 
-def validate_diff(diff_text: str, workspace_root: Path, allow_sensitive_read: bool = False) -> PatchValidationResult:
+def validate_diff(
+    diff_text: str, workspace_root: Path, allow_sensitive_read: bool = False
+) -> PatchValidationResult:
     errors: list[str] = []
     if not diff_text.strip():
         return PatchValidationResult(ok=False, errors=["empty diff"])
@@ -306,9 +311,7 @@ def validate_python_syntax(paths: list[Path]) -> list[SyntaxIssue]:
             ast.parse(source, filename=str(path))
         except SyntaxError as exc:
             line = exc.lineno or "?"
-            issues.append(
-                SyntaxIssue(path=path, detail=f"line {line}: {exc.msg}")
-            )
+            issues.append(SyntaxIssue(path=path, detail=f"line {line}: {exc.msg}"))
     return issues
 
 

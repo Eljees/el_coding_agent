@@ -27,21 +27,21 @@ class RankedWorkspaceFile:
 # These weights tune how aggressively rank_workspace_files prefers files that
 # match the task.  The exact numbers were tuned by hand; the names exist so
 # changes have to be justified instead of dropped into a magic-number jungle.
-SCORE_TARGET_PATH_EXACT       = 260   # exact match of the resolved task target
-SCORE_TARGET_BASENAME         = 220   # basename matches the task target
-SCORE_TASK_MENTIONS_PATH      = 140   # full rel-path appears verbatim in the task
-SCORE_TASK_MENTIONS_TESTS     = 140   # task talks about tests + file is a test
-SCORE_TASK_MENTIONS_BASENAME  = 110   # basename appears in the task text
-SCORE_TASK_MENTIONS_STEM      = 90    # stem (basename minus extension) appears
-SCORE_IMPORTANT_BASENAME      = 28    # well-known project file (pyproject.toml, ...)
-SCORE_CONFIG_FILE             = 18    # .toml/.yaml/.json/.ini config flavor
-SCORE_PY_SOURCE               = 14    # generic python source bonus
-SCORE_DOC_FILE                = 8     # .md/.rst documentation
-SCORE_TESTS_DIR               = 16    # lives under tests/
-SCORE_TOKEN_EXACT             = 35    # task token equals basename or stem
-SCORE_TOKEN_PARTIAL           = 10    # task token is a substring of the path
-SCORE_SAME_DIR_BOOST          = 8     # neighbour of a high-scoring file
-SCORE_STRONG_DIR_THRESHOLD    = 70    # min score for a directory to "pull in" peers
+SCORE_TARGET_PATH_EXACT = 260  # exact match of the resolved task target
+SCORE_TARGET_BASENAME = 220  # basename matches the task target
+SCORE_TASK_MENTIONS_PATH = 140  # full rel-path appears verbatim in the task
+SCORE_TASK_MENTIONS_TESTS = 140  # task talks about tests + file is a test
+SCORE_TASK_MENTIONS_BASENAME = 110  # basename appears in the task text
+SCORE_TASK_MENTIONS_STEM = 90  # stem (basename minus extension) appears
+SCORE_IMPORTANT_BASENAME = 28  # well-known project file (pyproject.toml, ...)
+SCORE_CONFIG_FILE = 18  # .toml/.yaml/.json/.ini config flavor
+SCORE_PY_SOURCE = 14  # generic python source bonus
+SCORE_DOC_FILE = 8  # .md/.rst documentation
+SCORE_TESTS_DIR = 16  # lives under tests/
+SCORE_TOKEN_EXACT = 35  # task token equals basename or stem
+SCORE_TOKEN_PARTIAL = 10  # task token is a substring of the path
+SCORE_SAME_DIR_BOOST = 8  # neighbour of a high-scoring file
+SCORE_STRONG_DIR_THRESHOLD = 70  # min score for a directory to "pull in" peers
 
 
 _IMPORTANT_BASENAMES = {
@@ -67,7 +67,17 @@ _IMPORTANT_BASENAMES = {
     "config.py",
 }
 
-_TEST_HINTS = {"test", "tests", "pytest", "validation", "doctor", "preview", "cli", "patch", "safety"}
+_TEST_HINTS = {
+    "test",
+    "tests",
+    "pytest",
+    "validation",
+    "doctor",
+    "preview",
+    "cli",
+    "patch",
+    "safety",
+}
 
 
 def build_tree(root: Path, config: WorkspaceConfig) -> list[str]:
@@ -82,20 +92,26 @@ def build_tree(root: Path, config: WorkspaceConfig) -> list[str]:
             continue
         if any(_path_matches(rel_path, pattern) for pattern in config.exclude_globs):
             continue
-        if config.include_globs and not any(_path_matches(rel_path, pattern) for pattern in config.include_globs):
+        if config.include_globs and not any(
+            _path_matches(rel_path, pattern) for pattern in config.include_globs
+        ):
             continue
         lines.append(rel)
     return lines
 
 
-def rank_workspace_files(root: Path, task: str, config: WorkspaceConfig) -> list[RankedWorkspaceFile]:
+def rank_workspace_files(
+    root: Path, task: str, config: WorkspaceConfig
+) -> list[RankedWorkspaceFile]:
     root = root.resolve()
     task_lower = task.lower()
     task_target = detect_task_target(task, root)
     ranked: list[RankedWorkspaceFile] = []
     for rel in build_tree(root, config):
         path = root / rel
-        score, reasons = _score_workspace_file(rel, task_lower, task_target.path if task_target else None)
+        score, reasons = _score_workspace_file(
+            rel, task_lower, task_target.path if task_target else None
+        )
         ranked.append(RankedWorkspaceFile(path=path, score=score, reasons=tuple(reasons)))
 
     if not ranked:
@@ -139,7 +155,9 @@ def summarize_ranked_files(
     return visible
 
 
-def read_file_chunks(root: Path, paths: list[Path], max_bytes: int, allow_sensitive_read: bool) -> list[FileChunk]:
+def read_file_chunks(
+    root: Path, paths: list[Path], max_bytes: int, allow_sensitive_read: bool
+) -> list[FileChunk]:
     chunks: list[FileChunk] = []
     for path in paths:
         if not is_inside_workspace(path, root):
@@ -151,7 +169,9 @@ def read_file_chunks(root: Path, paths: list[Path], max_bytes: int, allow_sensit
         size = path.stat().st_size
         if size > max_bytes:
             continue
-        chunks.append(FileChunk(path=path, content=path.read_text(encoding="utf-8", errors="replace")))
+        chunks.append(
+            FileChunk(path=path, content=path.read_text(encoding="utf-8", errors="replace"))
+        )
     return chunks
 
 
@@ -175,7 +195,9 @@ def compact_context(
     return "\n".join(parts).strip() + "\n"
 
 
-def _score_workspace_file(rel: str, task_lower: str, intended_target: str | None = None) -> tuple[int, list[str]]:
+def _score_workspace_file(
+    rel: str, task_lower: str, intended_target: str | None = None
+) -> tuple[int, list[str]]:
     rel_lower = rel.lower()
     basename = Path(rel).name.lower()
     stem = Path(rel).stem.lower()
@@ -212,7 +234,11 @@ def _score_workspace_file(rel: str, task_lower: str, intended_target: str | None
         score += SCORE_IMPORTANT_BASENAME
         reasons.append("important project file")
 
-    if basename.startswith("config.") or basename.startswith("settings.") or basename.endswith((".toml", ".yaml", ".yml", ".json", ".ini")):
+    if (
+        basename.startswith("config.")
+        or basename.startswith("settings.")
+        or basename.endswith((".toml", ".yaml", ".yml", ".json", ".ini"))
+    ):
         score += SCORE_CONFIG_FILE
         reasons.append("config file")
 

@@ -4,6 +4,7 @@ See module docstring for details. The command reads task/plan/patch from
 a saved run-dir and re-runs the post-LLM pipeline (validate, backup, git
 apply, AST gate) on the current workspace.  No LLM is contacted.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -12,14 +13,22 @@ from pathlib import Path
 
 from .cli_utils import (
     console,
-    log_patch_error as _log_patch_error,
-    print_patch_error as _print_patch_error,
     workspace_root,
+)
+from .cli_utils import (
+    log_patch_error as _log_patch_error,
+)
+from .cli_utils import (
+    print_patch_error as _print_patch_error,
 )
 from .config import UnknownProfileError, apply_profile, load_config
 from .evidence_mode import create_evidence_bundle, save_raw_text, save_summary_json, write_status
 from .logging_utils import dump_json, dump_text, resolve_run_dir, session_dir
-from .patch_errors import classify_patch_apply, classify_patch_validation, classify_python_syntax_error
+from .patch_errors import (
+    classify_patch_apply,
+    classify_patch_validation,
+    classify_python_syntax_error,
+)
 from .patcher import (
     apply_patch,
     backup_paths,
@@ -85,7 +94,10 @@ def cmd_replay(args: argparse.Namespace) -> int:
 
     run_dir = session_dir(base_root)
     evidence_bundle = create_evidence_bundle(
-        run_dir, source="replay", task=task, run_id=run_dir.name,
+        run_dir,
+        source="replay",
+        task=task,
+        run_id=run_dir.name,
     )
     dump_text(run_dir / "task.txt", task)
     dump_text(run_dir / "replay_source.txt", str(source))
@@ -107,20 +119,28 @@ def cmd_replay(args: argparse.Namespace) -> int:
         console.print("[bold]Patch (cached)[/bold]")
         console.print(patch)
         write_status(
-            evidence_bundle, status="ok", error_code=None,
-            message="replay dry-run completed", evidence_complete=True,
+            evidence_bundle,
+            status="ok",
+            error_code=None,
+            message="replay dry-run completed",
+            evidence_complete=True,
         )
         return 0
 
     if cfg.safety.require_apply_flag and not args.apply:
         write_status(
-            evidence_bundle, status="partial", error_code=None,
-            message="apply flag required", evidence_complete=False,
+            evidence_bundle,
+            status="partial",
+            error_code=None,
+            message="apply flag required",
+            evidence_complete=False,
         )
         console.print("Use --apply to actually re-run the saved patch.")
         return 0
 
-    validation = validate_diff(patch, base_root, allow_sensitive_read=cfg.safety.allow_sensitive_read)
+    validation = validate_diff(
+        patch, base_root, allow_sensitive_read=cfg.safety.allow_sensitive_read
+    )
     if not validation.ok:
         classification = classify_patch_validation(validation.errors)
         _print_patch_error(classification, 1)
@@ -130,8 +150,11 @@ def cmd_replay(args: argparse.Namespace) -> int:
             {"stage": "validation", "patch_error": classification, "errors": validation.errors},
         )
         write_status(
-            evidence_bundle, status="failed", error_code=classification.code,
-            message=classification.detail, evidence_complete=False,
+            evidence_bundle,
+            status="failed",
+            error_code=classification.code,
+            message=classification.detail,
+            evidence_complete=False,
             extra={"suggested_action": classification.suggested_action},
         )
         return 1
@@ -155,14 +178,19 @@ def cmd_replay(args: argparse.Namespace) -> int:
             result["patch_error"] = apply_error
             dump_json(run_dir / "result.json", result)
             _print_patch_error(apply_error, 1)
-            _log_patch_error(run_dir, "apply", 1, apply_error, apply_result.stderr or "apply failed")
+            _log_patch_error(
+                run_dir, "apply", 1, apply_error, apply_result.stderr or "apply failed"
+            )
             dump_json(
                 run_dir / "failure.json",
                 {"stage": "apply", "patch_error": apply_error, "stderr": apply_result.stderr},
             )
             write_status(
-                evidence_bundle, status="failed", error_code=apply_error.code,
-                message=apply_error.detail, evidence_complete=False,
+                evidence_bundle,
+                status="failed",
+                error_code=apply_error.code,
+                message=apply_error.detail,
+                evidence_complete=False,
                 extra={"suggested_action": apply_error.suggested_action},
             )
             return apply_result.returncode or 1
@@ -180,11 +208,19 @@ def cmd_replay(args: argparse.Namespace) -> int:
         _log_patch_error(run_dir, "post_apply_syntax", 1, syntax_error, detail)
         dump_json(
             run_dir / "failure.json",
-            {"stage": "post_apply_syntax", "patch_error": syntax_error, "detail": detail, "restored": restored},
+            {
+                "stage": "post_apply_syntax",
+                "patch_error": syntax_error,
+                "detail": detail,
+                "restored": restored,
+            },
         )
         write_status(
-            evidence_bundle, status="failed", error_code=syntax_error.code,
-            message=syntax_error.detail, evidence_complete=False,
+            evidence_bundle,
+            status="failed",
+            error_code=syntax_error.code,
+            message=syntax_error.detail,
+            evidence_complete=False,
             extra={"suggested_action": syntax_error.suggested_action, "restored": restored},
         )
         return 1
@@ -192,8 +228,11 @@ def cmd_replay(args: argparse.Namespace) -> int:
     result["applied"] = True
     dump_json(run_dir / "result.json", result)
     write_status(
-        evidence_bundle, status="ok", error_code=None,
-        message="replay applied", evidence_complete=True,
+        evidence_bundle,
+        status="ok",
+        error_code=None,
+        message="replay applied",
+        evidence_complete=True,
     )
     console.print(f"[green]Replay applied[/green]; new run logs at {run_dir}")
     return 0

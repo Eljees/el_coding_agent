@@ -4,6 +4,7 @@ The agent stays single-file for the *patch*: only ``target_path`` is
 modified.  ``secondary_files`` is read-only context so the model can
 reason about the call chain when a traceback spans several modules.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -32,6 +33,7 @@ def _traceback(*paths: Path) -> str:
 # ---------------------------------------------------------------------------
 # detect_runtime_fix_context: secondary_files population
 # ---------------------------------------------------------------------------
+
 
 def test_detect_returns_secondary_files_for_multifile_traceback(tmp_path: Path) -> None:
     ws = tmp_path.resolve()
@@ -99,16 +101,19 @@ def test_detect_returns_empty_secondary_files_for_single_frame(tmp_path: Path) -
 # _runtime_fix_related_block: prompt rendering
 # ---------------------------------------------------------------------------
 
+
 def test_related_block_empty_returns_empty_string() -> None:
     assert _runtime_fix_related_block(()) == ""
     assert _runtime_fix_related_block([]) == ""
 
 
 def test_related_block_emits_one_section_per_file() -> None:
-    block = _runtime_fix_related_block([
-        ("pkg/a.py", "def a(): pass\n"),
-        ("pkg/b.py", "def b(): pass\n"),
-    ])
+    block = _runtime_fix_related_block(
+        [
+            ("pkg/a.py", "def a(): pass\n"),
+            ("pkg/b.py", "def b(): pass\n"),
+        ]
+    )
     assert "Related files" in block
     assert "do NOT patch" in block
     assert "--- pkg/a.py ---" in block
@@ -127,6 +132,7 @@ def test_related_block_truncates_long_content() -> None:
 # Prompt functions accept related_files without breaking existing call sites
 # ---------------------------------------------------------------------------
 
+
 def test_plan_prompt_includes_related_block_when_present() -> None:
     msgs = runtime_fix_single_file_plan_prompt(
         "fix",
@@ -144,7 +150,10 @@ def test_plan_prompt_omits_related_block_when_empty() -> None:
     """Backward compatibility: existing callers that don't pass
     related_files must produce the same prompt shape as before."""
     msgs = runtime_fix_single_file_plan_prompt(
-        "fix", "pkg/a.py", "Traceback...", "def a(): pass\n",
+        "fix",
+        "pkg/a.py",
+        "Traceback...",
+        "def a(): pass\n",
     )
     content = "\n".join(m["content"] for m in msgs)
     assert "Related files" not in content

@@ -4,6 +4,7 @@ We don't actually pip-install a plugin here -- we monkeypatch
 ``discover_capabilities_with_source`` to return a controlled mix of
 built-in and plugin entries and check the formatting / counts.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -49,9 +50,7 @@ def _fake_entries():
 
 
 def _run(args_ns, monkeypatch):
-    monkeypatch.setattr(
-        plugins_cmd, "discover_capabilities_with_source", _fake_entries
-    )
+    monkeypatch.setattr(plugins_cmd, "discover_capabilities_with_source", _fake_entries)
     buf = io.StringIO()
     with redirect_stdout(buf):
         rc = plugins_cmd.cmd_plugins_list(args_ns)
@@ -82,6 +81,7 @@ def test_plugins_only_drops_builtins(monkeypatch):
 
 def test_json_output_shape(monkeypatch):
     import json
+
     ns = argparse.Namespace(plugins_only=False, json_output=True)
     rc, out = _run(ns, monkeypatch)
     assert rc == 0
@@ -97,9 +97,7 @@ def test_json_output_shape(monkeypatch):
 
 def test_empty_plugins_only_message(monkeypatch):
     # no entries at all
-    monkeypatch.setattr(
-        plugins_cmd, "discover_capabilities_with_source", lambda: []
-    )
+    monkeypatch.setattr(plugins_cmd, "discover_capabilities_with_source", lambda: [])
     ns = argparse.Namespace(plugins_only=True, json_output=False)
     buf = io.StringIO()
     with redirect_stdout(buf):

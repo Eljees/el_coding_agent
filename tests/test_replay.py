@@ -1,4 +1,5 @@
 """Tests for `local_codex_lite replay <run_id>`."""
+
 from __future__ import annotations
 
 import argparse
@@ -37,6 +38,7 @@ def _init_git_repo(path: Path, files: dict[str, str]) -> None:
 # pure helpers
 # ---------------------------------------------------------------------------
 
+
 def test_load_replay_inputs_returns_none_when_missing(tmp_path: Path) -> None:
     run = tmp_path / "r1"
     run.mkdir()
@@ -47,7 +49,8 @@ def test_load_replay_inputs_returns_none_when_missing(tmp_path: Path) -> None:
 
 def test_load_replay_inputs_returns_triple(tmp_path: Path) -> None:
     run = _make_source_run(
-        tmp_path, "r1",
+        tmp_path,
+        "r1",
         task="hello",
         plan={"summary": "p"},
         patch="diff --git a/foo b/foo\n--- a/foo\n+++ b/foo\n",
@@ -92,9 +95,12 @@ def test_extract_touched_paths_picks_up_b_paths(tmp_path: Path) -> None:
 # cmd_replay
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_replay_returns_1_for_missing_run(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(run_id="nope", dry_run=False, apply=False, profile=None))
+    rc = replay.cmd_replay(
+        argparse.Namespace(run_id="nope", dry_run=False, apply=False, profile=None)
+    )
     assert rc == 1
 
 
@@ -103,7 +109,9 @@ def test_cmd_replay_returns_1_when_inputs_incomplete(tmp_path: Path, monkeypatch
     run.mkdir(parents=True)
     (run / "task.txt").write_text("x", encoding="utf-8")
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(run_id="broken", dry_run=True, apply=False, profile=None))
+    rc = replay.cmd_replay(
+        argparse.Namespace(run_id="broken", dry_run=True, apply=False, profile=None)
+    )
     assert rc == 1
 
 
@@ -117,12 +125,18 @@ def test_cmd_replay_dry_run_prints_plan_and_patch(tmp_path: Path, monkeypatch, c
         "-print('hi')\n"
         "+print('hello')\n"
     )
-    _make_source_run(tmp_path, "20260516-abc",
-                     task="say hello", plan={"summary": "swap greeting"}, patch=diff)
+    _make_source_run(
+        tmp_path, "20260516-abc", task="say hello", plan={"summary": "swap greeting"}, patch=diff
+    )
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(
-        run_id="20260516-abc", dry_run=True, apply=False, profile=None,
-    ))
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=True,
+            apply=False,
+            profile=None,
+        )
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "swap greeting" in out
@@ -141,18 +155,21 @@ def test_cmd_replay_apply_writes_files_and_creates_run_dir(tmp_path: Path, monke
         "-print('hi')\n"
         "+print('hello')\n"
     )
-    src = _make_source_run(tmp_path, "20260516-abc",
-                           task="task", plan={"summary": "p"}, patch=diff)
+    src = _make_source_run(tmp_path, "20260516-abc", task="task", plan={"summary": "p"}, patch=diff)
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(
-        run_id="20260516-abc", dry_run=False, apply=True, profile=None,
-    ))
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile=None,
+        )
+    )
     assert rc == 0
     assert (tmp_path / "foo.py").read_text() == "print('hello')\n"
     # A new run dir distinct from the source must exist with task.txt etc.
     new_runs = sorted(
-        p for p in (tmp_path / ".local-codex-lite" / "runs").iterdir()
-        if p.is_dir() and p != src
+        p for p in (tmp_path / ".local-codex-lite" / "runs").iterdir() if p.is_dir() and p != src
     )
     assert len(new_runs) == 1
     new_run = new_runs[0]
@@ -173,31 +190,45 @@ def test_cmd_replay_requires_apply_when_safety_demands(tmp_path: Path, monkeypat
         "-print('hi')\n"
         "+print('hello')\n"
     )
-    _make_source_run(tmp_path, "20260516-abc",
-                     task="task", plan={"summary": "p"}, patch=diff)
+    _make_source_run(tmp_path, "20260516-abc", task="task", plan={"summary": "p"}, patch=diff)
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(
-        run_id="20260516-abc", dry_run=False, apply=False, profile=None,
-    ))
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=False,
+            profile=None,
+        )
+    )
     assert rc == 0
     assert (tmp_path / "foo.py").read_text() == "print('hi')\n"
 
 
 def test_cmd_replay_rejects_invalid_diff(tmp_path: Path, monkeypatch) -> None:
     _init_git_repo(tmp_path, {"foo.py": "x\n"})
-    _make_source_run(tmp_path, "20260516-abc",
-                     task="task", plan={"summary": "p"},
-                     patch="this is not a unified diff\n")
+    _make_source_run(
+        tmp_path,
+        "20260516-abc",
+        task="task",
+        plan={"summary": "p"},
+        patch="this is not a unified diff\n",
+    )
     monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
-    rc = replay.cmd_replay(argparse.Namespace(
-        run_id="20260516-abc", dry_run=False, apply=True, profile=None,
-    ))
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile=None,
+        )
+    )
     assert rc == 1
 
 
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
+
 
 def test_build_parser_replay_defaults() -> None:
     parser = cli.build_parser()

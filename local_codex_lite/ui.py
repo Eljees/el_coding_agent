@@ -13,7 +13,7 @@ from pathlib import Path
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
-except Exception as exc:  # noqa: BLE001
+except Exception as exc:
     tk = None  # type: ignore[assignment]
     ttk = None  # type: ignore[assignment]
     messagebox = None  # type: ignore[assignment]
@@ -22,11 +22,17 @@ except Exception as exc:  # noqa: BLE001
 else:
     _TK_IMPORT_ERROR = None
 
-from .capabilities import capability_brief_lines, default_capabilities, discover_capabilities
+from .capabilities import capability_brief_lines, discover_capabilities
+from .intent import (
+    IntentDecision,
+    decision_as_dict,
+    extract_artifact_input_path,
+    extract_artifact_output_path,
+    recognize_intent,
+)
 from .project_workspace import create_project_workspace, should_use_project_workspace
 from .skill_registry import discover_skills, skill_brief_lines
 from .tool_registry import default_tools, tool_brief_lines
-from .intent import IntentDecision, decision_as_dict, extract_artifact_input_path, extract_artifact_output_path, recognize_intent
 
 _HISTORY_MAX = 50
 _HISTORY_FILE = ".local-codex-lite/task_history.json"
@@ -73,7 +79,7 @@ def temporary_cwd(path: Path):
 
 
 class CommandCenterUI:
-    def __init__(self, root: "tk.Tk") -> None:
+    def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.capabilities = discover_capabilities()
         self.tools = default_tools()
@@ -118,7 +124,7 @@ class CommandCenterUI:
         style = ttk.Style(self.root)
         try:
             style.theme_use("clam")
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
 
         # --- Status bar (packed before main so it stays at the bottom) ---
@@ -126,9 +132,13 @@ class CommandCenterUI:
         self._status_bar.pack(side="bottom", fill="x")
         self._status_cve_var = tk.StringVar(value="cve-bin-tool: checking…")
         self._status_llm_var = tk.StringVar(value="LLM: checking…")
-        ttk.Label(self._status_bar, textvariable=self._status_cve_var, anchor="w").pack(side="left", padx=(0, 4))
+        ttk.Label(self._status_bar, textvariable=self._status_cve_var, anchor="w").pack(
+            side="left", padx=(0, 4)
+        )
         ttk.Separator(self._status_bar, orient="vertical").pack(side="left", fill="y", padx=4)
-        ttk.Label(self._status_bar, textvariable=self._status_llm_var, anchor="w").pack(side="left", padx=(0, 4))
+        ttk.Label(self._status_bar, textvariable=self._status_llm_var, anchor="w").pack(
+            side="left", padx=(0, 4)
+        )
         ttk.Separator(self._status_bar, orient="vertical").pack(side="left", fill="y", padx=4)
         ttk.Label(self._status_bar, textvariable=self.workspace_var, anchor="w").pack(side="left")
         threading.Thread(target=self._probe_status, daemon=True).start()
@@ -155,9 +165,11 @@ class CommandCenterUI:
         # task_text-level bindings take priority for agent hotkeys
         # (chat_input binds Ctrl+Return itself and returns "break")
 
-        self._write_command_output("Analyze a task to see the suggested intent and safe next action.\n\nHotkeys: F5=Analyze  Ctrl+Enter=Preview  Ctrl+Shift+Enter=Apply")
+        self._write_command_output(
+            "Analyze a task to see the suggested intent and safe next action.\n\nHotkeys: F5=Analyze  Ctrl+Enter=Preview  Ctrl+Shift+Enter=Apply"
+        )
 
-    def _build_agent_tab(self, parent: "ttk.Frame") -> None:
+    def _build_agent_tab(self, parent: ttk.Frame) -> None:
         top = ttk.Frame(parent)
         top.pack(fill="x")
         left = ttk.Frame(top)
@@ -200,28 +212,46 @@ class CommandCenterUI:
         evidence_inner = ttk.Frame(evidence_frame)
         evidence_inner.pack(fill="x", expand=False, padx=6, pady=(6, 0))
         self.evidence_text = tk.Text(evidence_inner, height=8, wrap="word")
-        evidence_scroll = ttk.Scrollbar(evidence_inner, orient="vertical", command=self.evidence_text.yview)
+        evidence_scroll = ttk.Scrollbar(
+            evidence_inner, orient="vertical", command=self.evidence_text.yview
+        )
         self.evidence_text.configure(yscrollcommand=evidence_scroll.set)
         self.evidence_text.pack(side="left", fill="both", expand=True)
         evidence_scroll.pack(side="right", fill="y")
         self._make_editable_copyable(self.evidence_text)
         evidence_actions = ttk.Frame(evidence_frame)
         evidence_actions.pack(fill="x", padx=6, pady=(4, 6))
-        ttk.Button(evidence_actions, text="Paste clipboard", command=self._paste_evidence).pack(side="left")
-        ttk.Button(evidence_actions, text="Clear evidence", command=self._clear_evidence).pack(side="left", padx=(6, 0))
+        ttk.Button(evidence_actions, text="Paste clipboard", command=self._paste_evidence).pack(
+            side="left"
+        )
+        ttk.Button(evidence_actions, text="Clear evidence", command=self._clear_evidence).pack(
+            side="left", padx=(6, 0)
+        )
 
         # --- Action buttons + progressbar + stop ---
         buttons = ttk.Frame(left)
         buttons.pack(fill="x", pady=(0, 8))
-        ttk.Button(buttons, text="Analyze (F5)", command=self.analyze).pack(side="left", padx=(0, 6))
-        ttk.Button(buttons, text="Preview (Ctrl+↵)", command=self.preview).pack(side="left", padx=(0, 6))
-        ttk.Button(buttons, text="Logs Latest", command=self.logs_latest).pack(side="left", padx=(0, 6))
-        self.apply_button = ttk.Button(buttons, text="Apply (Ctrl+Shift+↵)", command=self.apply_changes, state="disabled")
+        ttk.Button(buttons, text="Analyze (F5)", command=self.analyze).pack(
+            side="left", padx=(0, 6)
+        )
+        ttk.Button(buttons, text="Preview (Ctrl+↵)", command=self.preview).pack(
+            side="left", padx=(0, 6)
+        )
+        ttk.Button(buttons, text="Logs Latest", command=self.logs_latest).pack(
+            side="left", padx=(0, 6)
+        )
+        self.apply_button = ttk.Button(
+            buttons, text="Apply (Ctrl+Shift+↵)", command=self.apply_changes, state="disabled"
+        )
         self.apply_button.pack(side="left", padx=(0, 6))
-        self.exec_button = ttk.Button(buttons, text="Exec", command=self.exec_changes, state="disabled")
+        self.exec_button = ttk.Button(
+            buttons, text="Exec", command=self.exec_changes, state="disabled"
+        )
         self.exec_button.pack(side="left")
         # Stop + progressbar on right side
-        self._stop_button = ttk.Button(buttons, text="Stop", command=self._stop_worker, state="disabled")
+        self._stop_button = ttk.Button(
+            buttons, text="Stop", command=self._stop_worker, state="disabled"
+        )
         self._stop_button.pack(side="right", padx=(6, 0))
         self._progress = ttk.Progressbar(buttons, mode="indeterminate", length=100)
         self._progress.pack(side="right", padx=(6, 0))
@@ -263,7 +293,9 @@ class CommandCenterUI:
         intent_inner = ttk.Frame(intent_frame)
         intent_inner.pack(fill="both", expand=True)
         self.intent_text = tk.Text(intent_inner, wrap="word")
-        intent_scroll = ttk.Scrollbar(intent_inner, orient="vertical", command=self.intent_text.yview)
+        intent_scroll = ttk.Scrollbar(
+            intent_inner, orient="vertical", command=self.intent_text.yview
+        )
         self.intent_text.configure(yscrollcommand=intent_scroll.set)
         self.intent_text.pack(side="left", fill="both", expand=True)
         intent_scroll.pack(side="right", fill="y")
@@ -274,7 +306,9 @@ class CommandCenterUI:
         command_inner = ttk.Frame(command_frame)
         command_inner.pack(fill="both", expand=True)
         self.command_text = tk.Text(command_inner, wrap="word")
-        command_scroll = ttk.Scrollbar(command_inner, orient="vertical", command=self.command_text.yview)
+        command_scroll = ttk.Scrollbar(
+            command_inner, orient="vertical", command=self.command_text.yview
+        )
         self.command_text.configure(yscrollcommand=command_scroll.set)
         self.command_text.pack(side="left", fill="both", expand=True)
         command_scroll.pack(side="right", fill="y")
@@ -282,9 +316,15 @@ class CommandCenterUI:
 
         command_actions = ttk.Frame(command_frame)
         command_actions.pack(fill="x", pady=(6, 0))
-        ttk.Button(command_actions, text="Copy output", command=self._copy_command_output).pack(side="left")
-        ttk.Button(command_actions, text="Copy all", command=self._copy_all_output).pack(side="left", padx=(6, 0))
-        ttk.Button(command_actions, text="Export…", command=self._export_output).pack(side="left", padx=(6, 0))
+        ttk.Button(command_actions, text="Copy output", command=self._copy_command_output).pack(
+            side="left"
+        )
+        ttk.Button(command_actions, text="Copy all", command=self._copy_all_output).pack(
+            side="left", padx=(6, 0)
+        )
+        ttk.Button(command_actions, text="Export…", command=self._export_output).pack(
+            side="left", padx=(6, 0)
+        )
 
         # --- Right panel: capabilities / tools / skills / detail ---
         ttk.Label(right, text="Known capabilities").pack(anchor="w")
@@ -308,7 +348,9 @@ class CommandCenterUI:
         detail_frame = ttk.Frame(right)
         detail_frame.pack(fill="both", expand=False, pady=(8, 0))
         self.capability_detail = tk.Text(detail_frame, height=12, wrap="word")
-        detail_scroll = ttk.Scrollbar(detail_frame, orient="vertical", command=self.capability_detail.yview)
+        detail_scroll = ttk.Scrollbar(
+            detail_frame, orient="vertical", command=self.capability_detail.yview
+        )
         self.capability_detail.configure(yscrollcommand=detail_scroll.set)
         self.capability_detail.pack(side="left", fill="both", expand=True)
         detail_scroll.pack(side="right", fill="y")
@@ -321,7 +363,7 @@ class CommandCenterUI:
             self.capability_list.selection_set(0)
             self._show_capability_detail()
 
-    def _build_chat_tab(self, parent: "ttk.Frame") -> None:
+    def _build_chat_tab(self, parent: ttk.Frame) -> None:
         """Build the chat panel: conversation history + input field + Send button."""
         ttk.Label(
             parent,
@@ -334,7 +376,9 @@ class CommandCenterUI:
         history_inner = ttk.Frame(history_outer)
         history_inner.pack(fill="both", expand=True, padx=4, pady=4)
         self.chat_history = tk.Text(history_inner, wrap="word", state="disabled")
-        chat_hist_scroll = ttk.Scrollbar(history_inner, orient="vertical", command=self.chat_history.yview)
+        chat_hist_scroll = ttk.Scrollbar(
+            history_inner, orient="vertical", command=self.chat_history.yview
+        )
         self.chat_history.configure(yscrollcommand=chat_hist_scroll.set)
         self.chat_history.pack(side="left", fill="both", expand=True)
         chat_hist_scroll.pack(side="right", fill="y")
@@ -345,7 +389,9 @@ class CommandCenterUI:
         input_outer = ttk.Frame(parent)
         input_outer.pack(fill="x")
         self.chat_input = tk.Text(input_outer, height=4, wrap="word")
-        chat_input_scroll = ttk.Scrollbar(input_outer, orient="vertical", command=self.chat_input.yview)
+        chat_input_scroll = ttk.Scrollbar(
+            input_outer, orient="vertical", command=self.chat_input.yview
+        )
         self.chat_input.configure(yscrollcommand=chat_input_scroll.set)
         self.chat_input.pack(side="left", fill="both", expand=True)
         chat_input_scroll.pack(side="right", fill="y")
@@ -355,11 +401,17 @@ class CommandCenterUI:
         # Actions
         chat_actions = ttk.Frame(parent)
         chat_actions.pack(fill="x", pady=(6, 0))
-        self._chat_send_button = ttk.Button(chat_actions, text="Send (Ctrl+Enter)", command=self._chat_send)
+        self._chat_send_button = ttk.Button(
+            chat_actions, text="Send (Ctrl+Enter)", command=self._chat_send
+        )
         self._chat_send_button.pack(side="left")
-        ttk.Button(chat_actions, text="Clear history", command=self._chat_clear).pack(side="left", padx=(8, 0))
+        ttk.Button(chat_actions, text="Clear history", command=self._chat_clear).pack(
+            side="left", padx=(8, 0)
+        )
         self._chat_status_var = tk.StringVar(value="")
-        ttk.Label(chat_actions, textvariable=self._chat_status_var, foreground="gray").pack(side="left", padx=(12, 0))
+        ttk.Label(chat_actions, textvariable=self._chat_status_var, foreground="gray").pack(
+            side="left", padx=(12, 0)
+        )
 
     # ------------------------------------------------------------------
     # Persistence: geometry and task history
@@ -399,7 +451,9 @@ class CommandCenterUI:
         try:
             hist_file = self._base_workspace_root / _HISTORY_FILE
             hist_file.parent.mkdir(parents=True, exist_ok=True)
-            hist_file.write_text(json.dumps(self._task_history, ensure_ascii=False, indent=2), encoding="utf-8")
+            hist_file.write_text(
+                json.dumps(self._task_history, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
         except Exception:
             pass
         self._refresh_history_combo()
@@ -468,7 +522,9 @@ class CommandCenterUI:
         try:
             r = _sp.run(
                 ["cve-bin-tool", "--version"],
-                capture_output=True, text=True, timeout=8,
+                capture_output=True,
+                text=True,
+                timeout=8,
             )
             ver = (r.stdout.strip() or r.stderr.strip()).split("\n")[0]
             cve_status = f"cve-bin-tool: {ver}" if ver else "cve-bin-tool: ok"
@@ -482,6 +538,7 @@ class CommandCenterUI:
         base_url = "http://localhost:8015/v1"
         try:
             from .config import load_config
+
             cfg = load_config(self._base_workspace_root)
             base_url = cfg.llm.base_url
         except Exception:
@@ -506,12 +563,15 @@ class CommandCenterUI:
         self._chat_status_var.set("Sending…")
         self._chat_send_button.configure(state="disabled")
         self._chat_messages.append({"role": "user", "content": question})
-        threading.Thread(target=self._chat_worker, args=(list(self._chat_messages),), daemon=True).start()
+        threading.Thread(
+            target=self._chat_worker, args=(list(self._chat_messages),), daemon=True
+        ).start()
 
     def _chat_worker(self, messages: list[dict[str, str]]) -> None:
         try:
             from .config import load_config
             from .llm_client import OpenAICompatibleClient
+
             cfg = load_config(self._active_workspace_root)
             client = OpenAICompatibleClient(cfg.llm)
             full_messages = [
@@ -563,7 +623,7 @@ class CommandCenterUI:
     def _evidence(self) -> str:
         return self.evidence_text.get("1.0", "end").strip()
 
-    def _set_text(self, widget: "tk.Text", content: str) -> None:
+    def _set_text(self, widget: tk.Text, content: str) -> None:
         widget.configure(state="normal")
         widget.delete("1.0", "end")
         widget.insert("1.0", content)
@@ -585,9 +645,13 @@ class CommandCenterUI:
         self.can_do_var.set(f"can do: {decision.can_do}")
         self.requires_apply_var.set(f"requires apply: {decision.requires_apply}")
         self.requires_exec_var.set(f"requires exec: {decision.requires_exec}")
-        self.missing_inputs_var.set(f"missing inputs: {', '.join(decision.missing_inputs) if decision.missing_inputs else '-'}")
+        self.missing_inputs_var.set(
+            f"missing inputs: {', '.join(decision.missing_inputs) if decision.missing_inputs else '-'}"
+        )
         self.safe_action_var.set(f"safe next action: {decision.safe_next_action}")
-        self._intent_output_cache = json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2)
+        self._intent_output_cache = json.dumps(
+            decision_as_dict(decision), ensure_ascii=False, indent=2
+        )
         self._set_text(self.intent_text, self._intent_output_cache)
         self._update_action_buttons()
 
@@ -674,7 +738,10 @@ class CommandCenterUI:
         self._write_intent(decision)
         self._prepare_workspace(task, decision, create=False)
         self._save_task_to_history(task)
-        self._write_command_output("Intent analysis completed in-process.\n\n" + json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2))
+        self._write_command_output(
+            "Intent analysis completed in-process.\n\n"
+            + json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2)
+        )
 
     def preview(self) -> None:
         task = self._task()
@@ -686,7 +753,11 @@ class CommandCenterUI:
         self._write_intent(decision)
         self._save_task_to_history(task)
         if decision.intent == "evidence.artifacts.inspect":
-            self._run_background("artifacts inspect", task, lambda current_task: self._artifact_worker(current_task, extract=False))
+            self._run_background(
+                "artifacts inspect",
+                task,
+                lambda current_task: self._artifact_worker(current_task, extract=False),
+            )
             return
         if decision.intent == "evidence.cve_scan":
             self._run_background("cve scan", task, self._cve_worker)
@@ -705,12 +776,20 @@ class CommandCenterUI:
         self._write_intent(decision)
         self._save_task_to_history(task)
         if decision.intent == "evidence.artifacts.inspect":
-            self._run_background("artifacts extract", task, lambda current_task: self._artifact_worker(current_task, extract=True))
+            self._run_background(
+                "artifacts extract",
+                task,
+                lambda current_task: self._artifact_worker(current_task, extract=True),
+            )
             return
         if decision.intent == "evidence.cve_scan":
             self._run_background("cve scan", task, self._cve_worker)
             return
-        self._run_background("apply", task, lambda current_task: self._run_worker(current_task, apply=True, exec_=False))
+        self._run_background(
+            "apply",
+            task,
+            lambda current_task: self._run_worker(current_task, apply=True, exec_=False),
+        )
 
     def exec_changes(self) -> None:
         task = self._task()
@@ -718,7 +797,11 @@ class CommandCenterUI:
             self._write_command_output("Enter a task first.")
             return
         self._save_task_to_history(task)
-        self._run_background("apply + exec", task, lambda current_task: self._run_worker(current_task, apply=True, exec_=True))
+        self._run_background(
+            "apply + exec",
+            task,
+            lambda current_task: self._run_worker(current_task, apply=True, exec_=True),
+        )
 
     # ------------------------------------------------------------------
     # Background worker infrastructure
@@ -744,7 +827,7 @@ class CommandCenterUI:
         def runner() -> None:
             try:
                 output = worker(task)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 output = f"{exc.__class__.__name__}: {exc}"
             self.root.after(0, lambda: self._finish_background(output))
 
@@ -762,13 +845,13 @@ class CommandCenterUI:
             return
         if output:
             output = output.strip()
-            output = output + f"\n\ncompleted in {format_duration(time.time() - self._busy_started_at)}"
+            output = (
+                output + f"\n\ncompleted in {format_duration(time.time() - self._busy_started_at)}"
+            )
         self._write_command_output(output)
         lower = output.lower()
         self._preview_ready = (
-            "patch preview ok" in lower
-            or "patch applied" in lower
-            or "run completed" in lower
+            "patch preview ok" in lower or "patch applied" in lower or "run completed" in lower
         )
         self._update_action_buttons()
 
@@ -812,8 +895,15 @@ class CommandCenterUI:
 
         buffer = io.StringIO()
         evidence_text = self._evidence()
-        args = argparse.Namespace(task=task, evidence_file=[], evidence_stdin=bool(evidence_text), rag=False)
-        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer), self._redirect_optional_stdin(evidence_text):
+        args = argparse.Namespace(
+            task=task, evidence_file=[], evidence_stdin=bool(evidence_text), rag=False
+        )
+        with (
+            temporary_cwd(self._active_workspace_root),
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+            self._redirect_optional_stdin(evidence_text),
+        ):
             code = cli_module.cmd_preview(args)
         output = buffer.getvalue().strip()
         if output:
@@ -825,7 +915,11 @@ class CommandCenterUI:
 
         buffer = io.StringIO()
         args = argparse.Namespace()
-        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        with (
+            temporary_cwd(self._active_workspace_root),
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+        ):
             code = cli_module.cmd_logs_latest(args)
         output = buffer.getvalue().strip()
         if output:
@@ -849,7 +943,11 @@ class CommandCenterUI:
             max_files=2000,
             max_total_bytes=500_000_000,
         )
-        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        with (
+            temporary_cwd(self._active_workspace_root),
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+        ):
             code = cli_module.cmd_evidence_artifacts_inspect(args)
         output = buffer.getvalue().strip()
         if output:
@@ -877,7 +975,11 @@ class CommandCenterUI:
             min_severity=severity,
             format="json,md,high-critical-md",
         )
-        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        with (
+            temporary_cwd(self._active_workspace_root),
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+        ):
             code = cli_module.cmd_evidence_cve_scan(args)
         output = buffer.getvalue().strip()
         if output:
@@ -898,7 +1000,12 @@ class CommandCenterUI:
             evidence_file=[],
             evidence_stdin=bool(evidence_text),
         )
-        with temporary_cwd(self._active_workspace_root), contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer), self._redirect_optional_stdin(evidence_text):
+        with (
+            temporary_cwd(self._active_workspace_root),
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+            self._redirect_optional_stdin(evidence_text),
+        ):
             code = cli_module._run_task(task, args)
         output = buffer.getvalue().strip()
         if output:
@@ -913,13 +1020,24 @@ class CommandCenterUI:
         apply_state = "disabled"
         exec_state = "disabled"
         if not self._busy and self._last_decision is not None:
-            if self._last_decision.intent == "evidence.artifacts.inspect" and self._last_decision.can_do == "yes":
+            if (
+                (
+                    self._last_decision.intent == "evidence.artifacts.inspect"
+                    and self._last_decision.can_do == "yes"
+                )
+                or (
+                    self._last_decision.intent == "evidence.cve_scan"
+                    and self._last_decision.can_do == "yes"
+                )
+                or (
+                    self._preview_ready
+                    and self._last_decision.intent in {"run.preview", "run.apply", "run.exec"}
+                )
+            ):
                 apply_state = "normal"
-            elif self._last_decision.intent == "evidence.cve_scan" and self._last_decision.can_do == "yes":
-                apply_state = "normal"
-            elif self._preview_ready and self._last_decision.intent in {"run.preview", "run.apply", "run.exec"}:
-                apply_state = "normal"
-            if self._preview_ready and (self._last_decision.intent == "run.exec" or self._last_decision.requires_exec):
+            if self._preview_ready and (
+                self._last_decision.intent == "run.exec" or self._last_decision.requires_exec
+            ):
                 exec_state = "normal"
         self.apply_button.configure(state=apply_state)
         self.exec_button.configure(state=exec_state)
@@ -928,20 +1046,28 @@ class CommandCenterUI:
     # Text widget helpers
     # ------------------------------------------------------------------
 
-    def _make_readonly_copyable(self, widget: "tk.Text", copy_callback) -> None:
+    def _make_readonly_copyable(self, widget: tk.Text, copy_callback) -> None:
         widget.configure(state="disabled")
-        widget.bind("<Control-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback))
+        widget.bind(
+            "<Control-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback)
+        )
         widget.bind("<Control-a>", lambda _event: self._select_all(widget))
-        widget.bind("<Command-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback))
+        widget.bind(
+            "<Command-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback)
+        )
         widget.bind("<Command-a>", lambda _event: self._select_all(widget))
-        widget.bind("<Button-3>", lambda event: self._show_text_context_menu(widget, copy_callback, event))
+        widget.bind(
+            "<Button-3>", lambda event: self._show_text_context_menu(widget, copy_callback, event)
+        )
 
-    def _make_editable_copyable(self, widget: "tk.Text") -> None:
+    def _make_editable_copyable(self, widget: tk.Text) -> None:
         widget.bind("<Control-a>", lambda _event: self._select_all(widget))
         widget.bind("<Command-a>", lambda _event: self._select_all(widget))
-        widget.bind("<Button-3>", lambda event: self._show_editable_text_context_menu(widget, event))
+        widget.bind(
+            "<Button-3>", lambda event: self._show_editable_text_context_menu(widget, event)
+        )
 
-    def _select_all(self, widget: "tk.Text") -> str:
+    def _select_all(self, widget: tk.Text) -> str:
         prior_state = str(widget.cget("state"))
         if prior_state == "disabled":
             widget.configure(state="normal")
@@ -952,7 +1078,7 @@ class CommandCenterUI:
             widget.configure(state="disabled")
         return "break"
 
-    def _copy_selection_or_all(self, widget: "tk.Text", copy_callback) -> str:
+    def _copy_selection_or_all(self, widget: tk.Text, copy_callback) -> str:
         try:
             selected = widget.get("sel.first", "sel.last")
         except tk.TclError:
@@ -961,17 +1087,25 @@ class CommandCenterUI:
         self._copy_text(selected)
         return "break"
 
-    def _show_text_context_menu(self, widget: "tk.Text", copy_callback, event) -> str:
+    def _show_text_context_menu(self, widget: tk.Text, copy_callback, event) -> str:
         menu = tk.Menu(widget, tearoff=0)
-        menu.add_command(label="Copy selection", command=lambda: self._copy_selection_or_all(widget, copy_callback))
+        menu.add_command(
+            label="Copy selection",
+            command=lambda: self._copy_selection_or_all(widget, copy_callback),
+        )
         menu.add_command(label="Copy all", command=copy_callback)
         menu.add_command(label="Select all", command=lambda: self._select_all(widget))
         menu.tk_popup(event.x_root, event.y_root)
         return "break"
 
-    def _show_editable_text_context_menu(self, widget: "tk.Text", event) -> str:
+    def _show_editable_text_context_menu(self, widget: tk.Text, event) -> str:
         menu = tk.Menu(widget, tearoff=0)
-        menu.add_command(label="Copy selection", command=lambda: self._copy_selection_or_all(widget, lambda: self._copy_widget_contents(widget)))
+        menu.add_command(
+            label="Copy selection",
+            command=lambda: self._copy_selection_or_all(
+                widget, lambda: self._copy_widget_contents(widget)
+            ),
+        )
         menu.add_command(label="Paste", command=lambda: widget.event_generate("<<Paste>>"))
         menu.add_command(label="Select all", command=lambda: self._select_all(widget))
         menu.add_command(label="Clear", command=lambda: widget.delete("1.0", "end"))
@@ -992,7 +1126,7 @@ class CommandCenterUI:
     def _copy_capability_detail(self) -> None:
         self._copy_widget_contents(self.capability_detail)
 
-    def _copy_widget_contents(self, widget: "tk.Text") -> None:
+    def _copy_widget_contents(self, widget: tk.Text) -> None:
         prior_state = str(widget.cget("state"))
         if prior_state == "disabled":
             widget.configure(state="normal")
@@ -1003,9 +1137,14 @@ class CommandCenterUI:
 
     def _copy_all_output(self) -> None:
         combined = "\n\n".join(
-            part for part in (
-                "IntentDecision JSON:\n" + self._intent_output_cache if self._intent_output_cache else "",
-                "Command output:\n" + self._command_output_cache if self._command_output_cache else "",
+            part
+            for part in (
+                "IntentDecision JSON:\n" + self._intent_output_cache
+                if self._intent_output_cache
+                else "",
+                "Command output:\n" + self._command_output_cache
+                if self._command_output_cache
+                else "",
             )
             if part
         )
@@ -1037,10 +1176,17 @@ class CommandCenterUI:
         finally:
             sys.stdin = previous
 
-    def _prepare_workspace(self, task: str, decision: IntentDecision | None, *, create: bool) -> None:
+    def _prepare_workspace(
+        self, task: str, decision: IntentDecision | None, *, create: bool
+    ) -> None:
         if self.project_mode_var.get() and should_create_project_workspace(task, decision):
-            if create and (self._active_workspace_task != task or self._active_workspace_root == self._base_workspace_root):
-                self._active_workspace_root = create_project_workspace(self._base_workspace_root, task)
+            if create and (
+                self._active_workspace_task != task
+                or self._active_workspace_root == self._base_workspace_root
+            ):
+                self._active_workspace_root = create_project_workspace(
+                    self._base_workspace_root, task
+                )
                 self._active_workspace_task = task
             if create:
                 self.workspace_var.set(f"workspace: {self._active_workspace_root}")

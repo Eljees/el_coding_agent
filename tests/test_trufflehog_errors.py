@@ -6,8 +6,10 @@ from pathlib import Path
 from local_codex_lite.trufflehog import scan_repo_urls
 
 
-def test_scan_repo_urls_classifies_clone_failure_and_writes_status(tmp_path: Path, monkeypatch) -> None:
-    def fake_clone(url: str, dst: Path, user: str, token: str, depth: int) -> None:  # noqa: ARG001
+def test_scan_repo_urls_classifies_clone_failure_and_writes_status(
+    tmp_path: Path, monkeypatch
+) -> None:
+    def fake_clone(url: str, dst: Path, user: str, token: str, depth: int) -> None:
         raise subprocess.CalledProcessError(
             returncode=1,
             cmd=["git", "clone"],

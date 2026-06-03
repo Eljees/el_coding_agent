@@ -72,7 +72,14 @@ def _compare_value(
 ) -> None:
     if type(left) is not type(right):
         summary["type_changed"] += 1
-        changes.append({"path": path, "kind": "type_changed", "left": _compact_value(left), "right": _compact_value(right)})
+        changes.append(
+            {
+                "path": path,
+                "kind": "type_changed",
+                "left": _compact_value(left),
+                "right": _compact_value(right),
+            }
+        )
         return
 
     if isinstance(left, dict):
@@ -80,12 +87,28 @@ def _compare_value(
         right_keys = set(right)
         for key in sorted(left_keys - right_keys):
             summary["removed"] += 1
-            changes.append({"path": f"{path}.{key}", "kind": "removed", "left": _compact_value(left[key]), "right": None})
+            changes.append(
+                {
+                    "path": f"{path}.{key}",
+                    "kind": "removed",
+                    "left": _compact_value(left[key]),
+                    "right": None,
+                }
+            )
         for key in sorted(right_keys - left_keys):
             summary["added"] += 1
-            changes.append({"path": f"{path}.{key}", "kind": "added", "left": None, "right": _compact_value(right[key])})
+            changes.append(
+                {
+                    "path": f"{path}.{key}",
+                    "kind": "added",
+                    "left": None,
+                    "right": _compact_value(right[key]),
+                }
+            )
         for key in sorted(left_keys & right_keys):
-            _compare_value(left[key], right[key], path=f"{path}.{key}", summary=summary, changes=changes)
+            _compare_value(
+                left[key], right[key], path=f"{path}.{key}", summary=summary, changes=changes
+            )
         return
 
     if isinstance(left, list):
@@ -94,18 +117,39 @@ def _compare_value(
             item_path = f"{path}[{idx}]"
             if idx >= len(left):
                 summary["added"] += 1
-                changes.append({"path": item_path, "kind": "added", "left": None, "right": _compact_value(right[idx])})
+                changes.append(
+                    {
+                        "path": item_path,
+                        "kind": "added",
+                        "left": None,
+                        "right": _compact_value(right[idx]),
+                    }
+                )
                 continue
             if idx >= len(right):
                 summary["removed"] += 1
-                changes.append({"path": item_path, "kind": "removed", "left": _compact_value(left[idx]), "right": None})
+                changes.append(
+                    {
+                        "path": item_path,
+                        "kind": "removed",
+                        "left": _compact_value(left[idx]),
+                        "right": None,
+                    }
+                )
                 continue
             _compare_value(left[idx], right[idx], path=item_path, summary=summary, changes=changes)
         return
 
     if left != right:
         summary["changed"] += 1
-        changes.append({"path": path, "kind": "changed", "left": _compact_value(left), "right": _compact_value(right)})
+        changes.append(
+            {
+                "path": path,
+                "kind": "changed",
+                "left": _compact_value(left),
+                "right": _compact_value(right),
+            }
+        )
 
 
 def _compact_value(value: Any) -> Any:

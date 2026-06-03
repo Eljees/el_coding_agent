@@ -1,4 +1,5 @@
 """Tests for `local_codex_lite evidence cve-scan-history`."""
+
 from __future__ import annotations
 
 import argparse
@@ -40,16 +41,29 @@ def _write_summary(
 # collect_cve_scan_history
 # ---------------------------------------------------------------------------
 
+
 def test_collect_empty_when_no_summaries(tmp_path: Path) -> None:
     (tmp_path / "subdir").mkdir()
     assert collect_cve_scan_history(tmp_path) == []
 
 
 def test_collect_returns_each_summary(tmp_path: Path) -> None:
-    _write_summary(tmp_path / "runA", generated_at="2026-05-10T01:00:00+00:00",
-                   artifact="A", total=5, critical=1, high=2)
-    _write_summary(tmp_path / "runB", generated_at="2026-05-11T01:00:00+00:00",
-                   artifact="B", total=0, critical=0, high=0)
+    _write_summary(
+        tmp_path / "runA",
+        generated_at="2026-05-10T01:00:00+00:00",
+        artifact="A",
+        total=5,
+        critical=1,
+        high=2,
+    )
+    _write_summary(
+        tmp_path / "runB",
+        generated_at="2026-05-11T01:00:00+00:00",
+        artifact="B",
+        total=0,
+        critical=0,
+        high=0,
+    )
     history = collect_cve_scan_history(tmp_path)
     assert len(history) == 2
     # Sorted oldest-first
@@ -63,8 +77,14 @@ def test_collect_ignores_malformed_summary(tmp_path: Path) -> None:
     bad = tmp_path / "runX" / "cve_summary.json"
     bad.parent.mkdir(parents=True)
     bad.write_text("not json at all", encoding="utf-8")
-    good = _write_summary(tmp_path / "runOK", generated_at="2026-05-12T00:00:00+00:00",
-                          artifact="OK", total=0, critical=0, high=0)
+    good = _write_summary(
+        tmp_path / "runOK",
+        generated_at="2026-05-12T00:00:00+00:00",
+        artifact="OK",
+        total=0,
+        critical=0,
+        high=0,
+    )
     history = collect_cve_scan_history(tmp_path)
     assert len(history) == 1
     assert history[0]["summary_path"] == str(good)
@@ -77,6 +97,7 @@ def test_collect_returns_empty_for_missing_root(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # cmd_evidence_cve_scan_history
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_history_returns_1_for_missing_path(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("local_codex_lite.cli_evidence.workspace_root", lambda: tmp_path)
@@ -94,8 +115,14 @@ def test_cmd_history_returns_1_when_nothing_found(tmp_path: Path, monkeypatch) -
 
 
 def test_cmd_history_prints_table(tmp_path: Path, monkeypatch, capsys) -> None:
-    _write_summary(tmp_path / "runA", generated_at="2026-05-10T01:00:00+00:00",
-                   artifact="contentreader-nls.rpm", total=7, critical=2, high=5)
+    _write_summary(
+        tmp_path / "runA",
+        generated_at="2026-05-10T01:00:00+00:00",
+        artifact="contentreader-nls.rpm",
+        total=7,
+        critical=2,
+        high=5,
+    )
     monkeypatch.setattr("local_codex_lite.cli_evidence.workspace_root", lambda: tmp_path)
     code = cmd_evidence_cve_scan_history(argparse.Namespace(path=str(tmp_path)))
     out = capsys.readouterr().out
@@ -109,6 +136,7 @@ def test_cmd_history_prints_table(tmp_path: Path, monkeypatch, capsys) -> None:
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
+
 
 def test_build_parser_cve_scan_history() -> None:
     parser = cli.build_parser()

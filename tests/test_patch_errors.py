@@ -18,7 +18,9 @@ def test_classifies_malformed_diff() -> None:
 
 
 def test_classifies_context_mismatch() -> None:
-    error = classify_patch_apply("error: patch failed: app.py:10\nerror: app.py: patch does not apply")
+    error = classify_patch_apply(
+        "error: patch failed: app.py:10\nerror: app.py: patch does not apply"
+    )
 
     assert error.code == "context_mismatch"
     assert error.retryable is True
@@ -71,7 +73,11 @@ def test_new_file_already_exists_idempotency_is_not_broken(tmp_path: Path, monke
     (tmp_path / "foo.py").write_text("print('ok')\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(runner, "load_config", lambda root: AgentConfig())
-    monkeypatch.setattr(runner, "make_plan", lambda *args, **kwargs: {"summary": "create foo", "needs_clarification": False})
+    monkeypatch.setattr(
+        runner,
+        "make_plan",
+        lambda *args, **kwargs: {"summary": "create foo", "needs_clarification": False},
+    )
     monkeypatch.setattr(
         runner,
         "make_patch",
@@ -99,6 +105,9 @@ def test_new_file_already_exists_idempotency_is_not_broken(tmp_path: Path, monke
         ),
     )
 
-    result = cli._run_task("create foo.py", argparse.Namespace(dry_run=False, apply=True, execute=False, assume_clarification=False))
+    result = cli._run_task(
+        "create foo.py",
+        argparse.Namespace(dry_run=False, apply=True, execute=False, assume_clarification=False),
+    )
 
     assert result == 0

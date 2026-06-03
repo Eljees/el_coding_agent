@@ -8,6 +8,7 @@ These tests fabricate ``EntryPoint`` objects directly and monkeypatch
 ``importlib.metadata.entry_points`` so we never depend on a real
 installed package.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -53,16 +54,19 @@ class _FakeEntryPoint:
 def _install_eps(monkeypatch, *entry_points: _FakeEntryPoint) -> None:
     """Make capabilities._metadata.entry_points(group=...) return the list
     of fake entry points regardless of how the metadata API is called."""
+
     def fake(*, group=None):
         if group == CAPABILITY_ENTRY_POINT_GROUP:
             return list(entry_points)
         return []
+
     monkeypatch.setattr(capmod._metadata, "entry_points", fake)
 
 
 # ---------------------------------------------------------------------------
 # Built-in path: no plugins installed
 # ---------------------------------------------------------------------------
+
 
 def test_discover_returns_builtins_when_no_plugins(monkeypatch) -> None:
     _install_eps(monkeypatch)  # empty
@@ -76,9 +80,11 @@ def test_discover_returns_builtins_when_no_plugins(monkeypatch) -> None:
 # Plugin contributions are merged in
 # ---------------------------------------------------------------------------
 
+
 def test_discover_merges_plugin_single_capability(monkeypatch) -> None:
     def provider():
         return _cap("my_team.foo")
+
     _install_eps(monkeypatch, _FakeEntryPoint("my_team_foo", provider))
     out = discover_capabilities()
     assert any(cap.id == "my_team.foo" for cap in out)
@@ -87,6 +93,7 @@ def test_discover_merges_plugin_single_capability(monkeypatch) -> None:
 def test_discover_merges_plugin_list_of_capabilities(monkeypatch) -> None:
     def provider():
         return [_cap("plug.a"), _cap("plug.b")]
+
     _install_eps(monkeypatch, _FakeEntryPoint("plug", provider))
     out_ids = {cap.id for cap in discover_capabilities()}
     assert {"plug.a", "plug.b"}.issubset(out_ids)
@@ -96,6 +103,7 @@ def test_discover_merges_plugin_list_of_capabilities(monkeypatch) -> None:
 # Built-ins always win on id collision
 # ---------------------------------------------------------------------------
 
+
 def test_discover_ignores_plugin_that_collides_with_builtin(monkeypatch) -> None:
     """A plugin must not be able to redefine a safety-critical capability
     such as run.apply.  Built-in wins; plugin entry is silently dropped."""
@@ -103,6 +111,7 @@ def test_discover_ignores_plugin_that_collides_with_builtin(monkeypatch) -> None
 
     def hostile_provider():
         return [_cap("run.apply")]  # tries to override run.apply
+
     _install_eps(monkeypatch, _FakeEntryPoint("hostile", hostile_provider))
     out = discover_capabilities()
     matches = [cap for cap in out if cap.id == "run.apply"]
@@ -116,9 +125,11 @@ def test_discover_ignores_plugin_that_collides_with_builtin(monkeypatch) -> None
 # Misbehaving plugins are skipped, not fatal
 # ---------------------------------------------------------------------------
 
+
 def test_discover_skips_provider_that_raises(monkeypatch) -> None:
     def boom():
         raise RuntimeError("plugin broken")
+
     _install_eps(monkeypatch, _FakeEntryPoint("boom", boom))
     out = discover_capabilities()
     # Built-ins still present, nothing else.
@@ -128,6 +139,7 @@ def test_discover_skips_provider_that_raises(monkeypatch) -> None:
 def test_discover_skips_provider_that_returns_wrong_type(monkeypatch) -> None:
     def weird():
         return 42  # neither Capability nor list
+
     _install_eps(monkeypatch, _FakeEntryPoint("weird", weird))
     out = discover_capabilities()
     assert {cap.id for cap in out} == {cap.id for cap in default_capabilities()}
@@ -136,6 +148,7 @@ def test_discover_skips_provider_that_returns_wrong_type(monkeypatch) -> None:
 def test_discover_skips_non_capability_items_inside_list(monkeypatch) -> None:
     def mixed():
         return [_cap("plug.valid"), "this is not a Capability", 123]
+
     _install_eps(monkeypatch, _FakeEntryPoint("mixed", mixed))
     ids = {cap.id for cap in discover_capabilities()}
     assert "plug.valid" in ids

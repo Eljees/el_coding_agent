@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from local_codex_lite import cli
+from local_codex_lite import cli, cli_logs
 
 
 def test_logs_tail_falls_back_without_events(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -14,9 +14,12 @@ def test_logs_tail_falls_back_without_events(tmp_path: Path, monkeypatch, capsys
     (run_dir / "task.txt").write_text("Add README", encoding="utf-8")
     (run_dir / "result.json").write_text('{"dry_run": true}', encoding="utf-8")
     (run_dir / "plan.json").write_text('{"summary": "plan"}', encoding="utf-8")
-    (evidence / "status.json").write_text('{"status": "ok", "error_code": null, "message": "done", "evidence_complete": true}', encoding="utf-8")
+    (evidence / "status.json").write_text(
+        '{"status": "ok", "error_code": null, "message": "done", "evidence_complete": true}',
+        encoding="utf-8",
+    )
     (evidence / "metadata.json").write_text('{"kind": "evidence_bundle"}', encoding="utf-8")
-    monkeypatch.setattr(cli, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(cli_logs, "workspace_root", lambda: tmp_path)
 
     result = cli.cmd_logs_tail(argparse.Namespace(lines=5, run="latest"))
 
@@ -34,9 +37,12 @@ def test_logs_show_includes_evidence_status(tmp_path: Path, monkeypatch, capsys)
     (run_dir / "task.txt").write_text("Add README", encoding="utf-8")
     (run_dir / "result.json").write_text('{"applied": true}', encoding="utf-8")
     (run_dir / "plan.json").write_text('{"summary": "plan"}', encoding="utf-8")
-    (evidence / "status.json").write_text('{"status": "ok", "error_code": null, "message": "done", "evidence_complete": true}', encoding="utf-8")
+    (evidence / "status.json").write_text(
+        '{"status": "ok", "error_code": null, "message": "done", "evidence_complete": true}',
+        encoding="utf-8",
+    )
     (evidence / "metadata.json").write_text('{"kind": "evidence_bundle"}', encoding="utf-8")
-    monkeypatch.setattr(cli, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(cli_logs, "workspace_root", lambda: tmp_path)
 
     result = cli.cmd_logs_show(argparse.Namespace(run_id="latest"))
 

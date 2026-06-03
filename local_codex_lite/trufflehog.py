@@ -3,21 +3,25 @@ from __future__ import annotations
 import base64
 import csv
 import json
-import os
 import re
 import shutil
 import subprocess
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 from .container_errors import classify_container_error
 from .evidence import compare_json_values_as_dict, save_json_file
-from .evidence_mode import create_evidence_bundle, save_raw_json, save_report_text, save_summary_json, write_status
+from .evidence_mode import (
+    create_evidence_bundle,
+    save_raw_json,
+    save_report_text,
+    save_summary_json,
+    write_status,
+)
 from .logging_utils import sanitize_log_text
-
 
 DEFAULT_IMAGE = "trufflesecurity/trufflehog:3.94.1"
 
@@ -36,7 +40,9 @@ def repo_name(url: str) -> str:
     return url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
 
 
-def run(cmd: list[str], *, cwd: Path | None = None, timeout: int = 1200) -> subprocess.CompletedProcess[str]:
+def run(
+    cmd: list[str], *, cwd: Path | None = None, timeout: int = 1200
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -115,16 +121,21 @@ def clone_repo(url: str, dst: Path, user: str, token: str, depth: int) -> None:
     """
     if dst.exists():
         shutil.rmtree(dst)
-    basic = base64.b64encode(f"{user}:{token}".encode("utf-8")).decode("ascii")
+    basic = base64.b64encode(f"{user}:{token}".encode()).decode("ascii")
     cp = run(
         [
             "git",
-            "-c", f"http.extraHeader=Authorization: Basic {basic}",
-            "-c", "credential.helper=",
-            "-c", "core.askPass=",
-            "-c", "http.sslVerify=false",
+            "-c",
+            f"http.extraHeader=Authorization: Basic {basic}",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "core.askPass=",
+            "-c",
+            "http.sslVerify=false",
             "clone",
-            "--depth", str(depth),
+            "--depth",
+            str(depth),
             url,
             str(dst),
         ],
@@ -158,7 +169,9 @@ def scan_repo(repo_dir: Path, image: str = DEFAULT_IMAGE) -> dict[str, object]:
         timeout=2400,
     )
     if cp.returncode != 0:
-        raise subprocess.CalledProcessError(cp.returncode, cp.args, output=cp.stdout, stderr=cp.stderr)
+        raise subprocess.CalledProcessError(
+            cp.returncode, cp.args, output=cp.stdout, stderr=cp.stderr
+        )
     return parse_ndjson(cp.stdout)
 
 
@@ -179,7 +192,9 @@ def scan_repo_urls(
     run_out = out_root / timestamp
     clones_dir = run_cache / "clones"
     baseline_dir = run_out / "baseline"
-    evidence_bundle = create_evidence_bundle(run_out, source="trufflehog", task=f"scan {len(deduped_urls)} repos", run_id=timestamp)
+    evidence_bundle = create_evidence_bundle(
+        run_out, source="trufflehog", task=f"scan {len(deduped_urls)} repos", run_id=timestamp
+    )
     clones_dir.mkdir(parents=True, exist_ok=True)
     baseline_dir.mkdir(parents=True, exist_ok=True)
     save_raw_json(
@@ -241,7 +256,7 @@ def scan_repo_urls(
             failures += 1
             if first_issue is None:
                 first_issue = _issue_payload(issue)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             issue = classify_container_error(stderr=str(exc), stage="scan")
             row["error"] = _sanitize_error(str(exc))
             row["error_code"] = issue.code
@@ -308,7 +323,9 @@ def scan_repo_urls(
     status = {
         "status": "ok" if failures == 0 else ("failed" if failures == len(results) else "partial"),
         "error_code": first_issue["error_code"] if first_issue else None,
-        "message": "scan completed successfully" if failures == 0 else f"{failures} repository scan(s) failed",
+        "message": "scan completed successfully"
+        if failures == 0
+        else f"{failures} repository scan(s) failed",
         "evidence_complete": failures == 0,
     }
     if first_issue:
@@ -319,7 +336,11 @@ def scan_repo_urls(
         error_code=status.get("error_code"),
         message=status["message"],
         evidence_complete=bool(status.get("evidence_complete")),
-        extra={k: v for k, v in status.items() if k not in {"status", "error_code", "message", "evidence_complete"}},
+        extra={
+            k: v
+            for k, v in status.items()
+            if k not in {"status", "error_code", "message", "evidence_complete"}
+        },
     )
 
     if not keep_clones:
@@ -340,9 +361,21 @@ def analyze_output_root(input_root: Path) -> dict[str, object]:
     manifest_path = root / "manifest.json"
     total_path = root / "baseline_total.json"
     summary_csv = root / "baseline_summary.csv"
-    repo_jsons = sorted(path for path in root.glob("*.json") if path.name not in {"baseline_total.json", "manifest.json"})
-    if not root.exists() or (not repo_jsons and not total_path.exists() and not summary_csv.exists() and not manifest_path.exists()):
-        issue = classify_container_error(missing_artifacts=["baseline_total.json", "baseline_summary.csv", "repo_jsons"], stage="analyze")
+    repo_jsons = sorted(
+        path
+        for path in root.glob("*.json")
+        if path.name not in {"baseline_total.json", "manifest.json"}
+    )
+    if not root.exists() or (
+        not repo_jsons
+        and not total_path.exists()
+        and not summary_csv.exists()
+        and not manifest_path.exists()
+    ):
+        issue = classify_container_error(
+            missing_artifacts=["baseline_total.json", "baseline_summary.csv", "repo_jsons"],
+            stage="analyze",
+        )
         return {
             "status": "failed",
             "error_code": issue.code,
@@ -365,7 +398,9 @@ def analyze_output_root(input_root: Path) -> dict[str, object]:
         rows = [json.loads(path.read_text(encoding="utf-8")) for path in repo_jsons]
         summary_rows = _read_csv(summary_csv) if summary_csv.exists() else []
         total = json.loads(total_path.read_text(encoding="utf-8")) if total_path.exists() else {}
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+        manifest = (
+            json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
+        )
     except json.JSONDecodeError as exc:
         issue = classify_container_error(stderr=str(exc), stage="analyze")
         return {
@@ -436,7 +471,7 @@ def _dedupe(values: Iterable[str]) -> list[str]:
     return ordered
 
 
-def _issue_payload(issue) -> dict[str, object]:  # noqa: ANN001
+def _issue_payload(issue) -> dict[str, object]:
     return {
         "error_code": issue.code,
         "title": issue.title,

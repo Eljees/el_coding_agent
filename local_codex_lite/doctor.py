@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from importlib import metadata, util
 import shutil
 import subprocess
 import tempfile
 import time
+from dataclasses import dataclass
+from importlib import metadata, util
 from pathlib import Path
 
 from .config import LLMConfig, load_config
@@ -61,7 +61,9 @@ def build_doctor_probe_client(config: LLMConfig) -> OpenAICompatibleClient:
     return OpenAICompatibleClient(probe_config)
 
 
-def probe_local_llm_health(client: OpenAICompatibleClient, expected_model: str) -> DoctorProbeResult:
+def probe_local_llm_health(
+    client: OpenAICompatibleClient, expected_model: str
+) -> DoctorProbeResult:
     start = time.perf_counter()
     messages = [
         {
@@ -72,7 +74,7 @@ def probe_local_llm_health(client: OpenAICompatibleClient, expected_model: str) 
     ]
     try:
         response = client.chat(messages, max_tokens=32)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return DoctorProbeResult(
             endpoint_ok=False,
             latency_s=time.perf_counter() - start,
@@ -93,7 +95,7 @@ def probe_local_llm_health(client: OpenAICompatibleClient, expected_model: str) 
     try:
         json_payload = extract_json(response.text)
         json_ok = json_payload.get("ok") is True and json_payload.get("component") == "doctor"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         json_error = str(exc)
 
     return DoctorProbeResult(
@@ -126,8 +128,12 @@ def run_doctor(workspace_root: Path) -> int:
     probe = probe_local_llm_health(probe_client, config.llm.model)
     overall_ok = True
     if probe.endpoint_ok:
-        latency_ms = f"{probe.latency_s * 1000:.0f} ms" if probe.latency_s is not None else "unknown"
-        table.add_row("llm endpoint", "OK", f"{config.llm.base_url} / {probe.response_model or 'unknown'}")
+        latency_ms = (
+            f"{probe.latency_s * 1000:.0f} ms" if probe.latency_s is not None else "unknown"
+        )
+        table.add_row(
+            "llm endpoint", "OK", f"{config.llm.base_url} / {probe.response_model or 'unknown'}"
+        )
         table.add_row("latency", "OK", latency_ms)
     else:
         table.add_row("llm endpoint", "FAIL", probe.error or "request failed")
@@ -250,15 +256,21 @@ def run_rag_doctor(workspace_root: Path) -> int:
             formatted = format_retrieved_context(results, fixture_cfg.rag.max_context_chars)
             sensitive_indexed = any(".env" in item.path.name.lower() for item in results)
             if info.chunk_count > 0 and results and not sensitive_indexed and formatted:
-                table.add_row("fixture index", "OK", f"{info.chunk_count} chunks / {info.file_count} files")
+                table.add_row(
+                    "fixture index", "OK", f"{info.chunk_count} chunks / {info.file_count} files"
+                )
                 table.add_row("fixture query", "OK", results[0].reason)
                 table.add_row("sensitive exclusion", "OK", "secret.env was skipped")
             else:
-                table.add_row("fixture index", "FAIL", "keyword fixture did not produce usable results")
-                table.add_row("fixture query", "FAIL", "keyword fixture did not produce usable results")
+                table.add_row(
+                    "fixture index", "FAIL", "keyword fixture did not produce usable results"
+                )
+                table.add_row(
+                    "fixture query", "FAIL", "keyword fixture did not produce usable results"
+                )
                 table.add_row("sensitive exclusion", "FAIL", "secret.env was unexpectedly indexed")
                 overall_ok = False
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             table.add_row("fixture index", "FAIL", str(exc))
             table.add_row("fixture query", "FAIL", str(exc))
             table.add_row("sensitive exclusion", "FAIL", str(exc))
@@ -328,12 +340,11 @@ def run_full_doctor(workspace_root: Path) -> int:
         path = shutil.which(name)
         table.add_row(name, "OK" if path else "MISSING", path or "not in PATH")
     seven = (
-        shutil.which("7z")
-        or shutil.which("7za")
-        or shutil.which("7zz")
-        or shutil.which("7z.exe")
+        shutil.which("7z") or shutil.which("7za") or shutil.which("7zz") or shutil.which("7z.exe")
     )
-    table.add_row("7z", "OK" if seven else "MISSING", seven or "needed for .7z/.rar/.rpm extraction")
+    table.add_row(
+        "7z", "OK" if seven else "MISSING", seven or "needed for .7z/.rar/.rpm extraction"
+    )
     cve = shutil.which("cve-bin-tool") or shutil.which("cve-bin-tool.exe")
     table.add_row("cve-bin-tool", "OK" if cve else "MISSING", cve or "pip install cve-bin-tool")
     console.print(table)

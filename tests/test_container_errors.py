@@ -10,7 +10,9 @@ def test_classifies_docker_unavailable() -> None:
 
 
 def test_classifies_auth_missing() -> None:
-    issue = classify_container_error(stderr="fatal: Authentication required for 'https://example.com/repo.git'")
+    issue = classify_container_error(
+        stderr="fatal: Authentication required for 'https://example.com/repo.git'"
+    )
     assert issue.code == "auth_missing"
     assert issue.retryable is True
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 import httpx
 
@@ -12,10 +13,10 @@ from local_codex_lite.patcher import RuntimeFixContext
 
 
 class RetryClient:
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         self.calls = 0
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.calls += 1
         if self.calls == 1:
             request = httpx.Request("POST", "http://localhost:8015/v1/chat/completions")
@@ -42,23 +43,28 @@ def test_make_patch_retries_and_logs_events(tmp_path: Path, monkeypatch) -> None
     config = AgentConfig()
     monkeypatch.setattr(planner, "OpenAICompatibleClient", RetryClient)
 
-    patch = planner.make_patch("update foo.py", {"summary": "ok"}, tmp_path, config, run_dir=run_dir)
+    patch = planner.make_patch(
+        "update foo.py", {"summary": "ok"}, tmp_path, config, run_dir=run_dir
+    )
 
     assert "print('ok')" in patch
     events_path = run_dir / "events.jsonl"
     assert events_path.exists()
-    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    events = [
+        json.loads(line)
+        for line in events_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert any(item["status"] == "request_error" for item in events)
     assert any(item["status"] == "success" for item in events)
 
 
 class CaptureBudgetClient:
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         self.calls: list[int | None] = []
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.calls.append(max_tokens)
-        request = httpx.Request("POST", "http://localhost:8015/v1/chat/completions")
         return LLMResponse(
             text=json.dumps(
                 {
@@ -82,7 +88,7 @@ def test_make_plan_uses_context_budget(tmp_path: Path, monkeypatch) -> None:
     captured = {}
 
     class Client(CaptureBudgetClient):
-        def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+        def chat(self, messages, max_tokens=None, status_label=None):
             captured["max_tokens"] = max_tokens
             captured["messages"] = messages
             return super().chat(messages, max_tokens=max_tokens, status_label=status_label)
@@ -99,15 +105,17 @@ def test_make_plan_uses_context_budget(tmp_path: Path, monkeypatch) -> None:
 
     assert plan["summary"] == "ok"
     assert isinstance(captured["max_tokens"], int)
-    assert captured["max_tokens"] == planner._budget_for_messages(captured["messages"], config.llm.max_tokens)
+    assert captured["max_tokens"] == planner._budget_for_messages(
+        captured["messages"], config.llm.max_tokens
+    )
     assert captured["max_tokens"] < config.llm.max_tokens
 
 
 class RepairClient:
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         self.calls = 0
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.calls += 1
         if self.calls == 1:
             text = "\n".join(
@@ -134,7 +142,9 @@ class RepairClient:
         return LLMResponse(text=text, raw={"model": "qwen25-coder-14b-awq"})
 
 
-def test_repair_patch_with_error_retries_when_model_repeats_same_patch(tmp_path: Path, monkeypatch) -> None:
+def test_repair_patch_with_error_retries_when_model_repeats_same_patch(
+    tmp_path: Path, monkeypatch
+) -> None:
     (tmp_path / "foo.py").write_text("print('old')\n", encoding="utf-8")
     config = AgentConfig()
     monkeypatch.setattr(planner, "OpenAICompatibleClient", RepairClient)
@@ -164,10 +174,10 @@ def test_repair_patch_with_error_retries_when_model_repeats_same_patch(tmp_path:
 
 
 class RuntimeFixMalformedThenValidClient:
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         self.calls = 0
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.calls += 1
         if self.calls == 1:
             text = "\n".join(
@@ -217,18 +227,22 @@ def test_make_patch_runtime_fix_recovers_from_malformed_diff(tmp_path: Path, mon
     )
 
     assert "+print('fixed')" in patch
-    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+    events = [
+        json.loads(line)
+        for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     assert any(item["status"] == "parse_error" for item in events)
     assert any(item["status"] == "success" for item in events)
 
 
 class RuntimeFixTimeoutCaptureClient:
-    timeouts: list[float] = []
+    timeouts: ClassVar[list[float]] = []
 
-    def __init__(self, config, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, config, *args, **kwargs):
         self.config = config
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.__class__.timeouts.append(float(self.config.timeout))
         if len(self.__class__.timeouts) == 1:
             raise ValueError("Unexpected empty line inside unified diff hunk")
@@ -247,7 +261,9 @@ class RuntimeFixTimeoutCaptureClient:
         )
 
 
-def test_make_patch_runtime_fix_uses_shorter_timeout_for_repair_attempts(tmp_path: Path, monkeypatch) -> None:
+def test_make_patch_runtime_fix_uses_shorter_timeout_for_repair_attempts(
+    tmp_path: Path, monkeypatch
+) -> None:
     target = tmp_path / "foo.py"
     target.write_text("print('old')\n", encoding="utf-8")
     config = AgentConfig()
@@ -272,12 +288,12 @@ def test_make_patch_runtime_fix_uses_shorter_timeout_for_repair_attempts(tmp_pat
 
 
 class TargetDriftRepairClient:
-    seen_messages = []
+    seen_messages: ClassVar[list] = []
 
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         pass
 
-    def chat(self, messages, max_tokens=None, status_label=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None, status_label=None):
         self.__class__.seen_messages.append(messages)
         return LLMResponse(
             text="\n".join(
@@ -321,6 +337,8 @@ def test_repair_patch_with_error_retargets_to_intended_file(tmp_path: Path, monk
     )
 
     assert "+++ b/calculator.py" in repaired
-    prompt_text = "\n".join(message["content"] for message in TargetDriftRepairClient.seen_messages[0])
+    prompt_text = "\n".join(
+        message["content"] for message in TargetDriftRepairClient.seen_messages[0]
+    )
     assert "target path: calculator.py" in prompt_text.lower()
     assert "previous patch touched" in prompt_text.lower()

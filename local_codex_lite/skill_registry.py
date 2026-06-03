@@ -34,7 +34,9 @@ def _read_skill(path: Path) -> SkillDefinition:
     text = path.read_text(encoding="utf-8", errors="replace")
     metadata, body = _split_frontmatter(text)
     name = str(metadata.get("name") or _first_heading(body) or path.parent.name).strip()
-    summary = str(metadata.get("description") or _first_body_line(body) or "Local skill instructions").strip()
+    summary = str(
+        metadata.get("description") or _first_body_line(body) or "Local skill instructions"
+    ).strip()
     return SkillDefinition(name=name, path=path, summary=summary)
 
 

@@ -12,7 +12,7 @@ def test_probe_python_dependencies_marks_optional_missing(monkeypatch) -> None:
             return f"{name}-1.0"
         raise metadata.PackageNotFoundError(name)
 
-    def fake_find_spec(name: str):  # noqa: ANN001
+    def fake_find_spec(name: str):
         return object() if name == "rich" else None
 
     monkeypatch.setattr(doctor.metadata, "version", fake_version)
@@ -27,11 +27,21 @@ def test_probe_python_dependencies_marks_optional_missing(monkeypatch) -> None:
     assert names["pytest"].required is False
 
 
-def test_run_dependency_doctor_reports_missing_optional(tmp_path: Path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(doctor, "probe_python_dependencies", lambda: [
-        doctor.DependencyProbe(name="httpx", required=True, installed=True, version="1.0", module="httpx"),
-        doctor.DependencyProbe(name="rich", required=False, installed=False, version=None, module="rich"),
-    ])
+def test_run_dependency_doctor_reports_missing_optional(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    monkeypatch.setattr(
+        doctor,
+        "probe_python_dependencies",
+        lambda: [
+            doctor.DependencyProbe(
+                name="httpx", required=True, installed=True, version="1.0", module="httpx"
+            ),
+            doctor.DependencyProbe(
+                name="rich", required=False, installed=False, version=None, module="rich"
+            ),
+        ],
+    )
 
     result = doctor.run_dependency_doctor(tmp_path)
 

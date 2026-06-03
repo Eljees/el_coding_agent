@@ -4,18 +4,23 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-
 try:  # pragma: no cover - exercised implicitly when rich is installed
     from rich.console import Console as RichConsole  # type: ignore
     from rich.table import Table as RichTable  # type: ignore
-except Exception:  # noqa: BLE001
+except Exception:
     RichConsole = None
     RichTable = None
 
 
 class SimpleConsole:
-    def print(self, *args: object, **kwargs: Any) -> None:  # noqa: ANN401
-        print(*args, **kwargs)
+    def print(self, *args: object, **kwargs: Any) -> None:
+        # Drop rich-only keyword arguments (highlight, style, justify, markup,
+        # overflow, ...) so call sites written for rich.Console.print do not
+        # crash when the optional ``rich`` extra is absent and this stdlib
+        # fallback is used instead.
+        builtin_keys = {"sep", "end", "file", "flush"}
+        safe = {key: value for key, value in kwargs.items() if key in builtin_keys}
+        print(*args, **safe)
 
     def print_json(self, data: str | dict[str, Any]) -> None:
         if isinstance(data, str):
@@ -53,14 +58,16 @@ class SimpleTable:
         if self.title:
             lines.append(self.title)
         if self.columns:
-            lines.append(" | ".join(self.columns[idx].ljust(widths[idx]) for idx in range(len(self.columns))))
+            lines.append(
+                " | ".join(self.columns[idx].ljust(widths[idx]) for idx in range(len(self.columns)))
+            )
             lines.append("-+-".join("-" * width for width in widths))
         for row in self.rows:
             lines.append(" | ".join(row[idx].ljust(widths[idx]) for idx in range(len(row))))
         return "\n".join(lines)
 
 
-def make_console(*, legacy_windows: bool | None = None):  # noqa: ANN001
+def make_console(*, legacy_windows: bool | None = None):
     if RichConsole is not None:
         if legacy_windows is None:
             return RichConsole()
@@ -68,7 +75,7 @@ def make_console(*, legacy_windows: bool | None = None):  # noqa: ANN001
     return SimpleConsole()
 
 
-def make_table(title: str | None = None):  # noqa: ANN001
+def make_table(title: str | None = None):
     if RichTable is not None:
         return RichTable(title=title)
     return SimpleTable(title=title)

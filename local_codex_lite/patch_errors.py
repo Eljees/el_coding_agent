@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-
 PatchErrorCode = Literal[
     "malformed_diff",
     "context_mismatch",
@@ -88,7 +87,7 @@ def classify_patch_apply(stderr: str, stdout: str = "") -> PatchErrorClassificat
     lower = raw.lower()
     if "already exists in working directory" in lower:
         return _classification("file_already_exists", raw)
-    if "patch does not apply" in lower or "hunk" in lower and "failed" in lower:
+    if "patch does not apply" in lower or ("hunk" in lower and "failed" in lower):
         return _classification("context_mismatch", raw)
     if "corrupt patch" in lower or "invalid unified diff" in lower:
         return _classification("malformed_diff", raw)

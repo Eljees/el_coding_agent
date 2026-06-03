@@ -1,4 +1,5 @@
 """Tests for `local_codex_lite undo` — restoring files from runs/<id>/backups/."""
+
 from __future__ import annotations
 
 import argparse
@@ -24,6 +25,7 @@ def _make_run_with_backups(tmp_path: Path, files: dict[str, str]) -> Path:
 # collect_undo_entries
 # ---------------------------------------------------------------------------
 
+
 def test_collect_entries_empty_when_no_backups(tmp_path: Path) -> None:
     run_dir = tmp_path / ".local-codex-lite" / "runs" / "20260516-101010-000000-abcdef"
     run_dir.mkdir(parents=True)
@@ -48,6 +50,7 @@ def test_collect_entries_flags_sensitive_destination(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # cmd_undo end-to-end
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_undo_returns_1_when_no_runs(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("local_codex_lite.undo.workspace_root", lambda: tmp_path)
@@ -93,6 +96,7 @@ def test_cmd_undo_apply_skips_sensitive(tmp_path: Path, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
+
 
 def test_build_parser_undo_defaults() -> None:
     parser = cli.build_parser()

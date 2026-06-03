@@ -13,5 +13,15 @@ pytest_tmp/
 *.pyc
 *.egg-info/
 output.cve-bin-tool.*.json
+# Tooling caches and reports (ruff/mypy/pytest-cov/mutmut/hypothesis)
+.ruff_cache/
+coverage.xml
+.coverage
+.coverage.*
+.mutmut-cache
+/html/
+/mutants/
+.hypothesis/
+
 # Per-developer proxy override loaded by setup.ps1; ship .example only.
 tools/proxy.local.ps1

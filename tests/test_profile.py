@@ -1,5 +1,6 @@
 """Tests for the --profile flag: swap cfg.llm with a named profile per
 invocation, leaving config.yaml untouched."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,10 +18,10 @@ from local_codex_lite.config import (
     save_config,
 )
 
-
 # ---------------------------------------------------------------------------
 # apply_profile pure logic
 # ---------------------------------------------------------------------------
+
 
 def test_apply_profile_none_returns_same_config() -> None:
     cfg = default_config()
@@ -48,12 +49,14 @@ def test_apply_profile_swaps_llm_with_named_profile() -> None:
 
 def test_apply_profile_unknown_name_raises_with_available_list() -> None:
     base = default_config()
-    cfg = base.model_copy(update={
-        "llm_profiles": {
-            "fast": LLMConfig(model="fast-7b"),
-            "review": LLMConfig(model="strict-32b"),
+    cfg = base.model_copy(
+        update={
+            "llm_profiles": {
+                "fast": LLMConfig(model="fast-7b"),
+                "review": LLMConfig(model="strict-32b"),
+            }
         }
-    })
+    )
     with pytest.raises(UnknownProfileError) as exc_info:
         apply_profile(cfg, "missing")
     msg = str(exc_info.value)
@@ -75,14 +78,17 @@ def test_apply_profile_unknown_with_no_profiles_configured() -> None:
 # Config round-trip preserves llm_profiles
 # ---------------------------------------------------------------------------
 
+
 def test_profiles_round_trip_via_yaml(tmp_path: Path) -> None:
     cfg = default_config()
-    cfg = cfg.model_copy(update={
-        "llm_profiles": {
-            "fast": LLMConfig(base_url="http://localhost:8100/v1", model="fast-7b"),
-            "review": LLMConfig(base_url="http://localhost:8200/v1", model="strict-32b"),
+    cfg = cfg.model_copy(
+        update={
+            "llm_profiles": {
+                "fast": LLMConfig(base_url="http://localhost:8100/v1", model="fast-7b"),
+                "review": LLMConfig(base_url="http://localhost:8200/v1", model="strict-32b"),
+            }
         }
-    })
+    )
     save_config(tmp_path, cfg)
     loaded = load_config(tmp_path)
     assert set(loaded.llm_profiles.keys()) == {"fast", "review"}
@@ -93,6 +99,7 @@ def test_profiles_round_trip_via_yaml(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # argparse wires --profile through run / preview / ask / review
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "argv",

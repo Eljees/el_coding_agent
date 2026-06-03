@@ -11,7 +11,7 @@ from local_codex_lite.llm_client import LLMResponse
 class FakeClient:
     response: LLMResponse
 
-    def chat(self, messages, max_tokens=None):  # noqa: ANN001
+    def chat(self, messages, max_tokens=None):
         return self.response
 
 
@@ -56,7 +56,7 @@ def test_probe_local_llm_health_reports_malformed_json() -> None:
 
 def test_probe_local_llm_health_reports_endpoint_failure() -> None:
     class BrokenClient:
-        def chat(self, messages, max_tokens=None):  # noqa: ANN001
+        def chat(self, messages, max_tokens=None):
             raise RuntimeError("connection refused")
 
     probe = probe_local_llm_health(BrokenClient(), "qwen25-coder-14b-awq")

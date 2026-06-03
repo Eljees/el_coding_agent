@@ -11,7 +11,9 @@ from local_codex_lite.retrying import (
 
 def test_classify_httpx_exception_context_too_large() -> None:
     request = httpx.Request("POST", "http://localhost:8015/v1/chat/completions")
-    response = httpx.Response(400, request=request, text="This model's maximum context length is 6000 tokens.")
+    response = httpx.Response(
+        400, request=request, text="This model's maximum context length is 6000 tokens."
+    )
     exc = httpx.HTTPStatusError("bad request", request=request, response=response)
 
     assert classify_httpx_exception(exc) == "context_too_large"

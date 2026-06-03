@@ -52,10 +52,19 @@ The hooks are pinned in `.pre-commit-config.yaml` (ruff + ruff-format,
 mypy, plus trailing-whitespace / end-of-file-fixer / check-yaml /
 check-toml / check-merge-conflict / check-added-large-files).
 
+On Linux / macOS a `Makefile` mirrors these checks so `make check` runs the
+exact CI gate locally (lint + `format --check` + mypy + `pytest --cov`):
+
+```bash
+make setup     # pip install -e ".[dev]"
+make check     # full CI-equivalent gate
+make test      # pytest with the 60% coverage floor
+```
+
 CI (`.github/workflows/ci.yml`) runs ruff lint, `ruff format --check`,
-mypy without `--ignore-missing-imports`, `pytest --cov`, plus a Windows
-job and a no-LLM CLI smoke job (`doctor deps` / `config show` /
-`recognize`).
+mypy without `--ignore-missing-imports`, `pytest --cov` (60% floor), plus a
+Windows job, a no-LLM CLI smoke job (`doctor deps` / `config show` /
+`recognize`), and a non-blocking `ruff-canary` job on the latest ruff.
 
 ## Quick start
 

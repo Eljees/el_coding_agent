@@ -4,28 +4,33 @@ import difflib
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, TypeVar
-
-import httpx
+from typing import TypeVar
 
 from .config import AgentConfig
-from .llm_client import OpenAICompatibleClient, extract_diff, extract_json, repair_json_response
+from .llm_client import (
+    OpenAICompatibleClient,
+    SupportsChat,
+    extract_diff,
+    extract_json,
+    repair_json_response,
+)
 from .logging_utils import append_jsonl, sanitize_log_text
+from .patcher import RuntimeFixContext
 from .prompts import (
     assumption_prompt,
     command_prompt,
     evidence_context_block,
     patch_prompt,
-    review_prompt,
     patch_repair_prompt_for_issue,
     plan_prompt,
+    review_prompt,
     runtime_fix_single_file_command_prompt,
     runtime_fix_single_file_patch_prompt,
     runtime_fix_single_file_plan_prompt,
 )
-from .patcher import RuntimeFixContext
 from .retrying import RetryIssue, classify_httpx_exception, strategy_for_issue
 from .targeting import TaskTarget, detect_task_target
 from .workspace import compact_context
@@ -61,8 +66,10 @@ def make_plan(
     run_dir: Path | None = None,
     extra_context: str = "",
     runtime_fix: RuntimeFixContext | None = None,
+    *,
+    client: SupportsChat | None = None,
 ) -> dict:
-    client = OpenAICompatibleClient(config.llm)
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
     if runtime_fix is not None:
         messages = runtime_fix_single_file_plan_prompt(
             task,
@@ -117,121 +124,153 @@ def make_patch(
     run_dir: Path | None = None,
     extra_context: str = "",
     runtime_fix: RuntimeFixContext | None = None,
+    *,
+    client: SupportsChat | None = None,
 ) -> str:
-    client = OpenAICompatibleClient(config.llm)
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
     if runtime_fix is not None:
-        plan_json = json.dumps(plan, ensure_ascii=False, indent=2)
-        target_path = runtime_fix.target_path.relative_to(workspace_root).as_posix()
-        context_chars = len(runtime_fix.current_text) + len(runtime_fix.traceback_text)
-        last_error: str | None = None
-        last_response_text: str = ""
-        for attempt in range(1, 4):
-            if attempt == 1:
-                messages = runtime_fix_single_file_patch_prompt(
-                    task,
-                    plan_json,
-                    target_path,
-                    runtime_fix.traceback_text,
-                    runtime_fix.current_text,
-                    related_files=tuple(
-                        (p.relative_to(workspace_root).as_posix(), text)
-                        for p, text in runtime_fix.secondary_files
-                    ),
-                )
-                status_label = "Generating patch"
-            else:
-                messages = patch_repair_prompt_for_issue(
-                    "malformed_diff",
-                    task,
-                    plan_json,
-                    last_response_text,
-                    last_error or "runtime-fix patch response was not a valid unified diff",
-                    _runtime_fix_context_block(runtime_fix, workspace_root),
-                    repair_attempt=attempt - 1,
-                )
-                status_label = f"Repairing patch (attempt {attempt - 1}.runtime-fix)"
-            budget = _budget_for_messages(messages, config.llm.max_tokens)
-            try:
-                timeout_override = None if attempt == 1 else min(45.0, float(config.llm.timeout))
-                response = _chat_with_timeout(
-                    client,
-                    messages,
-                    max_tokens=budget,
-                    status_label=status_label,
-                    timeout=timeout_override,
-                )
-                last_response_text = response.text
-                patch = extract_diff(response.text)
-                _log_llm_attempt(
-                    run_dir,
-                    "patch",
-                    attempt,
-                    "success",
-                    issue_type="runtime_fix_single_file",
-                    strategy="focused_single_file",
-                    max_tokens=budget,
-                    context_chars=context_chars,
-                    response_text=patch,
-                )
-                return patch
-            except ValueError as exc:
-                last_error = str(exc)
-                _log_llm_attempt(
-                    run_dir,
-                    "patch",
-                    attempt,
-                    "parse_error",
-                    issue_type="malformed_diff",
-                    strategy="focused_single_file",
-                    error=last_error,
-                    max_tokens=budget,
-                    context_chars=context_chars,
-                    response_text=last_response_text,
-                )
-            except Exception as exc:  # noqa: BLE001
-                last_error = _format_exception(exc)
-                _log_llm_attempt(
-                    run_dir,
-                    "patch",
-                    attempt,
-                    "request_error",
-                    issue_type=classify_httpx_exception(exc),
-                    strategy="focused_single_file",
-                    error=last_error,
-                    max_tokens=budget,
-                    context_chars=context_chars,
-                    response_text=_response_text_from_exception(exc),
-                )
-        replacement_patch = _repair_via_full_file_rewrite(
-            client,
-            task,
-            plan,
-            workspace_root,
-            config,
-            previous_patch=last_response_text,
-            error=last_error or "runtime-fix patch generation returned malformed diff",
-            issue_type="malformed_diff",
-            repair_attempt=3,
-            runtime_fix=runtime_fix,
+        return _make_runtime_fix_patch(
+            client, task, plan, workspace_root, config, run_dir, runtime_fix
         )
-        if replacement_patch is not None:
+    return _make_standard_patch(client, task, plan, workspace_root, config, run_dir, extra_context)
+
+
+def _make_runtime_fix_patch(
+    client: SupportsChat,
+    task: str,
+    plan: dict,
+    workspace_root: Path,
+    config: AgentConfig,
+    run_dir: Path | None,
+    runtime_fix: RuntimeFixContext,
+) -> str:
+    plan_json = json.dumps(plan, ensure_ascii=False, indent=2)
+    target_path = runtime_fix.target_path.relative_to(workspace_root).as_posix()
+    context_chars = len(runtime_fix.current_text) + len(runtime_fix.traceback_text)
+    last_error: str | None = None
+    last_response_text: str = ""
+    for attempt in range(1, 4):
+        if attempt == 1:
+            messages = runtime_fix_single_file_patch_prompt(
+                task,
+                plan_json,
+                target_path,
+                runtime_fix.traceback_text,
+                runtime_fix.current_text,
+                related_files=tuple(
+                    (p.relative_to(workspace_root).as_posix(), text)
+                    for p, text in runtime_fix.secondary_files
+                ),
+            )
+            status_label = "Generating patch"
+        else:
+            messages = patch_repair_prompt_for_issue(
+                "malformed_diff",
+                task,
+                plan_json,
+                last_response_text,
+                last_error or "runtime-fix patch response was not a valid unified diff",
+                _runtime_fix_context_block(runtime_fix, workspace_root),
+                repair_attempt=attempt - 1,
+            )
+            status_label = f"Repairing patch (attempt {attempt - 1}.runtime-fix)"
+        budget = _budget_for_messages(messages, config.llm.max_tokens)
+        try:
+            timeout_override = None if attempt == 1 else min(45.0, float(config.llm.timeout))
+            response = _chat_with_timeout(
+                client,
+                messages,
+                max_tokens=budget,
+                status_label=status_label,
+                timeout=timeout_override,
+            )
+            last_response_text = response.text
+            patch = extract_diff(response.text)
             _log_llm_attempt(
                 run_dir,
                 "patch",
-                4,
+                attempt,
                 "success",
                 issue_type="runtime_fix_single_file",
-                strategy="full_file_rewrite",
-                max_tokens=min(2048, config.llm.max_tokens),
+                strategy="focused_single_file",
+                max_tokens=budget,
                 context_chars=context_chars,
-                response_text=replacement_patch,
+                response_text=patch,
             )
-            return replacement_patch
-        raise RuntimeError(f"patch generation failed after runtime-fix retries: {last_error or 'unknown error'}") from None
+            return patch
+        except ValueError as exc:
+            last_error = str(exc)
+            _log_llm_attempt(
+                run_dir,
+                "patch",
+                attempt,
+                "parse_error",
+                issue_type="malformed_diff",
+                strategy="focused_single_file",
+                error=last_error,
+                max_tokens=budget,
+                context_chars=context_chars,
+                response_text=last_response_text,
+            )
+        except Exception as exc:
+            last_error = _format_exception(exc)
+            _log_llm_attempt(
+                run_dir,
+                "patch",
+                attempt,
+                "request_error",
+                issue_type=classify_httpx_exception(exc),
+                strategy="focused_single_file",
+                error=last_error,
+                max_tokens=budget,
+                context_chars=context_chars,
+                response_text=_response_text_from_exception(exc),
+            )
+    replacement_patch = _repair_via_full_file_rewrite(
+        client,
+        task,
+        plan,
+        workspace_root,
+        config,
+        previous_patch=last_response_text,
+        error=last_error or "runtime-fix patch generation returned malformed diff",
+        issue_type="malformed_diff",
+        repair_attempt=3,
+        runtime_fix=runtime_fix,
+    )
+    if replacement_patch is not None:
+        _log_llm_attempt(
+            run_dir,
+            "patch",
+            4,
+            "success",
+            issue_type="runtime_fix_single_file",
+            strategy="full_file_rewrite",
+            max_tokens=min(2048, config.llm.max_tokens),
+            context_chars=context_chars,
+            response_text=replacement_patch,
+        )
+        return replacement_patch
+    raise RuntimeError(
+        f"patch generation failed after runtime-fix retries: {last_error or 'unknown error'}"
+    ) from None
+
+
+def _make_standard_patch(
+    client: SupportsChat,
+    task: str,
+    plan: dict,
+    workspace_root: Path,
+    config: AgentConfig,
+    run_dir: Path | None,
+    extra_context: str,
+) -> str:
     last_error: str | None = None
     last_issue: RetryIssue = "unknown"
     for attempt, context in enumerate(
-        _context_variants(workspace_root, task, config, variant="patch", extra_context=extra_context),
+        _context_variants(
+            workspace_root, task, config, variant="patch", extra_context=extra_context
+        ),
         start=1,
     ):
         messages = patch_prompt(task, json.dumps(plan, ensure_ascii=False, indent=2), context)
@@ -271,7 +310,7 @@ def make_patch(
                     context_chars=len(context),
                     response_text=response.text,
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_error = _format_exception(exc)
             last_issue = classify_httpx_exception(exc)
             _log_llm_attempt(
@@ -308,8 +347,9 @@ def repair_patch_with_error(
     *,
     repair_attempt: int = 1,
     runtime_fix: RuntimeFixContext | None = None,
+    client: SupportsChat | None = None,
 ) -> str:
-    client = OpenAICompatibleClient(config.llm)
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
     last_error: str | None = None
     diagnosis = _build_repair_diagnosis(task, workspace_root, previous_patch, error)
     effective_issue_type = "target_drift" if diagnosis.drifted else issue_type
@@ -371,7 +411,7 @@ def repair_patch_with_error(
                 status_label=f"Repairing patch (attempt {repair_attempt}.{variant_index})",
             )
             patch = extract_diff(response.text)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_error = _format_exception(exc)
             continue
         if patch.strip() == previous_patch.strip():
@@ -407,7 +447,7 @@ def repair_patch_with_error(
         fallback_patch = extract_diff(fallback_response.text)
         if fallback_patch.strip() != previous_patch.strip():
             return fallback_patch
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         last_error = _format_exception(exc)
     raise RuntimeError(last_error or "patch repair failed")
 
@@ -420,8 +460,10 @@ def suggest_commands(
     run_dir: Path | None = None,
     extra_context: str = "",
     runtime_fix: RuntimeFixContext | None = None,
+    *,
+    client: SupportsChat | None = None,
 ) -> dict:
-    client = OpenAICompatibleClient(config.llm)
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
     if runtime_fix is not None:
         messages = runtime_fix_single_file_command_prompt(
             task,
@@ -459,7 +501,11 @@ def suggest_commands(
             response_text,
             max_tokens=min(256, budget),
         ),
-        prompt_builder=lambda context: command_prompt(task, json.dumps(plan, ensure_ascii=False, indent=2), _merge_context(context, extra_context)),
+        prompt_builder=lambda context: command_prompt(
+            task,
+            json.dumps(plan, ensure_ascii=False, indent=2),
+            _merge_context(context, extra_context),
+        ),
     )
 
 
@@ -470,10 +516,17 @@ def make_review(
     config: AgentConfig,
     run_dir: Path | None = None,
     extra_context: str = "",
+    *,
+    client: SupportsChat | None = None,
 ) -> dict:
-    client = OpenAICompatibleClient(config.llm)
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
     review_context = _merge_context(
-        compact_context(workspace_root, task, config.workspace, allow_sensitive_read=config.safety.allow_sensitive_read),
+        compact_context(
+            workspace_root,
+            task,
+            config.workspace,
+            allow_sensitive_read=config.safety.allow_sensitive_read,
+        ),
         extra_context,
     )
     messages = review_prompt(diff_text, review_context)
@@ -494,7 +547,9 @@ def make_review(
         )
         return result
     except ValueError as exc:
-        repaired = repair_json_response(client, messages, response.text, max_tokens=min(768, budget))
+        repaired = repair_json_response(
+            client, messages, response.text, max_tokens=min(768, budget)
+        )
         _log_llm_attempt(
             run_dir,
             "review",
@@ -517,14 +572,27 @@ def revise_plan_with_assumptions(
     config: AgentConfig,
     run_dir: Path | None = None,
     extra_context: str = "",
+    *,
+    client: SupportsChat | None = None,
 ) -> dict:
     context = _merge_context(
-        compact_context(workspace_root, task, config.workspace, allow_sensitive_read=config.safety.allow_sensitive_read),
+        compact_context(
+            workspace_root,
+            task,
+            config.workspace,
+            allow_sensitive_read=config.safety.allow_sensitive_read,
+        ),
         extra_context,
     )
-    client = OpenAICompatibleClient(config.llm)
-    questions = plan.get("clarifying_questions") if isinstance(plan.get("clarifying_questions"), list) else []
-    messages = assumption_prompt(task, json.dumps(plan, ensure_ascii=False, indent=2), context, [str(q) for q in questions])
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
+    questions = (
+        plan.get("clarifying_questions")
+        if isinstance(plan.get("clarifying_questions"), list)
+        else []
+    )
+    messages = assumption_prompt(
+        task, json.dumps(plan, ensure_ascii=False, indent=2), context, [str(q) for q in questions]
+    )
     budget = _budget_for_messages(messages, config.llm.max_tokens)
     response = client.chat(messages, max_tokens=min(768, budget), status_label="Revising plan")
     try:
@@ -544,6 +612,7 @@ def _budget_for_messages(messages: list[dict[str, str]], configured_max_tokens: 
     estimated_input_tokens = max(1, estimated_chars // 4)
     safe_budget = max(128, 6000 - estimated_input_tokens - 512)
     return max(128, min(configured_max_tokens, safe_budget))
+
 
 def _context_variants(
     workspace_root: Path,
@@ -590,8 +659,12 @@ def _build_repair_diagnosis(
     touched_paths = tuple(_extract_failed_paths(previous_patch, error))
     if intended_target is None:
         return RepairDiagnosis(intended_target=None, touched_paths=touched_paths, drifted=False)
-    drifted = bool(touched_paths) and not any(_path_matches_target(path, intended_target) for path in touched_paths)
-    return RepairDiagnosis(intended_target=intended_target, touched_paths=touched_paths, drifted=drifted)
+    drifted = bool(touched_paths) and not any(
+        _path_matches_target(path, intended_target) for path in touched_paths
+    )
+    return RepairDiagnosis(
+        intended_target=intended_target, touched_paths=touched_paths, drifted=drifted
+    )
 
 
 def _path_matches_target(path: str, target: TaskTarget) -> bool:
@@ -615,7 +688,9 @@ def _build_intended_target_context(
         f"Target exists: {target.exists}",
     ]
     if diagnosis.touched_paths:
-        lines.extend(["", "Previous patch touched:", *[f"- {item}" for item in diagnosis.touched_paths]])
+        lines.extend(
+            ["", "Previous patch touched:", *[f"- {item}" for item in diagnosis.touched_paths]]
+        )
     if path.is_file():
         content = path.read_text(encoding="utf-8", errors="replace")
         lines.extend(["", f"## Current file: {target.path}", content[:3000]])
@@ -647,7 +722,9 @@ def _repair_context_variants(
         error=error,
         max_chars_per_file=min(config.workspace.max_file_bytes, 2500),
     )
-    minimal_context = "# Focused repair context\n" + (targeted_context or "No target files were extracted.")
+    minimal_context = "# Focused repair context\n" + (
+        targeted_context or "No target files were extracted."
+    )
     base_context = compact_context(
         workspace_root,
         task,
@@ -731,8 +808,7 @@ def _runtime_fix_context_block(runtime_fix: RuntimeFixContext, workspace_root: P
         "# Single-file runtime repair context\n"
         f"Target file: {rel_path}\n\n"
         f"Traceback:\n{runtime_fix.traceback_text}\n\n"
-        f"Current file content:\n{runtime_fix.current_text}"
-        + (related and ("\n" + related))
+        f"Current file content:\n{runtime_fix.current_text}" + (related and ("\n" + related))
     )
 
 
@@ -924,11 +1000,15 @@ def _retry_with_context_variants(
     repair_response: Callable[[str, list[dict[str, str]], int], T],
 ) -> T:
     last_error: str | None = None
-    for attempt, context in enumerate(_context_variants(workspace_root, task, config, variant=variant), start=1):
+    for attempt, context in enumerate(
+        _context_variants(workspace_root, task, config, variant=variant), start=1
+    ):
         messages = prompt_builder(context)
         budget = _budget_for_messages(messages, config.llm.max_tokens)
         try:
-            response = client.chat(messages, max_tokens=budget, status_label=f"{status_prefix} (attempt {attempt})")
+            response = client.chat(
+                messages, max_tokens=budget, status_label=f"{status_prefix} (attempt {attempt})"
+            )
             try:
                 result = parse_response(response.text)
                 _log_llm_attempt(
@@ -959,7 +1039,7 @@ def _retry_with_context_variants(
                     response_text=response.text,
                 )
                 return repair_response(response.text, messages, budget)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             issue = classify_httpx_exception(exc)
             last_error = _format_exception(exc)
             _log_llm_attempt(

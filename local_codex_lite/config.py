@@ -21,7 +21,14 @@ class WorkspaceConfig(BaseModel):
     root: Path = Path(".")
     max_file_bytes: int = 120_000
     include_globs: list[str] = Field(
-        default_factory=lambda: ["**/*.py", "**/*.md", "**/*.toml", "**/*.yaml", "**/*.yml", "**/*.json"]
+        default_factory=lambda: [
+            "**/*.py",
+            "**/*.md",
+            "**/*.toml",
+            "**/*.yaml",
+            "**/*.yml",
+            "**/*.json",
+        ]
     )
     exclude_globs: list[str] = Field(
         default_factory=lambda: [
@@ -128,7 +135,9 @@ def save_config(workspace_root: Path, config: AgentConfig) -> Path:
     cfg_dir = _config_dir(workspace_root)
     cfg_dir.mkdir(parents=True, exist_ok=True)
     path = cfg_dir / "config.yaml"
-    path.write_text(yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False), encoding="utf-8")
+    path.write_text(
+        yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
+    )
     return path
 
 

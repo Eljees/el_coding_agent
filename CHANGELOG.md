@@ -8,7 +8,97 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Removed
+- Pruned stale top-level files: `CHATGPT_HANDOFF.md` (self-marked as
+  superseded by AGENTS.md), `GUI_ZERO_RESULTS_PLAYBOOK.md` (playbook for a
+  bug fixed 2026-05-13), and the unreferenced `test_artifacts.ps1` smoke
+  script.  Also cleared gitignored on-disk junk (stray `.coverage*`, old
+  `output.cve-bin-tool.*.json` dumps, `generated_projects/` demo output).
+
+### Changed
+- Decomposed `planner.make_patch` (188 lines) into a 16-line dispatcher
+  over two focused helpers -- `_make_runtime_fix_patch` (single-file
+  traceback repair) and `_make_standard_patch` (context-variant retries) --
+  so each generation strategy reads on its own.  Behaviour unchanged;
+  covered by the existing planner retry/runtime-fix tests.
+- Pinned `ruff==0.15.15` and `mypy==1.14.1` in **both** the `[dev]`
+  extras and `.pre-commit-config.yaml` so local hooks and CI run
+  identical versions.  Previously `ruff>=0.6` / `mypy>=1.10` floated to
+  the latest release in CI while pre-commit pinned older revs, making
+  lint results non-reproducible between the two.
+- `cli.py` now declares `__all__` for the helpers re-exported from
+  `cli_utils` / `runner`, so the ruff F401 + isort autofix can no longer
+  silently strip the public/test re-exports.
+- Extracted the 267-line argparse wiring out of `cli.py` into a new
+  `local_codex_lite/cli_parser.py`; `cli.build_parser` is re-exported for
+  backwards compatibility, so `cli.py` shrinks 900 -> 634 lines while the
+  CLI surface lives in one focused module.  First step of the planned
+  god-module split (`cli.py` / `ui.py` / `planner.py`).
+- Extracted the four `review` diff/context helpers into a new
+  `local_codex_lite/cli_review.py` (re-exported from `cli`), trimming
+  `cli.py` further to ~566 lines.  Second step of the god-module split.
+- Extracted the four `cmd_logs_*` handlers into a new
+  `local_codex_lite/cli_logs.py` (re-exported from `cli`).  Third step of
+  the god-module split; `cli.py` is now ~456 lines (from 900).
+- Extracted the two `cmd_rag_*` handlers into a new
+  `local_codex_lite/cli_rag.py` (re-exported from `cli`).  Fourth step of
+  the god-module split; `cli.py` is now ~420 lines.
+- Extracted the `init` / `status` / `config show` / `recognize` handlers
+  into a new `local_codex_lite/cli_info.py` (re-exported from `cli`).
+  Fifth step of the god-module split; `cli.py` is now ~395 lines, down
+  from 900.  The remaining handlers are `main()` dispatch plus the
+  LLM-backed `preview` / `ask` / `review` / `doctor` commands.
+- Moved `cmd_review` next to its helpers in `cli_review.py` (re-exported
+  from `cli`); `cli.py` is now ~326 lines, down from 900.  Added
+  `tests/test_cli_reexports.py` asserting every name in `cli.__all__`
+  stays importable, so the ruff autofix can never silently drop a
+  `cli.*` re-export again.  Sixth step of the god-module split.
+- Extracted the LLM-backed `cmd_preview` and `cmd_ask` handlers into a new
+  `local_codex_lite/cli_query.py` (re-exported from `cli`).  Final step of
+  the god-module split: `cli.py` is now ~238 lines (from 900) and is a
+  thin dispatcher over the `cli_*` command modules.
+- Added `RUF001`/`RUF002`/`RUF003` (ambiguous-unicode) to the ruff
+  ignore list: Cyrillic literals in intent strings and tests are
+  intentional for this Russian-language tool.
+
+### Changed
+- Wired the `SupportsChat` seam through the planner: `make_plan`,
+  `make_patch`, `make_review`, `suggest_commands`, `repair_patch_with_error`
+  and `revise_plan_with_assumptions` now take an optional keyword-only
+  `client` argument (defaulting to a freshly constructed
+  `OpenAICompatibleClient`).  This makes the planner's parse/return logic
+  unit-testable with a conforming double instead of monkeypatching the
+  module-level client class.  New `tests/test_planner_client_injection.py`;
+  `planner.py` coverage 59%->62%.
+- Added direct tests for the previously-uncovered command handlers:
+  `tests/test_cli_rag.py` (cli_rag.py 28%->100%) and
+  `tests/test_cli_dispatch.py` exercising the `cli.main()` routing
+  (cli.py 45%->68%).  Total coverage 67%->68.5%.
+- Documentation: AGENTS.md "Module architecture" now reflects the
+  `cli_*` split (thin dispatcher + per-command modules) and the planner's
+  injectable `SupportsChat` client seam.
+- Added `tests/test_doctor_more.py` (doctor.py 55%->89%: LLM probe,
+  run_doctor, preview_patch, run_full_doctor) and `tests/test_runner_more.py`
+  (run_task --json redirect + unknown-profile early exit).  Total coverage
+  68%->70%; CI/Makefile coverage floor ratcheted 60%->65%.
+- Added `tests/test_runner_branches.py` for the clarification gate and the
+  require-apply safety gate (runner.py 53%->59%).
+
+### Fixed
+- `rich_compat.SimpleConsole.print` no longer forwards rich-only
+  keyword arguments (e.g. `highlight=`) to the builtin `print`; doing so
+  raised `TypeError` whenever the optional `rich` extra was absent (the
+  fallback path used by clean CI).
+- Made the `cve-bin-tool` update-db path assertion platform-independent
+  (it hard-coded the Windows separator and failed on POSIX runners).
+- Cleared the ruff backlog: 149 autofixes plus manual `RUF005`,
+  `RUF012`, `B011` and `F841` fixes; `ruff check` is now clean.
+
 ### Added
+- `Makefile` giving Linux/macOS parity with the PowerShell helpers:
+  `make check` runs the exact CI gate (lint + format-check + mypy + pytest
+  with the 60% floor); plus `setup`/`lint`/`format`/`test`/`smoke`/`doctor`/
+  `run`/`ask` targets.
 - `local-codex-lite plugins list` -- shows every Capability the agent
   sees and its source (`builtin` or the entry-point name of the
   plugin that contributed it).  Supports `--plugins-only` and `--json`

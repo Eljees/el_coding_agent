@@ -1,21 +1,22 @@
 """Tests for local_codex_lite.config."""
+
 from __future__ import annotations
 
-import yaml
 from pathlib import Path
 
 import pytest
+import yaml
 
 from local_codex_lite.config import (
     AgentConfig,
     LLMConfig,
-    WorkspaceConfig,
     SafetyConfig,
+    WorkspaceConfig,
     config_as_dict,
+    config_path,
     default_config,
     load_config,
     save_config,
-    config_path,
 )
 
 

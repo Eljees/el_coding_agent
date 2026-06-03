@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,11 @@ def classify_container_error(
     missing = [item.lower() for item in (missing_artifacts or [])]
     text = "\n".join(part for part in (stdout, stderr, " ".join(missing)) if part).lower()
 
-    if expected_db_snapshot_id and observed_db_snapshot_id and expected_db_snapshot_id != observed_db_snapshot_id:
+    if (
+        expected_db_snapshot_id
+        and observed_db_snapshot_id
+        and expected_db_snapshot_id != observed_db_snapshot_id
+    ):
         return _classification(
             code="db_snapshot_drift",
             title="Database snapshot drift",
@@ -40,9 +44,9 @@ def classify_container_error(
             evidence_hint="Check status.json, summary.json, and the mounted DB cache snapshot.",
         )
 
-    if _matches_any(text, ("no inventory", "no sbom", "inventory not found", "sbom not found")) or any(
-        token in missing for token in ("inventory", "sbom", "status.json", "summary.json")
-    ):
+    if _matches_any(
+        text, ("no inventory", "no sbom", "inventory not found", "sbom not found")
+    ) or any(token in missing for token in ("inventory", "sbom", "status.json", "summary.json")):
         return _classification(
             code="scan_no_inventory",
             title="Scan produced no inventory",
@@ -188,7 +192,10 @@ def classify_container_error(
             evidence_hint="Inspect the clone stderr and confirm the repository URL.",
         )
 
-    if _matches_any(text, ("git clone", "clone failed", "repository not found", "fatal: clone")) or stage == "clone":
+    if (
+        _matches_any(text, ("git clone", "clone failed", "repository not found", "fatal: clone"))
+        or stage == "clone"
+    ):
         return _classification(
             code="clone_failed",
             title="Repository clone failed",

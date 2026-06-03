@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
 import httpx
 
@@ -16,6 +17,23 @@ from .config import LLMConfig
 class LLMResponse:
     text: str
     raw: dict
+
+
+@runtime_checkable
+class SupportsChat(Protocol):
+    """Structural type for the one seam the LLM is reached through.
+
+    Both the real :class:`OpenAICompatibleClient` and the lightweight test
+    doubles in the suite satisfy this protocol, so planner/runner code can be
+    driven with any conforming object.  A double only needs ``chat``.
+    """
+
+    def chat(
+        self,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = ...,
+        status_label: str | None = ...,
+    ) -> LLMResponse: ...
 
 
 class OpenAICompatibleClient:
@@ -38,7 +56,7 @@ class OpenAICompatibleClient:
         for attempt in range(self.config.retries + 1):
             try:
                 return self._request_with_heartbeat(payload, status_label=status_label)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 last_error = exc
                 if attempt < self.config.retries:
                     time.sleep(0.5 * (attempt + 1))
@@ -46,7 +64,9 @@ class OpenAICompatibleClient:
                 raise
         raise RuntimeError(str(last_error))
 
-    def _request_with_heartbeat(self, payload: dict, status_label: str | None = None) -> LLMResponse:
+    def _request_with_heartbeat(
+        self, payload: dict, status_label: str | None = None
+    ) -> LLMResponse:
         stop_event = threading.Event()
         heartbeat = None
         completed = False
@@ -119,7 +139,8 @@ def repair_json_response(
     bad_text: str,
     max_tokens: int,
 ) -> dict:
-    repair_messages = list(original_messages) + [
+    repair_messages = [
+        *original_messages,
         {
             "role": "user",
             "content": (
@@ -127,9 +148,11 @@ def repair_json_response(
                 "Return only valid JSON. No markdown, no explanation.\n\n"
                 f"Invalid answer:\n{bad_text}"
             ),
-        }
+        },
     ]
-    response = client.chat(repair_messages, max_tokens=max_tokens, status_label="Repairing model output")
+    response = client.chat(
+        repair_messages, max_tokens=max_tokens, status_label="Repairing model output"
+    )
     return extract_json(response.text)
 
 

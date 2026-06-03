@@ -5,7 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import AgentConfig
@@ -62,9 +62,7 @@ def ensure_rag_provider_supported(cfg: AgentConfig) -> str:
             "RAG provider 'chroma' is configured but not implemented in this build. "
             "Use provider: keyword."
         )
-    raise RagProviderError(
-        f"RAG provider '{provider}' is not recognized. Use provider: keyword."
-    )
+    raise RagProviderError(f"RAG provider '{provider}' is not recognized. Use provider: keyword.")
 
 
 def resolve_store_dir(root: Path, cfg: AgentConfig) -> Path:
@@ -107,7 +105,9 @@ def build_chunks(root: Path, cfg: AgentConfig) -> list[Chunk]:
                 text = path.read_text(encoding="utf-8", errors="replace")
             except (OSError, PermissionError):  # skip unreadable files
                 continue
-            for start, end, chunk_text in _split_into_chunks(text, cfg.rag.chunk_chars, cfg.rag.overlap_chars):
+            for start, end, chunk_text in _split_into_chunks(
+                text, cfg.rag.chunk_chars, cfg.rag.overlap_chars
+            ):
                 start_line, end_line = _offsets_to_line_numbers(text, start, end)
                 chunks.append(
                     Chunk(
@@ -173,7 +173,9 @@ def index_workspace(root: Path, cfg: AgentConfig) -> RagIndexInfo:
     )
 
 
-def query_index(query: str, root: Path, cfg: AgentConfig, top_k: int | None = None) -> list[RetrievedChunk]:
+def query_index(
+    query: str, root: Path, cfg: AgentConfig, top_k: int | None = None
+) -> list[RetrievedChunk]:
     ensure_rag_provider_supported(cfg)
     root = root.resolve()
     store_dir = resolve_store_dir(root, cfg)
@@ -320,4 +322,4 @@ def _is_blocked_rel_path(path: Path, blocked_root: Path) -> bool:
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

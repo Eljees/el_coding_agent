@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from local_codex_lite import cli
+from local_codex_lite import cli, cli_logs
 from local_codex_lite.logging_utils import latest_events_path, latest_session_dir
 
 
@@ -34,7 +34,7 @@ def test_cmd_logs_latest_prints_events(tmp_path: Path, monkeypatch, capsys) -> N
     latest.mkdir(parents=True)
     events = latest / "events.jsonl"
     events.write_text('{"stage":"plan"}\n', encoding="utf-8")
-    monkeypatch.setattr(cli, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(cli_logs, "workspace_root", lambda: tmp_path)
 
     result = cli.cmd_logs_latest(argparse.Namespace())
 

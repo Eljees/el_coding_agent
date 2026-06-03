@@ -20,10 +20,17 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 
 ---
 
-## Current state (updated 2026-05-13)
+## Current state (updated 2026-05-31)
+
+> Canonical change history lives in `CHANGELOG.md`.  The dated
+> "session log" blocks in this file are point-in-time snapshots kept for
+> reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `127 passed` (2026-05-12, full suite)
+- Last known clean test run: `325 passed, 1 skipped` (2026-05-31, full
+  suite; the single skip is the optional `hypothesis` property test)
+- Toolchain pinned: `ruff==0.15.15`, `mypy==1.14.1` in both `[dev]` and
+  `.pre-commit-config.yaml`; `ruff check`/`ruff format --check` are clean
 - `cve-bin-tool` confirmed installed: `mode=executable`, `version=3.4`
 - Real GUI-path CVE scan on `CYBERSEC-11195/contentreader-nls-16.9.0.14297-RedOS.rpm` reproduces
   non-zero: `total_findings=7`, `CRITICAL=2`, `HIGH=5`, `evidence_complete=true`
@@ -87,6 +94,10 @@ Changes made during the cleanup/improvement pass (tasks #1–#19):
 - `commands.py` deleted — `SuggestedCommand` + `run_command` absorbed into `safety.py`
 - `runtime_fix.py` deleted — `RuntimeFixContext` + `detect_runtime_fix_context` absorbed into `patcher.py`
 - `cli.py` split from 1048 lines into `cli.py` + `cli_utils.py` + `cli_evidence.py`
+- 2026-05-31 pass: `cli.py` further split 900 -> 238 lines into
+  `cli_parser`/`cli_info`/`cli_logs`/`cli_rag`/`cli_query`/`cli_review`; planner gained
+  the injectable `SupportsChat` client seam; ruff/mypy pinned in lockstep with
+  pre-commit; CI gained a 60% coverage floor and a non-blocking ruff canary
 - `intent.py` `_missing_inputs` refactored: no hardcoded capability IDs, driven by `required_inputs` tuples
 - `capabilities.py` extended with `evidence.cve_scan` capability (12 capabilities total)
 - `skills/cve-bin-tool/` added: `run_cve_scan.py` + `SKILL.md`
@@ -171,8 +182,29 @@ Do not treat zero findings as proof of safety if:
 ## Module architecture
 
 ### `local_codex_lite/cli.py`
-Main CLI entry point. Loads config, indexes workspace, ranks files, requests plan and patch,
-validates, previews, applies with `--apply`, executes with `--exec`, writes logs.
+Thin command dispatcher.  `main()` parses args (via `cli_parser.build_parser`) and routes
+each top-level command to a handler in one of the focused `cli_*` modules below.  Keeps the
+trivial `doctor`/`ui` handlers and re-exports every handler plus the historical `_underscore`
+helpers -- pinned in `__all__` and guarded by `tests/test_cli_reexports.py` -- for backwards
+compatibility.  Split from a 900-line god-module in the 2026-05-31 pass.
+
+### `local_codex_lite/cli_parser.py`
+All `argparse` wiring (`build_parser`) for the CLI surface, in one place.
+
+### `local_codex_lite/cli_info.py`
+`init`, `status`, `config show`, `recognize` handlers.
+
+### `local_codex_lite/cli_logs.py`
+`logs latest/tail/show/diff` handlers.
+
+### `local_codex_lite/cli_rag.py`
+`rag index` / `rag query` handlers.
+
+### `local_codex_lite/cli_query.py`
+LLM-backed `preview` (plan+patch) and `ask` (Q&A) handlers.
+
+### `local_codex_lite/cli_review.py`
+`review` handler plus its diff-acquisition / context-building helpers.
 
 ### `local_codex_lite/cli_utils.py`
 Shared CLI utilities: `workspace_root`, console, output formatting helpers,
@@ -191,6 +223,10 @@ unified diff extraction, diff normalization, repair helpers.
 ### `local_codex_lite/planner.py`
 Builds plans, patches, command suggestions, clarification-aware plan revision,
 repair prompts with error-class input.
+The LLM-calling entry points (`make_plan`, `make_patch`, `make_review`,
+`suggest_commands`, `repair_patch_with_error`, `revise_plan_with_assumptions`) accept an
+optional keyword-only `client` -- the `llm_client.SupportsChat` seam -- so they are
+unit-testable with a fake client instead of monkeypatching the module-level class.
 
 ### `local_codex_lite/workspace.py`
 Compact workspace context: file tree, ranked relevant files, selected snippets,

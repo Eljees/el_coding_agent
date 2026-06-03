@@ -36,7 +36,9 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
     text = user_text.strip()
     lower = text.lower()
     if not text:
-        return _fallback_decision("needs_input", "unknown", "Describe the task first.", "Enter a task to analyze.")
+        return _fallback_decision(
+            "needs_input", "unknown", "Describe the task first.", "Enter a task to analyze."
+        )
 
     scored: list[tuple[int, Capability, list[str]]] = []
     for capability in capabilities:
@@ -45,7 +47,9 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         if capability.id == "review.code" and re.search(r"\bpr\b", lower):
             matched.append("phrase:pr")
             score += 2
-        if capability.id == "logs.latest" and ("покажи последние логи" in lower or "latest logs" in lower):
+        if capability.id == "logs.latest" and (
+            "покажи последние логи" in lower or "latest logs" in lower
+        ):
             matched.append("phrase:latest logs")
             score += 2
         if capability.id == "evidence.json_compare" and _looks_like_two_json_paths(lower):
@@ -57,12 +61,16 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         if capability.id == "evidence.cve_scan" and _looks_like_artifact_path(text):
             matched.append("pattern:cve artifact path")
             score += 2
-        if capability.id == "evidence.cve_scan" and any(marker in lower for marker in ("cve", "cve-bin-tool", "уязвим")):
+        if capability.id == "evidence.cve_scan" and any(
+            marker in lower for marker in ("cve", "cve-bin-tool", "уязвим")
+        ):
             matched.append("phrase:cve scan")
             score += 3
         scored.append((score, capability, matched))
 
-    score, capability, matched_keywords = max(scored, key=lambda item: item[0], default=(0, capabilities[0], []))
+    score, capability, matched_keywords = max(
+        scored, key=lambda item: item[0], default=(0, capabilities[0], [])
+    )
     if score <= 0:
         return _fallback_decision(
             "partial",
@@ -90,9 +98,13 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         if missing_inputs:
             safe_next_action = "Provide an artifact directory or archive path, then run evidence artifacts inspect."
     if capability.id == "evidence.cve_scan":
-        summary = "Run cve-bin-tool on artifacts, keep evidence, and generate a high/critical report."
+        summary = (
+            "Run cve-bin-tool on artifacts, keep evidence, and generate a high/critical report."
+        )
         if missing_inputs:
-            safe_next_action = "Provide an artifact directory or archive path, then run evidence cve-scan."
+            safe_next_action = (
+                "Provide an artifact directory or archive path, then run evidence cve-scan."
+            )
     confidence = min(0.45 + 0.08 * score, 0.95)
     risks = []
     if capability.requires_apply:

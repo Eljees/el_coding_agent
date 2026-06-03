@@ -15,13 +15,14 @@ provides two related admin commands:
 
 Both default to dry-run; pass ``--apply`` to actually touch anything.
 """
+
 from __future__ import annotations
 
 import argparse
 import shutil
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .cli_utils import console, workspace_root
@@ -45,13 +46,13 @@ def list_run_entries(workspace: Path) -> list[RunEntry]:
     runs_root = _runs_root(workspace)
     if not runs_root.is_dir():
         return []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     entries: list[RunEntry] = []
     for path in sorted(runs_root.iterdir()):
         if not path.is_dir():
             continue
         try:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         except OSError:
             continue
         age = (now - mtime).total_seconds() / 86400.0
@@ -66,7 +67,11 @@ def select_for_archival(entries: list[RunEntry], older_than_days: float) -> list
 def archive_run(run_dir: Path) -> Path:
     """Zip ``run_dir`` into ``<run_dir>.zip`` next to it.  Returns the
     archive path.  Overwrites an existing archive."""
-    archive_path = run_dir.with_suffix(run_dir.suffix + ".zip") if run_dir.suffix else run_dir.parent / f"{run_dir.name}.zip"
+    archive_path = (
+        run_dir.with_suffix(run_dir.suffix + ".zip")
+        if run_dir.suffix
+        else run_dir.parent / f"{run_dir.name}.zip"
+    )
     with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for path in run_dir.rglob("*"):
             if path.is_file():
@@ -98,12 +103,15 @@ def cmd_runs_archive(args: argparse.Namespace) -> int:
     archived = 0
     removed = 0
     for entry in selected:
-        rel = entry.path.relative_to(workspace) if entry.path.is_relative_to(workspace) else entry.path
+        rel = (
+            entry.path.relative_to(workspace)
+            if entry.path.is_relative_to(workspace)
+            else entry.path
+        )
         if not apply_flag:
             action = "would archive + remove" if remove_flag else "would archive"
             console.print(
-                f"  {action} {rel} (mtime={entry.mtime.isoformat()}, "
-                f"age={entry.age_days:.1f}d)",
+                f"  {action} {rel} (mtime={entry.mtime.isoformat()}, age={entry.age_days:.1f}d)",
             )
             continue
         archive_path = archive_run(entry.path)
@@ -119,8 +127,7 @@ def cmd_runs_archive(args: argparse.Namespace) -> int:
         console.print(f"Archived {archived} run(s); removed {removed}.")
     else:
         console.print(
-            f"Dry run: {len(selected)} run(s) would be touched.  "
-            "Pass --apply to actually archive."
+            f"Dry run: {len(selected)} run(s) would be touched.  Pass --apply to actually archive."
         )
     return 0
 

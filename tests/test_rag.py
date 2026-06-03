@@ -7,13 +7,13 @@ import pytest
 from local_codex_lite.config import default_config
 from local_codex_lite.rag import (
     RagProviderError,
+    RetrievedChunk,
     build_chunks,
     ensure_rag_provider_supported,
     format_retrieved_context,
     index_workspace,
     query_index,
     resolve_store_dir,
-    RetrievedChunk,
 )
 
 
@@ -27,7 +27,9 @@ def test_unsupported_provider_raises_clear_error(tmp_path: Path) -> None:
     cfg = default_config().model_copy(deep=True)
     cfg.rag.provider = "chroma"
 
-    with pytest.raises(RagProviderError, match="provider 'chroma' is configured but not implemented"):
+    with pytest.raises(
+        RagProviderError, match="provider 'chroma' is configured but not implemented"
+    ):
         ensure_rag_provider_supported(cfg)
 
 

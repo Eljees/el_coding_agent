@@ -1,4 +1,5 @@
 """Tests for local_codex_lite.intent."""
+
 from __future__ import annotations
 
 import pytest
@@ -12,13 +13,13 @@ from local_codex_lite.intent import (
     recognize_intent,
 )
 
-
 CAPS = default_capabilities()
 
 
 # ---------------------------------------------------------------------------
 # recognize_intent
 # ---------------------------------------------------------------------------
+
 
 def test_recognize_intent_empty_text_returns_needs_input() -> None:
     decision = recognize_intent("", CAPS)
@@ -27,9 +28,7 @@ def test_recognize_intent_empty_text_returns_needs_input() -> None:
 
 
 def test_recognize_intent_cve_russian_task() -> None:
-    decision = recognize_intent(
-        r"проверь на cve артефакты D:\artifacts\demo.rpm", CAPS
-    )
+    decision = recognize_intent(r"проверь на cve артефакты D:\artifacts\demo.rpm", CAPS)
     assert decision.intent == "evidence.cve_scan"
     assert decision.can_do == "yes"
     assert decision.confidence > 0.5
@@ -48,17 +47,13 @@ def test_recognize_intent_preview_code_change() -> None:
 
 
 def test_recognize_intent_artifacts_inspect_detects_path() -> None:
-    decision = recognize_intent(
-        r"проведи анализ артефактов отсюда D:\data\archives", CAPS
-    )
+    decision = recognize_intent(r"проведи анализ артефактов отсюда D:\data\archives", CAPS)
     assert decision.intent == "evidence.artifacts.inspect"
     assert decision.can_do == "yes"
 
 
 def test_recognize_intent_json_compare_two_paths() -> None:
-    decision = recognize_intent(
-        r"сравни D:\reports\left.json и D:\reports\right.json", CAPS
-    )
+    decision = recognize_intent(r"сравни D:\reports\left.json и D:\reports\right.json", CAPS)
     assert decision.intent == "evidence.json_compare"
 
 
@@ -83,6 +78,7 @@ def test_decision_as_dict_contains_all_fields() -> None:
 # Path extraction helpers
 # ---------------------------------------------------------------------------
 
+
 def test_extract_artifact_input_path_windows_path() -> None:
     text = r'запусти cve на "D:\artifacts\bundle.rpm"'
     path = extract_artifact_input_path(text)
@@ -103,6 +99,7 @@ def test_extract_artifact_input_path_empty_when_no_path() -> None:
 # ---------------------------------------------------------------------------
 # Missing inputs validation
 # ---------------------------------------------------------------------------
+
 
 def test_cve_scan_capability_requires_input_root() -> None:
     decision = recognize_intent("проверь на cve уязвимости", CAPS)
@@ -141,9 +138,7 @@ def test_trufflehog_scan_with_repo_list_file_is_satisfied() -> None:
 
 
 def test_trufflehog_scan_with_windows_repo_list_path_is_satisfied() -> None:
-    decision = recognize_intent(
-        r"запусти trufflehog scan по D:\repos\baseline.list", CAPS
-    )
+    decision = recognize_intent(r"запусти trufflehog scan по D:\repos\baseline.list", CAPS)
     assert decision.intent == "evidence.trufflehog.scan"
     assert decision.missing_inputs == ()
     assert decision.can_do == "yes"

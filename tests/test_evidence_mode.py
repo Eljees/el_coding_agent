@@ -14,7 +14,9 @@ from local_codex_lite.evidence_mode import (
 
 def test_create_evidence_bundle_creates_structure(tmp_path: Path) -> None:
     run_root = tmp_path / "runs" / "20260501-010101"
-    bundle = create_evidence_bundle(run_root, source="trufflehog", task="scan repo", run_id="20260501-010101")
+    bundle = create_evidence_bundle(
+        run_root, source="trufflehog", task="scan repo", run_id="20260501-010101"
+    )
 
     assert bundle.metadata_path.exists()
     assert bundle.status_path.exists()

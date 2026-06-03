@@ -59,8 +59,10 @@ dev = [
   "pytest-cov>=5.0",
   "hypothesis>=6.100",
   "mutmut>=2.5",
-  "ruff>=0.6",
-  "mypy>=1.10",
+  # Pin ruff/mypy to exact versions so local pre-commit and CI agree.
+  # These MUST stay in lockstep with .pre-commit-config.yaml.
+  "ruff==0.15.15",
+  "mypy==1.14.1",
   "pre-commit>=3.7",
   "types-PyYAML>=6.0",
 ]
@@ -108,7 +110,17 @@ ignore = [
   "B904",   # use 'raise ... from err' (legacy paths)
   "SIM108", # use ternary -- often less readable for our explicit flow
   "SIM117", # combine nested with-statements
+  "SIM102", # collapsible-if -- explicit nested guards read clearer here
+  "SIM103", # needless-bool -- guard-clause style is intentional
+  "SIM105", # suppressible-exception -- explicit try/except/pass is clearer
+  "SIM109", # compare-with-tuple -- explicit equality chain is intentional
   "UP007",  # use X | Y instead of Optional[X] (cosmetic)
+  # This is a Russian-language tool: Cyrillic literals in intent strings and
+  # test assertions are intentional, not typos.  Silence the ambiguous-unicode
+  # family rather than mangle the text.
+  "RUF001", # ambiguous-unicode-character-string
+  "RUF002", # ambiguous-unicode-character-docstring
+  "RUF003", # ambiguous-unicode-character-comment
 ]
 
 [tool.ruff.lint.per-file-ignores]

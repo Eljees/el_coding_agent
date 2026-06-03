@@ -13,6 +13,7 @@ path outside the workspace, is skipped with an explanatory line.
 The command is read-only by default; pass ``--apply`` to actually
 overwrite the workspace.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -27,8 +28,8 @@ from .safety import is_inside_workspace, is_sensitive_path
 
 @dataclass(frozen=True)
 class UndoEntry:
-    backup_path: Path        # source inside <run_dir>/backups/
-    workspace_path: Path     # destination inside the workspace
+    backup_path: Path  # source inside <run_dir>/backups/
+    workspace_path: Path  # destination inside the workspace
     skip_reason: str | None  # None when the entry is restorable
 
 
@@ -52,7 +53,9 @@ def collect_undo_entries(run_dir: Path, workspace_root_path: Path) -> list[UndoE
             reason = "destination outside workspace"
         elif is_sensitive_path(target):
             reason = "destination is a sensitive path"
-        entries.append(UndoEntry(backup_path=backup_path, workspace_path=target, skip_reason=reason))
+        entries.append(
+            UndoEntry(backup_path=backup_path, workspace_path=target, skip_reason=reason)
+        )
     return entries
 
 
@@ -72,7 +75,11 @@ def cmd_undo(args: argparse.Namespace) -> int:
     restored = 0
     skipped = 0
     for entry in entries:
-        rel = entry.workspace_path.relative_to(root) if is_inside_workspace(entry.workspace_path, root) else entry.workspace_path
+        rel = (
+            entry.workspace_path.relative_to(root)
+            if is_inside_workspace(entry.workspace_path, root)
+            else entry.workspace_path
+        )
         if entry.skip_reason:
             console.print(f"[yellow]skip[/yellow] {rel}: {entry.skip_reason}")
             skipped += 1
@@ -89,6 +96,8 @@ def cmd_undo(args: argparse.Namespace) -> int:
     if apply_flag:
         console.print(f"Restored {restored} file(s), skipped {skipped}.")
     else:
-        console.print(f"Dry run: {len(entries) - skipped} file(s) would be restored, {skipped} skipped.")
+        console.print(
+            f"Dry run: {len(entries) - skipped} file(s) would be restored, {skipped} skipped."
+        )
         console.print("Pass --apply to actually overwrite the workspace.")
     return 0

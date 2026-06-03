@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar
 
 from local_codex_lite import cli, cli_evidence
 
@@ -130,7 +131,7 @@ def test_cve_runner_scan_argv_defaults_to_update_never(tmp_path: Path, monkeypat
     raw = tmp_path / "cve_raw.json"
     raw.write_text("[]", encoding="utf-8")
 
-    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):  # noqa: ANN001
+    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):
         captured.append(argv)
         captured_cwds.append(cwd)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -170,7 +171,7 @@ def test_cve_runner_fallback_search_stays_inside_output_dir(tmp_path: Path, monk
     now = time.time()
     os.utime(stray, (now, now))
 
-    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):  # noqa: ANN001
+    def fake_run(argv, capture_output=False, text=False, check=False, timeout=0, cwd=None):
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(runner.subprocess, "run", fake_run)
@@ -192,16 +193,16 @@ def test_cve_runner_update_db_uses_streaming_command(monkeypatch) -> None:
     runner = _load_cve_runner()
     captured: list[list[str]] = []
 
-    def fake_stream(argv, *, timeout):  # noqa: ANN001
+    def fake_stream(argv, *, timeout):
         captured.append(argv)
         assert timeout == 1800
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
     class FakeTempDir:
-        def __enter__(self):  # noqa: ANN204
+        def __enter__(self):
             return r"C:\temp\cve-update"
 
-        def __exit__(self, exc_type, exc, tb):  # noqa: ANN001, ANN204
+        def __exit__(self, exc_type, exc, tb):
             return False
 
     monkeypatch.setattr(runner, "run_streaming_command", fake_stream)
@@ -217,7 +218,10 @@ def test_cve_runner_update_db_uses_streaming_command(monkeypatch) -> None:
     assert "--update" in captured[0]
     assert "now" in captured[0]
     assert captured[0][-1] == r"C:\temp\cve-update"
-    assert captured[0][captured[0].index("--output-file") + 1] == r"C:\temp\cve-update\update-db.json"
+    # Build the expected path with os.path.join so the assertion checks the
+    # join logic, not the platform-specific separator (\\ on Windows, / on POSIX).
+    expected_output = os.path.join(r"C:\temp\cve-update", "update-db.json")
+    assert captured[0][captured[0].index("--output-file") + 1] == expected_output
 
 
 def test_cve_runner_merge_unpack_summaries_accumulates_counts() -> None:
@@ -225,7 +229,12 @@ def test_cve_runner_merge_unpack_summaries_accumulates_counts() -> None:
 
     merged = runner._merge_unpack_summaries(
         {"archives_total": 1, "files_extracted": 1, "extraction_root": r"D:\out"},
-        {"archives_total": 2, "files_extracted": 5, "missing_tool": 1, "extraction_root": r"D:\other"},
+        {
+            "archives_total": 2,
+            "files_extracted": 5,
+            "missing_tool": 1,
+            "extraction_root": r"D:\other",
+        },
     )
 
     assert merged["archives_total"] == 3
@@ -250,7 +259,7 @@ def test_cve_runner_expand_nested_archives_processes_new_archives_only(tmp_path:
         def __init__(self, count: int) -> None:
             self.summary = {"archives_total": 1, "files_extracted": count}
 
-    def fake_inspect_artifacts(path: Path, output_root: Path, **kwargs):  # noqa: ANN001
+    def fake_inspect_artifacts(path: Path, output_root: Path, **kwargs):
         calls.append(path)
         return FakeResult(1)
 
@@ -268,19 +277,23 @@ def test_cve_runner_unpack_archives_passes_extract_target(monkeypatch, tmp_path:
     captured: dict[str, object] = {}
 
     class FakeResult:
-        summary = {"archives_total": 1, "files_extracted": 1}
+        summary: ClassVar[dict] = {"archives_total": 1, "files_extracted": 1}
         extraction_root = str(tmp_path / "out")
 
-    def fake_inspect_artifacts(source_root, output_root, **kwargs):  # noqa: ANN001
+    def fake_inspect_artifacts(source_root, output_root, **kwargs):
         captured["source_root"] = source_root
         captured["output_root"] = output_root
         captured["kwargs"] = kwargs
         return FakeResult()
 
-    monkeypatch.setitem(sys.modules, "local_codex_lite.artifact_unpack", SimpleNamespace(
-        archive_format=lambda path: "unsupported",
-        inspect_artifacts=fake_inspect_artifacts,
-    ))
+    monkeypatch.setitem(
+        sys.modules,
+        "local_codex_lite.artifact_unpack",
+        SimpleNamespace(
+            archive_format=lambda path: "unsupported",
+            inspect_artifacts=fake_inspect_artifacts,
+        ),
+    )
     monkeypatch.setattr(runner, "_expand_nested_archives", lambda *args, **kwargs: {})
 
     summary = runner.unpack_archives(source, tmp_path / "out")
@@ -377,7 +390,7 @@ def test_cli_parser_defaults_cve_min_severity_to_high() -> None:
 def test_cmd_evidence_cve_scan_builds_status_command(monkeypatch) -> None:
     captured: list[list[str]] = []
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):  # noqa: ANN001
+    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):
         captured.append(cmd)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
@@ -405,7 +418,7 @@ def test_cmd_evidence_cve_scan_builds_status_command(monkeypatch) -> None:
 def test_cmd_evidence_cve_scan_builds_scan_command(monkeypatch) -> None:
     captured: list[list[str]] = []
 
-    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):  # noqa: ANN001
+    def fake_run(cmd, check=False, capture_output=False, text=False, encoding=None, errors=None):
         captured.append(cmd)
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 

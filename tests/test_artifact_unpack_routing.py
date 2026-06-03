@@ -11,6 +11,7 @@ Scenarios mirror real-world usage:
   5. multiple archives       → each unpacks to its own sub-folder under dest
   6. destination is new      → must be created automatically
 """
+
 from __future__ import annotations
 
 import argparse
@@ -22,13 +23,13 @@ from pathlib import Path
 
 import pytest
 
-from local_codex_lite.artifact_unpack import inspect_artifacts, _resolve_extraction_root
+from local_codex_lite.artifact_unpack import _resolve_extraction_root, inspect_artifacts
 from local_codex_lite.cli_evidence import cmd_evidence_artifacts_inspect
-
 
 # ---------------------------------------------------------------------------
 # Unit tests for _resolve_extraction_root
 # ---------------------------------------------------------------------------
+
 
 def test_resolve_root_source_is_dir_returns_source(tmp_path: Path) -> None:
     """Default: source dir  → extract inside that same dir."""
@@ -58,6 +59,7 @@ def test_resolve_root_explicit_extract_to_wins(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Integration tests using inspect_artifacts()
 # ---------------------------------------------------------------------------
+
 
 def _make_zip(path: Path, entries: dict[str, str]) -> None:
     with zipfile.ZipFile(path, "w") as zf:
@@ -145,7 +147,7 @@ def test_multiple_archives_each_gets_own_subfolder(tmp_path: Path) -> None:
     source = tmp_path / "many"
     source.mkdir()
     _make_zip(source / "alpha.zip", {"a.txt": "A"})
-    _make_zip(source / "beta.zip",  {"b.txt": "B"})
+    _make_zip(source / "beta.zip", {"b.txt": "B"})
     dest = tmp_path / "out"
 
     result = inspect_artifacts(source, tmp_path / "ev", extract=True, extract_to=dest)
@@ -173,6 +175,7 @@ def test_tar_gz_default_extract_same_dir(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # CLI layer: both positional arg and --extract-to flag
 # ---------------------------------------------------------------------------
+
 
 def test_cli_default_extracts_to_source_dir(tmp_path: Path, monkeypatch) -> None:
     """CLI without extract_to argument: unpack in the same directory as source."""

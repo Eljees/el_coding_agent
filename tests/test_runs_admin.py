@@ -1,4 +1,5 @@
 """Tests for `local_codex_lite runs archive` / `runs prune`."""
+
 from __future__ import annotations
 
 import argparse
@@ -20,7 +21,9 @@ from local_codex_lite.runs_admin import (
 )
 
 
-def _make_run(tmp_path: Path, run_id: str, *, age_days: float = 0.0, files: dict[str, str] | None = None) -> Path:
+def _make_run(
+    tmp_path: Path, run_id: str, *, age_days: float = 0.0, files: dict[str, str] | None = None
+) -> Path:
     run_dir = tmp_path / ".local-codex-lite" / "runs" / run_id
     run_dir.mkdir(parents=True)
     files = files or {"task.txt": run_id, "result.json": "{}"}
@@ -39,6 +42,7 @@ def _make_run(tmp_path: Path, run_id: str, *, age_days: float = 0.0, files: dict
 # ---------------------------------------------------------------------------
 # list_run_entries / select_for_archival / archive_run
 # ---------------------------------------------------------------------------
+
 
 def test_list_run_entries_empty_when_no_runs(tmp_path: Path) -> None:
     assert list_run_entries(tmp_path) == []
@@ -77,6 +81,7 @@ def test_archive_run_produces_readable_zip(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # cmd_runs_archive
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_archive_returns_1_when_no_runs(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
@@ -125,6 +130,7 @@ def test_cmd_archive_skips_fresh_runs(tmp_path: Path, monkeypatch) -> None:
 # cmd_runs_prune is archive+remove
 # ---------------------------------------------------------------------------
 
+
 def test_cmd_prune_apply_archives_and_removes(tmp_path: Path, monkeypatch) -> None:
     run_dir = _make_run(tmp_path, "old1", age_days=40)
     monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
@@ -137,6 +143,7 @@ def test_cmd_prune_apply_archives_and_removes(tmp_path: Path, monkeypatch) -> No
 # ---------------------------------------------------------------------------
 # argparse wiring
 # ---------------------------------------------------------------------------
+
 
 def test_build_parser_runs_archive() -> None:
     parser = cli.build_parser()
@@ -156,10 +163,10 @@ def test_build_parser_runs_prune_defaults() -> None:
     assert ns.apply is False
 
 
-
 # ---------------------------------------------------------------------------
 # cmd_runs_export
 # ---------------------------------------------------------------------------
+
 
 def test_cmd_export_returns_1_for_missing_run(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
@@ -169,14 +176,16 @@ def test_cmd_export_returns_1_for_missing_run(tmp_path: Path, monkeypatch) -> No
 
 def test_cmd_export_default_writes_next_to_run(tmp_path: Path, monkeypatch) -> None:
     """When --out is omitted the zip lands beside the run directory."""
-    run_dir = _make_run(tmp_path, "20260516-101010-000000-abc",
-                       files={"task.txt": "x", "events.jsonl": "{}"})
+    run_dir = _make_run(
+        tmp_path, "20260516-101010-000000-abc", files={"task.txt": "x", "events.jsonl": "{}"}
+    )
     monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
     rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=None))
     assert rc == 0
     assert (run_dir.parent / f"{run_dir.name}.zip").exists()
     assert run_dir.exists()  # source not removed
     import zipfile
+
     with zipfile.ZipFile(run_dir.parent / f"{run_dir.name}.zip") as zf:
         names = sorted(zf.namelist())
     assert any(n.endswith("task.txt") for n in names)
@@ -212,6 +221,7 @@ def test_cmd_export_overwrites_existing_zip(tmp_path: Path, monkeypatch) -> None
     rc = runs_admin.cmd_runs_export(argparse.Namespace(run=run_dir.name, out=None))
     assert rc == 0
     import zipfile
+
     with zipfile.ZipFile(run_dir.parent / f"{run_dir.name}.zip") as zf:
         contents = {n: zf.read(n) for n in zf.namelist() if n.endswith("task.txt")}
     assert any(v == b"second" for v in contents.values())
@@ -220,6 +230,7 @@ def test_cmd_export_overwrites_existing_zip(tmp_path: Path, monkeypatch) -> None
 # ---------------------------------------------------------------------------
 # argparse wiring for runs export
 # ---------------------------------------------------------------------------
+
 
 def test_build_parser_runs_export_defaults() -> None:
     parser = cli.build_parser()

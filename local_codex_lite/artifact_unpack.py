@@ -210,16 +210,65 @@ def _inspect_one(
     fmt = archive_format(archive_path)
     try:
         if fmt in _ZIP_LIKE_FORMATS:
-            return _inspect_zip(archive_path, source_root, extraction_root, extract, remaining_files, remaining_bytes)
+            return _inspect_zip(
+                archive_path,
+                source_root,
+                extraction_root,
+                extract,
+                remaining_files,
+                remaining_bytes,
+            )
         if fmt in {"tar", "tar_gz", "tgz", "tar_bz2", "tbz2", "tar_xz", "txz"}:
-            return _inspect_tar(archive_path, source_root, extraction_root, extract, remaining_files, remaining_bytes)
+            return _inspect_tar(
+                archive_path,
+                source_root,
+                extraction_root,
+                extract,
+                remaining_files,
+                remaining_bytes,
+            )
         if fmt == "gz":
-            return _inspect_gzip(archive_path, source_root, extraction_root, extract, remaining_files, remaining_bytes)
+            return _inspect_gzip(
+                archive_path,
+                source_root,
+                extraction_root,
+                extract,
+                remaining_files,
+                remaining_bytes,
+            )
         if fmt in _EXTERNAL_FORMATS:
-            return _inspect_external(archive_path, source_root, extraction_root, extract, remaining_files, remaining_bytes)
-        return _record_error(archive_path, source_root, fmt, "unsupported", "unsupported_format", "Unsupported archive format.")
-    except (OSError, ValueError, zipfile.BadZipFile, tarfile.TarError, EOFError, UnicodeDecodeError) as exc:
-        return _record_error(archive_path, source_root, fmt, "stdlib", "archive_read_failed", f"{exc.__class__.__name__}: {exc}")
+            return _inspect_external(
+                archive_path,
+                source_root,
+                extraction_root,
+                extract,
+                remaining_files,
+                remaining_bytes,
+            )
+        return _record_error(
+            archive_path,
+            source_root,
+            fmt,
+            "unsupported",
+            "unsupported_format",
+            "Unsupported archive format.",
+        )
+    except (
+        OSError,
+        ValueError,
+        zipfile.BadZipFile,
+        tarfile.TarError,
+        EOFError,
+        UnicodeDecodeError,
+    ) as exc:
+        return _record_error(
+            archive_path,
+            source_root,
+            fmt,
+            "stdlib",
+            "archive_read_failed",
+            f"{exc.__class__.__name__}: {exc}",
+        )
 
 
 def _inspect_zip(
@@ -240,23 +289,62 @@ def _inspect_zip(
             members.append(member)
         issue = _first_member_issue(members)
         if issue:
-            return _record(archive_path, source_root, "zip", "python.zipfile", "blocked", members, [], "unsafe_member_path", issue), 0, 0
+            return (
+                _record(
+                    archive_path,
+                    source_root,
+                    "zip",
+                    "python.zipfile",
+                    "blocked",
+                    members,
+                    [],
+                    "unsafe_member_path",
+                    issue,
+                ),
+                0,
+                0,
+            )
         if any(item.encrypted for item in members):
-            return _record(archive_path, source_root, "zip", "python.zipfile", "blocked", members, [], "encrypted_archive", "Encrypted zip entries require a password."), 0, 0
+            return (
+                _record(
+                    archive_path,
+                    source_root,
+                    "zip",
+                    "python.zipfile",
+                    "blocked",
+                    members,
+                    [],
+                    "encrypted_archive",
+                    "Encrypted zip entries require a password.",
+                ),
+                0,
+                0,
+            )
         if extract:
             target_root = _archive_extract_root(extraction_root, source_root, archive_path)
             for info, member in zip(zf.infolist(), members, strict=False):
                 if member.is_dir:
                     continue
-                _enforce_budget(used_files + 1, used_bytes + (member.size or 0), remaining_files, remaining_bytes)
+                _enforce_budget(
+                    used_files + 1,
+                    used_bytes + (member.size or 0),
+                    remaining_files,
+                    remaining_bytes,
+                )
                 target = _safe_target(target_root, member.path)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(info) as src, target.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
                 used_files += 1
                 used_bytes += member.size or 0
-    extracted = _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
-    return _record(archive_path, source_root, "zip", "python.zipfile", "ok", members, extracted), used_files, used_bytes
+    extracted = (
+        _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
+    )
+    return (
+        _record(archive_path, source_root, "zip", "python.zipfile", "ok", members, extracted),
+        used_files,
+        used_bytes,
+    )
 
 
 def _inspect_tar(
@@ -279,13 +367,32 @@ def _inspect_tar(
             members.append(member)
         issue = _first_member_issue(members)
         if issue:
-            return _record(archive_path, source_root, archive_format(archive_path), "python.tarfile", "blocked", members, [], "unsafe_member_path", issue), 0, 0
+            return (
+                _record(
+                    archive_path,
+                    source_root,
+                    archive_format(archive_path),
+                    "python.tarfile",
+                    "blocked",
+                    members,
+                    [],
+                    "unsafe_member_path",
+                    issue,
+                ),
+                0,
+                0,
+            )
         if extract:
             target_root = _archive_extract_root(extraction_root, source_root, archive_path)
             for info, member in zip(tar_members, members, strict=False):
                 if member.is_dir:
                     continue
-                _enforce_budget(used_files + 1, used_bytes + (member.size or 0), remaining_files, remaining_bytes)
+                _enforce_budget(
+                    used_files + 1,
+                    used_bytes + (member.size or 0),
+                    remaining_files,
+                    remaining_bytes,
+                )
                 target = _safe_target(target_root, member.path)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 source = tf.extractfile(info)
@@ -295,8 +402,22 @@ def _inspect_tar(
                     shutil.copyfileobj(source, dst)
                 used_files += 1
                 used_bytes += member.size or 0
-    extracted = _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
-    return _record(archive_path, source_root, archive_format(archive_path), "python.tarfile", "ok", members, extracted), used_files, used_bytes
+    extracted = (
+        _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
+    )
+    return (
+        _record(
+            archive_path,
+            source_root,
+            archive_format(archive_path),
+            "python.tarfile",
+            "ok",
+            members,
+            extracted,
+        ),
+        used_files,
+        used_bytes,
+    )
 
 
 def _inspect_gzip(
@@ -312,17 +433,39 @@ def _inspect_gzip(
     member = _member(member_name, size, False)
     issue = _first_member_issue([member])
     if issue:
-        return _record(archive_path, source_root, "gz", "python.gzip", "blocked", [member], [], "unsafe_member_path", issue), 0, 0
+        return (
+            _record(
+                archive_path,
+                source_root,
+                "gz",
+                "python.gzip",
+                "blocked",
+                [member],
+                [],
+                "unsafe_member_path",
+                issue,
+            ),
+            0,
+            0,
+        )
     used_bytes = size or 0
-    _enforce_budget(1 if extract else 0, used_bytes if extract else 0, remaining_files, remaining_bytes)
+    _enforce_budget(
+        1 if extract else 0, used_bytes if extract else 0, remaining_files, remaining_bytes
+    )
     if extract:
         target_root = _archive_extract_root(extraction_root, source_root, archive_path)
         target = _safe_target(target_root, member.path)
         target.parent.mkdir(parents=True, exist_ok=True)
         with gzip.open(archive_path, "rb") as src, target.open("wb") as dst:
             shutil.copyfileobj(src, dst)
-    extracted = _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
-    return _record(archive_path, source_root, "gz", "python.gzip", "ok", [member], extracted), 1 if extract else 0, used_bytes if extract else 0
+    extracted = (
+        _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
+    )
+    return (
+        _record(archive_path, source_root, "gz", "python.gzip", "ok", [member], extracted),
+        1 if extract else 0,
+        used_bytes if extract else 0,
+    )
 
 
 def _inspect_external(
@@ -348,10 +491,26 @@ def _inspect_external(
     issue = _first_member_issue(members)
     allow_7z_safe_skip = extract and fmt in {"rpm", "cpio"}
     if issue and not allow_7z_safe_skip:
-        return _record(archive_path, source_root, fmt, executable.name, "blocked", members, [], "unsafe_member_path", issue), 0, 0
+        return (
+            _record(
+                archive_path,
+                source_root,
+                fmt,
+                executable.name,
+                "blocked",
+                members,
+                [],
+                "unsafe_member_path",
+                issue,
+            ),
+            0,
+            0,
+        )
     total_size = sum(item.size or 0 for item in members if not item.is_dir)
     file_count = sum(1 for item in members if not item.is_dir)
-    _enforce_budget(file_count if extract else 0, total_size if extract else 0, remaining_files, remaining_bytes)
+    _enforce_budget(
+        file_count if extract else 0, total_size if extract else 0, remaining_files, remaining_bytes
+    )
     if extract:
         target_root = _archive_extract_root(extraction_root, source_root, archive_path)
         target_root.mkdir(parents=True, exist_ok=True)
@@ -367,21 +526,48 @@ def _inspect_external(
         if result.returncode != 0:
             extracted = _relative_extracted_files(extraction_root, source_root, archive_path)
             warning_text = _compact_text(result.stderr or result.stdout)
-            if extracted and "dangerous link path was ignored" in (result.stderr or result.stdout).lower():
-                return _record(
+            if (
+                extracted
+                and "dangerous link path was ignored" in (result.stderr or result.stdout).lower()
+            ):
+                return (
+                    _record(
+                        archive_path,
+                        source_root,
+                        fmt,
+                        executable.name,
+                        "ok",
+                        members,
+                        extracted,
+                        "extract_warnings",
+                        warning_text,
+                    ),
+                    len(extracted),
+                    total_size,
+                )
+            return (
+                _record(
                     archive_path,
                     source_root,
                     fmt,
                     executable.name,
-                    "ok",
+                    "failed",
                     members,
-                    extracted,
-                    "extract_warnings",
+                    [],
+                    "extract_failed",
                     warning_text,
-                ), len(extracted), total_size
-            return _record(archive_path, source_root, fmt, executable.name, "failed", members, [], "extract_failed", warning_text), 0, 0
-    extracted = _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
-    return _record(archive_path, source_root, fmt, executable.name, "ok", members, extracted), file_count if extract else 0, total_size if extract else 0
+                ),
+                0,
+                0,
+            )
+    extracted = (
+        _relative_extracted_files(extraction_root, source_root, archive_path) if extract else []
+    )
+    return (
+        _record(archive_path, source_root, fmt, executable.name, "ok", members, extracted),
+        file_count if extract else 0,
+        total_size if extract else 0,
+    )
 
 
 def _list_7z_members(executable: Path, archive_path: Path) -> list[ArchiveMember]:
@@ -422,10 +608,19 @@ def _member_from_7z(data: dict[str, str]) -> ArchiveMember:
     return _member(path, size, is_dir="D" in attributes, encrypted=encrypted)
 
 
-def _member(path: str, size: int | None, is_dir: bool, *, encrypted: bool = False, unsafe_reason: str | None = None) -> ArchiveMember:
+def _member(
+    path: str,
+    size: int | None,
+    is_dir: bool,
+    *,
+    encrypted: bool = False,
+    unsafe_reason: str | None = None,
+) -> ArchiveMember:
     normalized = path.replace("\\", "/").strip("/")
     reason = unsafe_reason or _unsafe_member_reason(path)
-    return ArchiveMember(path=normalized, size=size, is_dir=is_dir, encrypted=encrypted, unsafe_reason=reason)
+    return ArchiveMember(
+        path=normalized, size=size, is_dir=is_dir, encrypted=encrypted, unsafe_reason=reason
+    )
 
 
 def _unsafe_member_reason(path: str) -> str | None:
@@ -455,7 +650,7 @@ def _archive_extract_root(extraction_root: Path, source_root: Path, archive_path
     safe_parts = [part for part in rel.parts if part not in {"", ".", ".."}]
     if not safe_parts:
         safe_parts = [archive_path.name]
-    stemmed = list(safe_parts[:-1]) + [_archive_output_name(safe_parts[-1])]
+    stemmed = [*safe_parts[:-1], _archive_output_name(safe_parts[-1])]
     return extraction_root.joinpath(*stemmed)
 
 
@@ -475,11 +670,17 @@ def _safe_target(target_root: Path, member_path: str) -> Path:
     return target
 
 
-def _relative_extracted_files(extraction_root: Path, source_root: Path, archive_path: Path) -> list[str]:
+def _relative_extracted_files(
+    extraction_root: Path, source_root: Path, archive_path: Path
+) -> list[str]:
     target_root = _archive_extract_root(extraction_root, source_root, archive_path)
     if not target_root.exists():
         return []
-    return sorted(path.relative_to(extraction_root).as_posix() for path in target_root.rglob("*") if path.is_file())
+    return sorted(
+        path.relative_to(extraction_root).as_posix()
+        for path in target_root.rglob("*")
+        if path.is_file()
+    )
 
 
 def _enforce_budget(files: int, bytes_: int, max_files: int, max_total_bytes: int) -> None:
@@ -570,7 +771,11 @@ def _record_error(
     error_code: str,
     message: str,
 ) -> tuple[ArchiveRecord, int, int]:
-    return _record(archive_path, source_root, fmt, backend, "failed", [], [], error_code, message), 0, 0
+    return (
+        _record(archive_path, source_root, fmt, backend, "failed", [], [], error_code, message),
+        0,
+        0,
+    )
 
 
 def _display_archive_path(archive_path: Path, source_root: Path) -> str:
@@ -609,7 +814,6 @@ def _summarize(records: list[ArchiveRecord]) -> dict[str, int]:
     return summary
 
 
-
 def _compact_text(text: str, limit: int = 600) -> str:
     compact = " ".join(text.split())
     if len(compact) <= limit:
@@ -619,5 +823,7 @@ def _compact_text(text: str, limit: int = 600) -> str:
 
 def write_result(path: Path, result: ArtifactInspectResult) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(result_as_dict(result), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(result_as_dict(result), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     return path

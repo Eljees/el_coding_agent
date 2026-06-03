@@ -1,229 +1,106 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import sys
-from subprocess import CompletedProcess, run as subprocess_run
-from pathlib import Path
-from typing import Any
+import sys  # noqa: F401  # re-exported as cli.sys; patched by the stdin-evidence tests
 
-from .config import UnknownProfileError, apply_profile, config_as_dict, config_path, default_config, load_config, save_config
-from .doctor import preview_patch, run_dependency_doctor, run_doctor, run_full_doctor, run_rag_doctor
-from .evidence_mode import create_evidence_bundle, save_raw_text, save_summary_json, save_summary_text, write_status
-from .logging_utils import (
-    dump_json,
-    dump_text,
-    latest_events_path,
-    latest_session_dir,
-    resolve_run_dir,
-    run_summary,
-    session_dir,
-    tail_events_text,
+from .cli_evidence import (
+    cmd_evidence_artifacts_inspect,
+    cmd_evidence_cve_scan,
+    cmd_evidence_cve_scan_history,
+    cmd_evidence_json_compare,
+    cmd_evidence_trufflehog_analyze,
+    cmd_evidence_trufflehog_compare,
+    cmd_evidence_trufflehog_scan,
 )
-from .planner import make_patch, make_plan
-from .planner import make_review
-from .project_workspace import resolve_task_workspace
-from .prompts import ask_prompt
-from .capabilities import default_capabilities, discover_capabilities
-from .intent import decision_as_dict, recognize_intent
-from .llm_client import OpenAICompatibleClient
-from .rag import (
-    RagProviderError,
-    format_retrieved_context,
-    index_workspace as rag_index_workspace,
-    query_index as rag_query_index,
+from .cli_info import (
+    cmd_config_show,
+    cmd_init,
+    cmd_recognize,
+    cmd_status,
 )
-from .patcher import detect_runtime_fix_context
+from .cli_logs import (
+    cmd_logs_diff,
+    cmd_logs_latest,
+    cmd_logs_show,
+    cmd_logs_tail,
+)
+from .cli_parser import build_parser
+from .cli_query import cmd_ask, cmd_preview
+from .cli_rag import cmd_rag_index, cmd_rag_query
+from .cli_review import (
+    cmd_review,
+)
+from .cli_utils import (
+    ensure_utf8_output as _ensure_utf8_output,
+)
+from .cli_utils import (
+    load_evidence_block as _load_evidence_block,
+)
+from .cli_utils import (
+    load_rag_context as _load_rag_context,
+)
+from .cli_utils import (
+    load_urls as _load_urls,
+)
+from .cli_utils import (
+    log_patch_error as _log_patch_error,
+)
+from .cli_utils import (
+    looks_like_shell_command as _looks_like_shell_command,
+)
+from .cli_utils import (
+    merge_context_blocks as _merge_context_blocks,
+)
+from .cli_utils import (
+    normalize_suggested_commands as _normalize_suggested_commands,
+)
+from .cli_utils import (
+    print_patch_error as _print_patch_error,
+)
+from .cli_utils import (
+    print_plan_summary as _print_plan_summary,
+)
+from .cli_utils import (
+    print_retrieved_rag_context as _print_retrieved_rag_context,
+)
+from .cli_utils import (
+    print_selected_files as _print_selected_files,
+)
+from .cli_utils import (
+    read_stdin_evidence as _read_stdin_evidence,
+)
+from .cli_utils import (
+    render_evidence_item as _render_evidence_item,
+)
+from .cli_utils import (
+    sanitize_log_text as _sanitize_log_text,
+)
+from .cli_utils import (
+    selected_files as _selected_files,
+)
+
+# ── helpers from split modules (re-exported for backward compatibility) ───────
+from .cli_utils import (
+    workspace_root,
+)
+from .config import (
+    default_config,
+)
+from .doctor import (
+    run_dependency_doctor,
+    run_doctor,
+    run_full_doctor,
+    run_rag_doctor,
+)
 from .plugins_cmd import cmd_plugins_list
 from .replay import cmd_replay
 from .runs_admin import cmd_runs_archive, cmd_runs_export, cmd_runs_prune
-from .undo import cmd_undo
 from .ui import run_command_center_ui
-from .workspace import read_file_chunks
-from .evidence import save_evidence
-
-# ── helpers from split modules (re-exported for backward compatibility) ───────
-from .cli_utils import (  # noqa: F401
-    workspace_root,
-    ensure_utf8_output as _ensure_utf8_output,
-    print_selected_files as _print_selected_files,
-    print_plan_summary as _print_plan_summary,
-    print_patch_error as _print_patch_error,
-    log_patch_error as _log_patch_error,
-    sanitize_log_text as _sanitize_log_text,
-    selected_files as _selected_files,
-    load_urls as _load_urls,
-    normalize_suggested_commands as _normalize_suggested_commands,
-    looks_like_shell_command as _looks_like_shell_command,
-    load_evidence_block as _load_evidence_block,
-    load_rag_context as _load_rag_context,
-    print_retrieved_rag_context as _print_retrieved_rag_context,
-    merge_context_blocks as _merge_context_blocks,
-    render_evidence_item as _render_evidence_item,
-    read_stdin_evidence as _read_stdin_evidence,
-    console,
-)
-from .cli_evidence import (  # noqa: F401
-    cmd_evidence_json_compare,
-    cmd_evidence_artifacts_inspect,
-    cmd_evidence_trufflehog_scan,
-    cmd_evidence_trufflehog_analyze,
-    cmd_evidence_trufflehog_compare,
-    cmd_evidence_cve_scan,
-    cmd_evidence_cve_scan_history,
-)
-
-
-def cmd_init(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    path = config_path(root)
-    if path.exists():
-        console.print(f"Config already exists: {path}")
-        return 0
-    save_config(root, default_config())
-    console.print(f"Created {path}")
-    return 0
-
-
-def cmd_config_show(args: argparse.Namespace) -> int:
-    cfg = load_config(workspace_root())
-    console.print_json(json.dumps(config_as_dict(cfg), ensure_ascii=False, indent=2))
-    return 0
-
-
-def cmd_status(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    cfg = load_config(root)
-    console.print(f"Workspace: {root}")
-    console.print(f"Config: {config_path(root)}")
-    console.print(f"LLM: {cfg.llm.base_url} / {cfg.llm.model}")
-    return 0
-
-
-def cmd_recognize(args: argparse.Namespace) -> int:
-    decision = recognize_intent(args.task, discover_capabilities())
-    console.print_json(json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2))
-    return 0
+from .undo import cmd_undo
 
 
 def cmd_ui(args: argparse.Namespace) -> int:
     return run_command_center_ui(autoclose_ms=getattr(args, "autoclose_ms", None))
-
-
-def cmd_preview(args: argparse.Namespace) -> int:
-    base_root = workspace_root()
-    root = resolve_task_workspace(base_root, args.task)
-    if root != base_root:
-        console.print(f"Project workspace: {root}")
-    cfg = load_config(root)
-    try:
-        cfg = apply_profile(cfg, getattr(args, "profile", None))
-    except UnknownProfileError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return 1
-    evidence_text = _load_evidence_block(args.evidence_file, use_stdin=args.evidence_stdin)
-    runtime_fix = detect_runtime_fix_context(args.task, evidence_text, root)
-    rag_context_text = _load_rag_context(root, cfg, args.task) if getattr(args, "rag", False) else ""
-    selected = _selected_files(root, args.task, cfg)
-    _print_selected_files(root, selected)
-    if rag_context_text:
-        _print_retrieved_rag_context(rag_context_text)
-    try:
-        plan = make_plan(
-            args.task,
-            root,
-            cfg,
-            extra_context=_merge_context_blocks(evidence_text, rag_context_text),
-            runtime_fix=runtime_fix,
-        )
-        _print_plan_summary(plan)
-        patch = make_patch(
-            args.task,
-            plan,
-            root,
-            cfg,
-            extra_context=_merge_context_blocks(evidence_text, rag_context_text),
-            runtime_fix=runtime_fix,
-        )
-        return preview_patch(root, patch)
-    except RagProviderError as exc:
-        console.print("[red]RAG unavailable[/red]")
-        console.print(str(exc))
-        return 1
-    except Exception as exc:  # noqa: BLE001
-        console.print("[red]Preview failed[/red]")
-        console.print(f"{exc.__class__.__name__}: {exc}")
-        return 1
-
-
-def cmd_review(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    cfg = load_config(root)
-    try:
-        cfg = apply_profile(cfg, getattr(args, "profile", None))
-    except UnknownProfileError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return 1
-    run_dir = session_dir(root)
-    evidence_bundle = create_evidence_bundle(run_dir, source="manual", task="code review", run_id=run_dir.name)
-    task = "Review the current code changes for bugs, regressions, missing tests, and maintainability issues."
-    diff_text, diff_label = _load_review_diff(root, args)
-    if not diff_text.strip():
-        console.print("[red]No diff found to review.[/red]")
-        return 1
-    dump_text(run_dir / "review.diff", diff_text)
-    save_raw_text(evidence_bundle, "review.diff", diff_text)
-    save_summary_text(evidence_bundle, "review.diff", f"Reviewed diff source: {diff_label}")
-    review_paths = _extract_review_paths(diff_text)
-    selected_files = read_file_chunks(root, review_paths, cfg.workspace.max_file_bytes, cfg.safety.allow_sensitive_read)
-    if selected_files:
-        selected_payload = [
-            {"path": item.path.relative_to(root).as_posix(), "content_excerpt": item.content[:2000]}
-            for item in selected_files
-        ]
-        save_summary_json(evidence_bundle, "review_context.json", selected_payload)
-        dump_json(run_dir / "review_context.json", selected_payload)
-    context = _build_review_context(root, diff_text, review_paths, selected_files)
-    review = make_review(task, diff_text, root, cfg, run_dir=run_dir, extra_context=context)
-    dump_json(run_dir / "review.json", review)
-    save_evidence(run_dir, "review", review)
-    save_summary_json(evidence_bundle, "review.json", review)
-    write_status(evidence_bundle, status="ok", error_code=None, message="review completed", evidence_complete=True)
-    console.print("[bold]Code review[/bold]")
-    console.print_json(json.dumps(review, ensure_ascii=False, indent=2))
-    return 0
-
-
-# _run_task moved to local_codex_lite.runner.run_task in stage 3b.
-# We re-export it under the old underscore name so cli.main() and any
-# external code that imports cli._run_task keep working without change.
-from .runner import run_task as _run_task  # noqa: E402,F401
-
-
-def cmd_ask(question: str, args: argparse.Namespace) -> int:
-    root = workspace_root()
-    cfg = load_config(root)
-    try:
-        cfg = apply_profile(cfg, getattr(args, "profile", None))
-    except UnknownProfileError as exc:
-        console.print(f"[red]{exc}[/red]")
-        return 1
-    context = f"Workspace root: {root}\nConfig path: {config_path(root)}"
-    evidence_text = _load_evidence_block(args.evidence_file, use_stdin=args.evidence_stdin)
-    try:
-        rag_context_text = _load_rag_context(root, cfg, question) if getattr(args, "rag", False) else ""
-        client = OpenAICompatibleClient(cfg.llm)
-        if rag_context_text:
-            _print_retrieved_rag_context(rag_context_text)
-        messages = ask_prompt(question, context, evidence=evidence_text, rag_context=rag_context_text)
-        response = client.chat(messages, status_label="Answering question")
-        console.print(response.text)
-        return 0
-    except RagProviderError as exc:
-        console.print("[red]RAG unavailable[/red]")
-        console.print(str(exc))
-        return 1
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -234,356 +111,47 @@ def cmd_doctor_deps(args: argparse.Namespace) -> int:
     return run_dependency_doctor(workspace_root())
 
 
-def cmd_logs_latest(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    run_dir = latest_session_dir(root)
-    if run_dir is None:
-        console.print("No runs found.")
-        return 1
-    console.print(f"Latest run: {run_dir}")
-    events_path = latest_events_path(root)
-    if events_path is None:
-        console.print("No events.jsonl found in the latest run.")
-        console.print_json(json.dumps(run_summary(run_dir), ensure_ascii=False, indent=2))
-        return 0
-    console.print(events_path.read_text(encoding="utf-8"))
-    return 0
+# _run_task moved to local_codex_lite.runner.run_task in stage 3b.
+# We re-export it under the old underscore name so cli.main() and any
+# external code that imports cli._run_task keep working without change.
+from .runner import run_task as _run_task  # noqa: E402
 
-
-def cmd_logs_tail(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    run_dir = resolve_run_dir(root, args.run)
-    if run_dir is None:
-        console.print("No matching run found.")
-        return 1
-    console.print(f"Run: {run_dir}")
-    events_path = run_dir / "events.jsonl"
-    if events_path.exists():
-        console.print(tail_events_text(events_path, lines=args.lines))
-        return 0
-    console.print("No events.jsonl found; showing run summary instead.")
-    console.print_json(json.dumps(run_summary(run_dir), ensure_ascii=False, indent=2))
-    return 0
-
-
-def cmd_logs_show(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    run_dir = resolve_run_dir(root, args.run_id)
-    if run_dir is None:
-        console.print("No matching run found.")
-        return 1
-    summary = run_summary(run_dir)
-    console.print(f"Run: {summary['run_dir']}")
-    console.print(f"Task: {summary.get('task') or 'n/a'}")
-    console.print(f"Status: {summary.get('status')}")
-    console.print(f"Selected files: {summary.get('selected_files_count', 0)}")
-    console.print(f"Patch: {summary.get('patch_path') or 'n/a'}")
-    console.print(f"Evidence: {summary.get('evidence_path') or 'n/a'}")
-    if summary.get("patch_error_code"):
-        console.print(f"Patch error: {summary['patch_error_code']}")
-    evidence_status = summary.get("evidence_status") or {}
-    if evidence_status:
-        console.print(f"Evidence status: {evidence_status.get('status')} / {evidence_status.get('error_code') or 'ok'}")
-    artifacts = summary.get("artifacts") or []
-    if artifacts:
-        console.print("Artifacts:")
-        for artifact in artifacts:
-            console.print(f"- {artifact}")
-    return 0
-
-def cmd_logs_diff(args: argparse.Namespace) -> int:
-    """Print a side-by-side comparison of two run directories."""
-    root = workspace_root()
-    left_dir = resolve_run_dir(root, args.left)
-    right_dir = resolve_run_dir(root, args.right)
-    if left_dir is None:
-        console.print(f"[red]Left run not found:[/red] {args.left}")
-        return 1
-    if right_dir is None:
-        console.print(f"[red]Right run not found:[/red] {args.right}")
-        return 1
-
-    left = run_summary(left_dir)
-    right = run_summary(right_dir)
-
-    console.print(f"[bold]Left :[/bold] {left['run_dir']}")
-    console.print(f"[bold]Right:[/bold] {right['run_dir']}")
-    console.print("")
-
-    rows: list[tuple[str, str, str]] = []
-    def add(label: str, lkey: str, rkey: str | None = None) -> None:
-        rkey = rkey or lkey
-        rows.append((label, str(left.get(lkey) or ""), str(right.get(rkey) or "")))
-
-    add("status", "status")
-    add("task", "task")
-    add("plan summary", "plan_summary")
-    add("selected files", "selected_files_count")
-    add("patch error", "patch_error_code")
-
-    left_es = (left.get("evidence_status") or {})
-    right_es = (right.get("evidence_status") or {})
-    rows.append(("evidence", f"{left_es.get('status')}/{left_es.get('error_code') or 'ok'}",
-                 f"{right_es.get('status')}/{right_es.get('error_code') or 'ok'}"))
-
-    left_artifacts = set(left.get("artifacts") or [])
-    right_artifacts = set(right.get("artifacts") or [])
-    only_left = sorted(left_artifacts - right_artifacts)
-    only_right = sorted(right_artifacts - left_artifacts)
-    rows.append(("artifacts only left", "\n".join(only_left) or "-", ""))
-    rows.append(("artifacts only right", "", "\n".join(only_right) or "-"))
-
-    for label, lval, rval in rows:
-        console.print(f"[bold]{label}[/bold]")
-        console.print(f"  L: {lval if lval else '-'}")
-        console.print(f"  R: {rval if rval else '-'}")
-    return 0
-
-
-def cmd_rag_index(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    cfg = load_config(root)
-    try:
-        info = rag_index_workspace(root, cfg)
-    except RagProviderError as exc:
-        console.print("[red]RAG index failed[/red]")
-        console.print(str(exc))
-        return 1
-    console.print(f"RAG index built: {info.index_path}")
-    console.print(f"Provider: {info.provider}")
-    console.print(f"Chunks: {info.chunk_count}")
-    console.print(f"Files: {info.file_count}")
-    return 0
-
-
-def cmd_rag_query(args: argparse.Namespace) -> int:
-    root = workspace_root()
-    cfg = load_config(root)
-    try:
-        retrieved = rag_query_index(args.query, root, cfg, top_k=args.top_k)
-    except RagProviderError as exc:
-        console.print("[red]RAG query failed[/red]")
-        console.print(str(exc))
-        return 1
-    if not retrieved:
-        console.print("No RAG matches found.")
-        return 0
-    _print_retrieved_rag_context(format_retrieved_context(retrieved, cfg.rag.max_context_chars))
-    return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="local-codex-lite")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    sub.add_parser("init")
-    sub.add_parser("status")
-    p_recognize = sub.add_parser("recognize")
-    p_recognize.add_argument("task")
-    p_ui = sub.add_parser("ui")
-    p_ui.add_argument("--autoclose-ms", type=int)
-    p_doctor = sub.add_parser("doctor")
-    doctor_sub = p_doctor.add_subparsers(dest="doctor_command")
-    doctor_sub.required = False
-    p_doctor.set_defaults(doctor_command="run")
-    doctor_sub.add_parser("deps")
-    doctor_sub.add_parser("rag")
-    doctor_sub.add_parser("full", help="aggregate core + deps + rag + tool probes")
-    config_parser = sub.add_parser("config")
-    config_sub = config_parser.add_subparsers(dest="config_command", required=True)
-    config_sub.add_parser("show")
-
-    p_run = sub.add_parser("run")
-    p_run.add_argument("task")
-    p_run.add_argument("--dry-run", action="store_true")
-    p_run.add_argument("--apply", action="store_true")
-    p_run.add_argument("--exec", dest="execute", action="store_true",
-                       help="run suggested commands after a successful apply")
-    p_run.add_argument("--assume-clarification", action="store_true")
-    p_run.add_argument("--evidence-file", action="append", default=[])
-    p_run.add_argument("--evidence-stdin", action="store_true")
-    p_run.add_argument("--profile", default=None,
-                       help="select an llm_profiles entry from config.yaml for this invocation")
-    p_run.add_argument(
-        "--max-patch-attempts",
-        dest="max_patch_attempts",
-        type=int,
-        default=None,
-        help="override cfg.safety.max_patch_attempts for this run only",
-    )
-    p_run.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help="emit one JSON document on stdout (dry-run only); useful for scripting",
-    )
-
-    p_ask = sub.add_parser("ask")
-    p_ask.add_argument("question")
-    p_ask.add_argument("--evidence-file", action="append", default=[])
-    p_ask.add_argument("--evidence-stdin", action="store_true")
-    p_ask.add_argument("--profile", default=None,
-                       help="select an llm_profiles entry from config.yaml for this invocation")
-    p_ask.add_argument("--rag", action="store_true")
-
-    p_preview = sub.add_parser("preview")
-    p_preview.add_argument("task")
-    p_preview.add_argument("--evidence-file", action="append", default=[])
-    p_preview.add_argument("--evidence-stdin", action="store_true")
-    p_preview.add_argument("--profile", default=None,
-                       help="select an llm_profiles entry from config.yaml for this invocation")
-    p_preview.add_argument("--rag", action="store_true")
-
-    p_review = sub.add_parser("review")
-    p_review.add_argument("--base", default="")
-    p_review.add_argument("--head", default="HEAD")
-    p_review.add_argument("--staged", action="store_true")
-    p_review.add_argument("--diff-file", action="append", default=[])
-    p_review.add_argument("--diff-stdin", action="store_true")
-    p_review.add_argument("--profile", default=None,
-                          help="select an llm_profiles entry from config.yaml for this invocation")
-
-    p_rag = sub.add_parser("rag")
-    rag_sub = p_rag.add_subparsers(dest="rag_command", required=True)
-    p_rag_index = rag_sub.add_parser("index")
-    p_rag_index.add_argument("--rebuild", action="store_true")
-    p_rag_query = rag_sub.add_parser("query")
-    p_rag_query.add_argument("query")
-    p_rag_query.add_argument("--top-k", type=int, default=None)
-
-    p_runs = sub.add_parser("runs", help="manage .local-codex-lite/runs lifecycle")
-    runs_sub = p_runs.add_subparsers(dest="runs_command", required=True)
-    for runs_action in ("archive", "prune"):
-        sp = runs_sub.add_parser(
-            runs_action,
-            help=("archive" if runs_action == "archive" else "archive + remove")
-                 + " runs older than N days",
-        )
-        sp.add_argument("--older-than", dest="older_than", type=float, default=30.0,
-                        help="age threshold in days (default: 30)")
-        sp.add_argument("--apply", action="store_true",
-                        help="actually archive/remove; default is dry-run")
-        if runs_action == "archive":
-            sp.add_argument("--remove", action="store_true",
-                            help="delete the run dir after archiving (= 'prune')")
-    p_runs_export = runs_sub.add_parser(
-        "export",
-        help="zip a single run on demand (bug-report friendly)",
-    )
-    p_runs_export.add_argument("--run", default="latest",
-                               help="run id under .local-codex-lite/runs/, path, or 'latest'")
-    p_runs_export.add_argument("--out", default=None,
-                               help="output zip path or directory (default: next to the run)")
-
-    p_replay = sub.add_parser("replay", help="re-run a saved task without calling the LLM")
-    p_replay.add_argument("run_id", help="run id, path, or 'latest'")
-    p_replay.add_argument("--dry-run", action="store_true",
-                          help="print the cached plan + patch and exit")
-    p_replay.add_argument("--apply", action="store_true",
-                          help="re-apply the saved patch to the current workspace")
-    p_replay.add_argument("--profile", default=None,
-                          help="select an llm_profiles entry (affects only post-apply config, no LLM call)")
-
-    p_undo = sub.add_parser("undo", help="restore workspace files from a run's backups/")
-    p_undo.add_argument("--run", default="latest", help="run id under .local-codex-lite/runs/, or 'latest'")
-    p_undo.add_argument("--apply", action="store_true", help="actually overwrite the workspace; default is dry-run")
-
-    p_plugins = sub.add_parser(
-        "plugins",
-        help="inspect capability plugins discovered via entry_points",
-    )
-    plugins_sub = p_plugins.add_subparsers(dest="plugins_command", required=True)
-    p_plugins_list = plugins_sub.add_parser(
-        "list",
-        help="show every Capability the agent currently sees and its source",
-    )
-    p_plugins_list.add_argument(
-        "--plugins-only",
-        dest="plugins_only",
-        action="store_true",
-        help="show only entry-point contributed capabilities (drops built-ins)",
-    )
-    p_plugins_list.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help="emit machine-readable JSON instead of the text table",
-    )
-
-    p_logs = sub.add_parser("logs")
-    logs_sub = p_logs.add_subparsers(dest="logs_command", required=True)
-    logs_sub.add_parser("latest")
-    p_logs_tail = logs_sub.add_parser("tail")
-    p_logs_tail.add_argument("--lines", type=int, default=40)
-    p_logs_tail.add_argument("--run", default="latest")
-    p_logs_show = logs_sub.add_parser("show")
-    p_logs_show.add_argument("run_id")
-    p_logs_diff = logs_sub.add_parser("diff", help="compare two runs side-by-side")
-    p_logs_diff.add_argument("left", help="left run id, path, or 'latest'")
-    p_logs_diff.add_argument("right", help="right run id, path, or 'latest'")
-
-    p_evidence = sub.add_parser("evidence")
-    evidence_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
-
-    p_json = evidence_sub.add_parser("json-compare")
-    p_json.add_argument("left")
-    p_json.add_argument("right")
-    p_json.add_argument("--out")
-
-    p_artifacts = evidence_sub.add_parser("artifacts")
-    artifacts_sub = p_artifacts.add_subparsers(dest="artifacts_command", required=True)
-    p_artifacts_inspect = artifacts_sub.add_parser("inspect")
-    p_artifacts_inspect.add_argument("input_root")
-    p_artifacts_inspect.add_argument("extract_to", nargs="?")
-    p_artifacts_inspect.add_argument("--extract", action="store_true")
-    p_artifacts_inspect.add_argument("--extract-to", dest="extract_to_flag")
-    p_artifacts_inspect.add_argument("--max-depth", type=int, default=2)
-    p_artifacts_inspect.add_argument("--max-files", type=int, default=2000)
-    p_artifacts_inspect.add_argument("--max-total-bytes", type=int, default=500_000_000)
-
-    p_th = evidence_sub.add_parser("trufflehog")
-    th_sub = p_th.add_subparsers(dest="trufflehog_command", required=True)
-    p_th_scan = th_sub.add_parser("scan")
-    p_th_scan.add_argument("--repo-url", action="append")
-    p_th_scan.add_argument("--repo-file")
-    p_th_scan.add_argument("--git-user", default=os.environ.get("GITLAB_USER", "").strip())
-    p_th_scan.add_argument("--git-token", default=os.environ.get("GITLAB_TOKEN", "").strip())
-    p_th_scan.add_argument("--image", default=os.environ.get("TRUFFLEHOG_IMAGE", "trufflesecurity/trufflehog:3.94.1"))
-    p_th_scan.add_argument("--cache-root", default=os.environ.get("TRUFFLEHOG_CACHE_ROOT", ""))
-    p_th_scan.add_argument("--out-root", default=os.environ.get("TRUFFLEHOG_OUT_ROOT", ""))
-    p_th_scan.add_argument("--depth", type=int, default=1)
-    p_th_scan.add_argument("--keep-clones", action="store_true")
-
-    p_th_analyze = th_sub.add_parser("analyze")
-    p_th_analyze.add_argument("input_root")
-    p_th_analyze.add_argument("--out")
-
-    p_th_compare = th_sub.add_parser("compare")
-    p_th_compare.add_argument("left")
-    p_th_compare.add_argument("right")
-    p_th_compare.add_argument("--out")
-
-    p_cve_history = evidence_sub.add_parser(
-        "cve-scan-history",
-        help="list past cve-bin-tool scans by walking a directory tree",
-    )
-    p_cve_history.add_argument("path", nargs="?", default=None,
-                               help="root to walk; defaults to .local-codex-lite/runs")
-
-    p_cve = evidence_sub.add_parser("cve-scan", help="CVE scan tool runner")
-    p_cve.add_argument("action_or_input", nargs="?", help="status | install | update-db | scan | <input_root>")
-    p_cve.add_argument("input_root", nargs="?", help="Path to artifacts directory (may contain archives)")
-    p_cve.add_argument("--extract-to", dest="extract_to", default=None)
-    p_cve.add_argument("--output-dir", dest="output_dir", default=None)
-    p_cve.add_argument("--install", action="store_true", help="Auto-install cve-bin-tool if missing")
-    p_cve.add_argument("--update-db", dest="update_db", action="store_true", help="Update CVE database before scan")
-    p_cve.add_argument("--skip-unpack", dest="skip_unpack", action="store_true", help="Skip archive extraction")
-    p_cve.add_argument("--offline", action="store_true", help="Run cve-bin-tool in offline mode")
-    p_cve.add_argument("--min-severity", dest="min_severity", default="HIGH",
-                       choices=["LOW", "MEDIUM", "HIGH", "CRITICAL"])
-    p_cve.add_argument("--format", default="json,md,high-critical-md")
-
-    return parser
+# Names re-exported for external/test callers; keep in __all__ so the
+# ruff F401/isort autofix never strips them.
+__all__ = [
+    "_ensure_utf8_output",
+    "_load_evidence_block",
+    "_load_rag_context",
+    "_load_urls",
+    "_log_patch_error",
+    "_looks_like_shell_command",
+    "_merge_context_blocks",
+    "_normalize_suggested_commands",
+    "_print_patch_error",
+    "_print_plan_summary",
+    "_print_retrieved_rag_context",
+    "_print_selected_files",
+    "_read_stdin_evidence",
+    "_render_evidence_item",
+    "_run_task",
+    "_sanitize_log_text",
+    "_selected_files",
+    "build_parser",
+    "cmd_ask",
+    "cmd_config_show",
+    "cmd_init",
+    "cmd_logs_diff",
+    "cmd_logs_latest",
+    "cmd_logs_show",
+    "cmd_logs_tail",
+    "cmd_preview",
+    "cmd_rag_index",
+    "cmd_rag_query",
+    "cmd_recognize",
+    "cmd_review",
+    "cmd_status",
+    "default_config",
+]
 
 
 def main() -> int:
@@ -664,74 +232,6 @@ def main() -> int:
             return cmd_evidence_cve_scan_history(args)
     parser.print_help()
     return 1
-
-
-def _load_review_diff(root: Path, args: argparse.Namespace) -> tuple[str, str]:
-    if getattr(args, "diff_file", []):
-        parts: list[str] = []
-        for item in args.diff_file:
-            path = Path(item)
-            if not path.is_absolute():
-                path = root / path
-            if path.exists():
-                parts.append(path.read_text(encoding="utf-8", errors="replace"))
-        return ("\n\n".join(parts), "diff-file")
-    if getattr(args, "diff_stdin", False):
-        return (sys.stdin.read(), "stdin")
-    base = (getattr(args, "base", "") or "").strip()
-    head = (getattr(args, "head", "") or "HEAD").strip() or "HEAD"
-    if base:
-        diff = _git_diff(root, ["diff", "--no-ext-diff", "--unified=3", f"{base}...{head}"])
-        return (diff, f"{base}...{head}")
-    if getattr(args, "staged", False):
-        diff = _git_diff(root, ["diff", "--cached", "--no-ext-diff", "--unified=3"])
-        return (diff, "staged")
-    diff = _git_diff(root, ["diff", "--no-ext-diff", "--unified=3"])
-    return (diff, "working tree")
-
-
-def _git_diff(root: Path, git_args: list[str]) -> str:
-    completed: CompletedProcess[str] = subprocess_run(["git", *git_args], cwd=root, capture_output=True, text=True, check=False)
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or "git diff failed")
-    return completed.stdout
-
-
-def _extract_review_paths(diff_text: str) -> list[Path]:
-    paths: list[Path] = []
-    seen: set[str] = set()
-    for line in diff_text.splitlines():
-        if not (line.startswith("+++ b/") or line.startswith("--- a/")):
-            continue
-        raw = line[6:].strip()
-        if raw == "/dev/null":
-            continue
-        normalized = raw.replace("\\", "/")
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-        paths.append(Path(normalized))
-    return paths
-
-
-def _build_review_context(root: Path, diff_text: str, paths: list[Path], selected_files: list[Any]) -> str:
-    top_level = []
-    try:
-        top_level = [entry.name for entry in sorted(root.iterdir(), key=lambda item: item.name.lower())[:20]]
-    except OSError:
-        top_level = []
-    parts = ["# Review summary", f"Files touched: {len(paths)}"]
-    if top_level:
-        parts.extend(["", "# Top-level entries", *top_level])
-    if selected_files:
-        parts.append("")
-        parts.append("# Current file excerpts")
-        for item in selected_files:
-            parts.append(f"## {item.path.relative_to(root).as_posix()}")
-            parts.append(item.content[:2000])
-            parts.append("")
-    parts.extend(["", "# Diff", diff_text])
-    return "\n".join(parts).strip()
 
 
 if __name__ == "__main__":

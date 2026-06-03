@@ -4,10 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-
-_FILE_TOKEN_RE = re.compile(
-    r"(?P<path>(?:[A-Za-z]:[\\/])?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9_]+)"
-)
+_FILE_TOKEN_RE = re.compile(r"(?P<path>(?:[A-Za-z]:[\\/])?[A-Za-z0-9_./\\-]+\.[A-Za-z0-9_]+)")
 _CREATE_HINT_RE = re.compile(
     r"\b(create|new|add|make)\b|созда(?:й|ть)|нов(?:ый|ую)\s+файл",
     flags=re.IGNORECASE,

@@ -1,4 +1,5 @@
 """CLI handlers for evidence sub-commands (artifacts, trufflehog, json-compare, cve-scan)."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,6 +10,7 @@ import sys
 from pathlib import Path
 
 from .artifact_unpack import inspect_artifacts, render_markdown_report, result_as_dict
+from .cli_utils import console, load_urls, workspace_root
 from .evidence import compare_json_files
 from .evidence_mode import (
     create_evidence_bundle,
@@ -19,7 +21,6 @@ from .evidence_mode import (
 )
 from .logging_utils import dump_json, session_dir
 from .trufflehog import analyze_output_root, compare_trufflehog_outputs, scan_repo_urls
-from .cli_utils import console, load_urls, workspace_root
 
 
 def _candidate_exists(path: Path) -> bool:
@@ -34,7 +35,9 @@ def resolve_cve_skill_script(root: Path | None = None) -> Path:
     candidates: list[Path] = []
     package_root = Path(__file__).resolve().parents[1]
     candidates.append(package_root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
-    candidates.append(Path(__file__).resolve().parent / "skills" / "cve-bin-tool" / "run_cve_scan.py")
+    candidates.append(
+        Path(__file__).resolve().parent / "skills" / "cve-bin-tool" / "run_cve_scan.py"
+    )
     if root is not None:
         candidates.append(root / "skills" / "cve-bin-tool" / "run_cve_scan.py")
     candidates.append(workspace_root() / "skills" / "cve-bin-tool" / "run_cve_scan.py")
@@ -295,7 +298,9 @@ def cmd_evidence_cve_scan_history(args: argparse.Namespace) -> int:
     search root does not exist.
     """
     root = workspace_root()
-    search_root = Path(args.path) if getattr(args, "path", None) else root / ".local-codex-lite" / "runs"
+    search_root = (
+        Path(args.path) if getattr(args, "path", None) else root / ".local-codex-lite" / "runs"
+    )
     if not search_root.exists():
         console.print(f"[red]No such directory:[/red] {search_root}")
         return 1

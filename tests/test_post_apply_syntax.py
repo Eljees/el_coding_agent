@@ -1,24 +1,25 @@
 """Tests for the post-apply AST validator that rejects syntactically broken
 Python patches.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
 
+from local_codex_lite.patch_errors import classify_python_syntax_error
 from local_codex_lite.patcher import (
     SyntaxIssue,
     backup_paths,
     restore_from_run_backups,
     validate_python_syntax,
 )
-from local_codex_lite.patch_errors import classify_python_syntax_error
-
 
 # ---------------------------------------------------------------------------
 # validate_python_syntax
 # ---------------------------------------------------------------------------
+
 
 def test_validate_python_syntax_accepts_clean_file(tmp_path: Path) -> None:
     p = tmp_path / "ok.py"
@@ -63,6 +64,7 @@ def test_validate_python_syntax_reports_each_broken_file(tmp_path: Path) -> None
 # restore_from_run_backups (companion to validate_python_syntax)
 # ---------------------------------------------------------------------------
 
+
 def test_restore_from_run_backups_round_trip(tmp_path: Path) -> None:
     """backup_paths writes <run_dir>/backups/<rel>; restore_from_run_backups
     copies them back over the workspace.  Together they round-trip cleanly."""
@@ -100,6 +102,7 @@ def test_restore_from_run_backups_skips_missing(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # classify_python_syntax_error
 # ---------------------------------------------------------------------------
+
 
 def test_classify_python_syntax_error_is_retryable() -> None:
     err = classify_python_syntax_error("foo.py: line 12: invalid syntax")

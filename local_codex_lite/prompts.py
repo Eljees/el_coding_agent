@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 
-def ask_prompt(question: str, context: str, evidence: str = "", rag_context: str = "") -> list[dict[str, str]]:
+def ask_prompt(
+    question: str, context: str, evidence: str = "", rag_context: str = ""
+) -> list[dict[str, str]]:
     has_evidence = bool(evidence.strip())
     has_rag = bool(rag_context.strip())
     return [
@@ -72,9 +74,9 @@ def plan_prompt(task: str, context: str) -> list[dict[str, str]]:
     ]
 
 
-
-
-def _runtime_fix_related_block(related_files: list[tuple[str, str]] | tuple[tuple[str, str], ...]) -> str:
+def _runtime_fix_related_block(
+    related_files: list[tuple[str, str]] | tuple[tuple[str, str], ...],
+) -> str:
     """Render a 'Related files (read-only context)' block for the runtime-fix
     prompts.  The model is told to patch only the primary target file; these
     related files exist so it can reason about the call chain.
@@ -202,8 +204,12 @@ def runtime_fix_single_file_patch_prompt(
     ]
 
 
-def patch_repair_prompt(task: str, plan_json: str, previous_patch: str, error: str, context: str) -> list[dict[str, str]]:
-    return patch_repair_prompt_for_issue("generic_retry", task, plan_json, previous_patch, error, context)
+def patch_repair_prompt(
+    task: str, plan_json: str, previous_patch: str, error: str, context: str
+) -> list[dict[str, str]]:
+    return patch_repair_prompt_for_issue(
+        "generic_retry", task, plan_json, previous_patch, error, context
+    )
 
 
 def patch_repair_prompt_for_issue(
@@ -333,7 +339,9 @@ def command_prompt(task: str, plan_json: str, context: str) -> list[dict[str, st
     ]
 
 
-def review_prompt(diff_text: str, context: str, base_ref: str = "working tree", head_ref: str = "HEAD") -> list[dict[str, str]]:
+def review_prompt(
+    diff_text: str, context: str, base_ref: str = "working tree", head_ref: str = "HEAD"
+) -> list[dict[str, str]]:
     return [
         {
             "role": "system",
@@ -362,7 +370,9 @@ def review_prompt(diff_text: str, context: str, base_ref: str = "working tree", 
     ]
 
 
-def runtime_fix_single_file_command_prompt(task: str, plan_json: str, target_path: str) -> list[dict[str, str]]:
+def runtime_fix_single_file_command_prompt(
+    task: str, plan_json: str, target_path: str
+) -> list[dict[str, str]]:
     return [
         {
             "role": "system",
@@ -387,8 +397,12 @@ def runtime_fix_single_file_command_prompt(task: str, plan_json: str, target_pat
     ]
 
 
-def assumption_prompt(task: str, plan_json: str, context: str, questions: list[str]) -> list[dict[str, str]]:
-    questions_text = "\n".join(f"- {q}" for q in questions) if questions else "- No questions provided."
+def assumption_prompt(
+    task: str, plan_json: str, context: str, questions: list[str]
+) -> list[dict[str, str]]:
+    questions_text = (
+        "\n".join(f"- {q}" for q in questions) if questions else "- No questions provided."
+    )
     return [
         {
             "role": "system",

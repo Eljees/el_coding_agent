@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import fnmatch
-import os
 import re
 import subprocess
 from dataclasses import dataclass

@@ -6,6 +6,7 @@ load the provider module by path, call it, and assert the shape of what
 it returns.  That way any drift in the ``Capability`` contract that
 breaks the example surfaces in the main test suite.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -48,6 +49,7 @@ def _load_provider():
 # Shape of the example
 # ---------------------------------------------------------------------------
 
+
 def test_example_provide_is_callable() -> None:
     module = _load_provider()
     assert callable(module.provide)
@@ -86,6 +88,7 @@ def test_example_capability_uses_namespaced_id() -> None:
 # to return a fake EntryPoint whose .load() yields the example's provide().
 # ---------------------------------------------------------------------------
 
+
 def test_example_can_be_loaded_via_entry_points(monkeypatch) -> None:
     module = _load_provider()
     provider = module.provide
@@ -95,7 +98,7 @@ def test_example_can_be_loaded_via_entry_points(monkeypatch) -> None:
             self.name = "sample_capabilities"
             self.group = CAPABILITY_ENTRY_POINT_GROUP
 
-        def load(self):  # noqa: D401
+        def load(self):
             return provider
 
     def fake_entry_points(*, group=None):

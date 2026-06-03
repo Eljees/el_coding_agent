@@ -31,9 +31,7 @@ def test_normalize_suggested_commands_filters_unix_only_commands() -> None:
     normalized = _normalize_suggested_commands(payload)
 
     assert normalized == {
-        "commands": [
-            {"cmd": "pytest tests/test_demo.py", "reason": "run tests", "risk": "low"}
-        ]
+        "commands": [{"cmd": "pytest tests/test_demo.py", "reason": "run tests", "risk": "low"}]
     }
 
 
@@ -48,7 +46,5 @@ def test_normalize_suggested_commands_filters_editor_commands() -> None:
     normalized = _normalize_suggested_commands(payload)
 
     assert normalized == {
-        "commands": [
-            {"cmd": "python demo.py", "reason": "run demo", "risk": "low"}
-        ]
+        "commands": [{"cmd": "python demo.py", "reason": "run demo", "risk": "low"}]
     }

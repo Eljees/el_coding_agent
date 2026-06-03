@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +20,12 @@ class EvidenceBundle:
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def create_evidence_bundle(run_root: Path, *, source: str, task: str, run_id: str | None = None) -> EvidenceBundle:
+def create_evidence_bundle(
+    run_root: Path, *, source: str, task: str, run_id: str | None = None
+) -> EvidenceBundle:
     bundle_dir = run_root / "evidence"
     raw_dir = bundle_dir / "raw"
     summaries_dir = bundle_dir / "summaries"
@@ -112,11 +114,15 @@ def save_report_json(bundle: EvidenceBundle, name: str, data: Any) -> Path:
 def list_evidence_artifacts(bundle_dir: Path) -> list[str]:
     if not bundle_dir.exists():
         return []
-    files = [path.relative_to(bundle_dir).as_posix() for path in bundle_dir.rglob("*") if path.is_file()]
+    files = [
+        path.relative_to(bundle_dir).as_posix() for path in bundle_dir.rglob("*") if path.is_file()
+    ]
     return sorted(files)
 
 
-def _save_text_artifact(bundle: EvidenceBundle, base: Path, metadata_key: str, name: str, text: str) -> Path:
+def _save_text_artifact(
+    bundle: EvidenceBundle, base: Path, metadata_key: str, name: str, text: str
+) -> Path:
     path = base / name
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -124,7 +130,9 @@ def _save_text_artifact(bundle: EvidenceBundle, base: Path, metadata_key: str, n
     return path
 
 
-def _save_json_artifact(bundle: EvidenceBundle, base: Path, metadata_key: str, name: str, data: Any) -> Path:
+def _save_json_artifact(
+    bundle: EvidenceBundle, base: Path, metadata_key: str, name: str, data: Any
+) -> Path:
     path = base / name
     path.parent.mkdir(parents=True, exist_ok=True)
     save_json_file(path, data)

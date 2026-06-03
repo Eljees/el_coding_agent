@@ -5,6 +5,7 @@ needs a display, a real Tk root, and would dominate CI time.  Instead this
 module locks down the behaviour of the small free functions and the
 file-backed persistence helpers that don't require an actual Tk window.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,10 +17,10 @@ import pytest
 from local_codex_lite import ui
 from local_codex_lite.intent import IntentDecision
 
-
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "task,expected",
@@ -48,8 +49,8 @@ def test_cve_min_severity_for_task(task: str, expected: str) -> None:
         (65, "01:05"),
         (3599, "59:59"),
         (3600, "60:00"),
-        (-5, "00:00"),       # clamped to zero
-        (12.7, "00:12"),     # floats truncated
+        (-5, "00:00"),  # clamped to zero
+        (12.7, "00:12"),  # floats truncated
     ],
 )
 def test_format_duration(seconds: float, expected: str) -> None:
@@ -118,6 +119,7 @@ def test_temporary_cwd_restores_previous(tmp_path: Path) -> None:
 # This keeps the tests CI-friendly while still locking the read/write
 # format that the GUI consumes.
 # ---------------------------------------------------------------------------
+
 
 def _fake_ui(tmp_path: Path) -> types.SimpleNamespace:
     """A duck-typed `self` for CommandCenterUI's file-backed methods.
