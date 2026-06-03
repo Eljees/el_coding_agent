@@ -18,7 +18,7 @@ except Exception as exc:
     ttk = None  # type: ignore[assignment]
     messagebox = None  # type: ignore[assignment]
     filedialog = None  # type: ignore[assignment]
-    _TK_IMPORT_ERROR = exc
+    _TK_IMPORT_ERROR = exc  # type: Exception | None
 else:
     _TK_IMPORT_ERROR = None
 
@@ -188,8 +188,8 @@ class CommandCenterUI:
         task_scroll.pack(side="right", fill="y")
         self._make_editable_copyable(self.task_text)
         # Hotkeys on task_text (return "break" to suppress default newline)
-        self.task_text.bind("<Control-Return>", lambda _e: self.preview() or "break")
-        self.task_text.bind("<Control-Shift-Return>", lambda _e: self.apply_changes() or "break")
+        self.task_text.bind("<Control-Return>", lambda _e: self.preview() or "break")  # type: ignore[func-returns-value]
+        self.task_text.bind("<Control-Shift-Return>", lambda _e: self.apply_changes() or "break")  # type: ignore[func-returns-value]
 
         # --- Task history dropdown ---
         history_row = ttk.Frame(left)
@@ -396,7 +396,7 @@ class CommandCenterUI:
         self.chat_input.pack(side="left", fill="both", expand=True)
         chat_input_scroll.pack(side="right", fill="y")
         self._make_editable_copyable(self.chat_input)
-        self.chat_input.bind("<Control-Return>", lambda _e: self._chat_send() or "break")
+        self.chat_input.bind("<Control-Return>", lambda _e: self._chat_send() or "break")  # type: ignore[func-returns-value]
 
         # Actions
         chat_actions = ttk.Frame(parent)
@@ -532,7 +532,7 @@ class CommandCenterUI:
             cve_status = "cve-bin-tool: not found"
         except Exception:
             cve_status = "cve-bin-tool: error"
-        self.root.after(0, lambda s=cve_status: self._status_cve_var.set(s))
+        self.root.after(0, lambda s=cve_status: self._status_cve_var.set(s))  # type: ignore[misc]
 
         # LLM endpoint
         base_url = "http://localhost:8015/v1"
@@ -548,7 +548,7 @@ class CommandCenterUI:
             llm_status = f"LLM: {base_url} ok"
         except Exception:
             llm_status = f"LLM: {base_url} (unreachable)"
-        self.root.after(0, lambda s=llm_status: self._status_llm_var.set(s))
+        self.root.after(0, lambda s=llm_status: self._status_llm_var.set(s))  # type: ignore[misc]
 
     # ------------------------------------------------------------------
     # Chat handlers
@@ -589,7 +589,7 @@ class CommandCenterUI:
             answer = response.text.strip()
         except Exception as exc:
             answer = f"[Error: {exc}]"
-        self.root.after(0, lambda a=answer: self._chat_on_response(a))
+        self.root.after(0, lambda a=answer: self._chat_on_response(a))  # type: ignore[misc]
 
     def _chat_on_response(self, answer: str) -> None:
         self._chat_messages.append({"role": "assistant", "content": answer})

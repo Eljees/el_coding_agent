@@ -85,6 +85,16 @@ straight into `## [Unreleased]`.
   require-apply safety gate (runner.py 53%->59%).
 
 ### Fixed
+- Made the `mypy` gate green for the first time: fixed all 55 type errors
+  across 10 modules (42 source files now clean on `mypy==1.14.1`).  This
+  covers the 10 errors introduced by the `SupportsChat` planner seam
+  (internal helpers now accept the protocol, not the concrete client) plus
+  ~45 pre-existing ones: `dict`-typed-as-`bool` result maps in runner,
+  `object`->`int`/`str` casts in trufflehog, no-any-return casts in
+  config/evidence_mode/llm_client, the `is_dataclass` instance narrowing in
+  logging_utils, a robust `rich` optional-import shim (+`rich.*` added to
+  the mypy ignore-missing-imports overrides), and targeted ignores for the
+  Tkinter event-binding glue in ui.py.
 - `rich_compat.SimpleConsole.print` no longer forwards rich-only
   keyword arguments (e.g. `highlight=`) to the builtin `print`; doing so
   raised `TypeError` whenever the optional `rich` extra was absent (the

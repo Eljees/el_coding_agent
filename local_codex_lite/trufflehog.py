@@ -11,6 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from .container_errors import classify_container_error
 from .evidence import compare_json_values_as_dict, save_json_file
@@ -66,7 +67,7 @@ def parse_ndjson(text: str) -> dict[str, object]:
             "raw_findings": [],
         }
     rows = [json.loads(line) for line in text.splitlines() if line.strip()]
-    detectors = Counter()
+    detectors: Counter[str] = Counter()
     verified = 0
     unknown = 0
     unverified = 0
@@ -144,7 +145,7 @@ def clone_repo(url: str, dst: Path, user: str, token: str, depth: int) -> None:
     if cp.returncode != 0:
         raise subprocess.CalledProcessError(
             cp.returncode,
-            _redact_subprocess_args(cp.args),
+            cast("list[str]", _redact_subprocess_args(cp.args)),
             output=cp.stdout,
             stderr=cp.stderr,
         )
@@ -305,10 +306,10 @@ def scan_repo_urls(
     save_report_text(evidence_bundle, "baseline_summary.csv", _summary_csv_text(summary_rows))
 
     total = {
-        "findings": sum(int(r.get("findings", 0)) for r in results),
-        "verified": sum(int(r.get("verified", 0)) for r in results),
-        "unknown": sum(int(r.get("unknown", 0)) for r in results),
-        "unverified": sum(int(r.get("unverified", 0)) for r in results),
+        "findings": sum(int(cast(int, r.get("findings", 0))) for r in results),
+        "verified": sum(int(cast(int, r.get("verified", 0))) for r in results),
+        "unknown": sum(int(cast(int, r.get("unknown", 0))) for r in results),
+        "unverified": sum(int(cast(int, r.get("unverified", 0))) for r in results),
         "repos": len(results),
         "failures": failures,
     }
@@ -332,9 +333,9 @@ def scan_repo_urls(
         status.update(first_issue)
     write_status(
         evidence_bundle,
-        status=status["status"],
-        error_code=status.get("error_code"),
-        message=status["message"],
+        status=cast(str, status["status"]),
+        error_code=cast("str | None", status.get("error_code")),
+        message=cast(str, status["message"]),
         evidence_complete=bool(status.get("evidence_complete")),
         extra={
             k: v
@@ -452,7 +453,7 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def _aggregate_detectors(rows: list[dict[str, object]]) -> dict[str, int]:
-    detectors = Counter()
+    detectors: Counter[str] = Counter()
     for row in rows:
         raw = row.get("detectors", {})
         if isinstance(raw, dict):

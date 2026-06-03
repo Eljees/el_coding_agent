@@ -149,7 +149,11 @@ def _run_task_body(
     console.print("[bold]Planning done[/bold]")
     _print_plan_summary(plan)
     dump_text(run_dir / "selected_context.txt", "see plan/prompt context in session")
-    result = {"dry_run": bool(args.dry_run), "apply": bool(args.apply), "exec": bool(args.execute)}
+    result: dict[str, object] = {
+        "dry_run": bool(args.dry_run),
+        "apply": bool(args.apply),
+        "exec": bool(args.execute),
+    }
 
     if plan.get("needs_clarification"):
         questions = (
@@ -205,6 +209,7 @@ def _run_task_body(
                 "result": result,
             }
             target = real_stdout if real_stdout is not None else sys.__stdout__
+            assert target is not None
             target.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
             target.flush()
         return 0

@@ -585,11 +585,8 @@ def revise_plan_with_assumptions(
         extra_context,
     )
     client = client if client is not None else OpenAICompatibleClient(config.llm)
-    questions = (
-        plan.get("clarifying_questions")
-        if isinstance(plan.get("clarifying_questions"), list)
-        else []
-    )
+    raw_questions = plan.get("clarifying_questions")
+    questions = raw_questions if isinstance(raw_questions, list) else []
     messages = assumption_prompt(
         task, json.dumps(plan, ensure_ascii=False, indent=2), context, [str(q) for q in questions]
     )
@@ -813,7 +810,7 @@ def _runtime_fix_context_block(runtime_fix: RuntimeFixContext, workspace_root: P
 
 
 def _repair_via_full_file_rewrite(
-    client: OpenAICompatibleClient,
+    client: SupportsChat,
     task: str,
     plan: dict,
     workspace_root: Path,
@@ -881,7 +878,7 @@ def _repair_via_full_file_rewrite(
 
 
 def _repair_via_intended_target(
-    client: OpenAICompatibleClient,
+    client: SupportsChat,
     task: str,
     plan: dict,
     workspace_root: Path,
@@ -946,7 +943,7 @@ def _build_unified_diff(rel_path: str, before: str, after: str) -> str:
 
 
 def _chat_with_timeout(
-    client: OpenAICompatibleClient,
+    client: SupportsChat,
     messages: list[dict[str, str]],
     *,
     max_tokens: int,
@@ -987,7 +984,7 @@ def _extract_failed_paths(previous_patch: str, error: str) -> list[str]:
 
 def _retry_with_context_variants(
     *,
-    client: OpenAICompatibleClient,
+    client: SupportsChat,
     task: str,
     workspace_root: Path,
     config: AgentConfig,
@@ -1025,7 +1022,7 @@ def _retry_with_context_variants(
                 return result
             except ValueError as exc:
                 last_error = str(exc)
-                issue = "unknown"
+                issue: RetryIssue = "unknown"
                 _log_llm_attempt(
                     run_dir,
                     stage,
@@ -1106,7 +1103,7 @@ def _response_text_from_exception(exc: Exception) -> str | None:
     if response is None:
         return None
     text = getattr(response, "text", None)
-    if text:
+    if isinstance(text, str):
         return text
     return None
 

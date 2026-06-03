@@ -170,7 +170,7 @@ def append_jsonl(path: Path, data: Any) -> None:
 
 
 def _jsonable(data: Any) -> Any:
-    if is_dataclass(data):
+    if is_dataclass(data) and not isinstance(data, type):
         return _jsonable(asdict(data))
     if isinstance(data, dict):
         return {str(key): _jsonable(value) for key, value in data.items()}

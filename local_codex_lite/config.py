@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import yaml
 from pydantic import BaseModel, Field
@@ -142,7 +142,7 @@ def save_config(workspace_root: Path, config: AgentConfig) -> Path:
 
 
 def config_as_dict(config: AgentConfig) -> dict[str, Any]:
-    return _redact_sensitive_structure(config.model_dump(mode="json"))
+    return cast(dict[str, Any], _redact_sensitive_structure(config.model_dump(mode="json")))
 
 
 def _redact_sensitive_structure(value: Any) -> Any:

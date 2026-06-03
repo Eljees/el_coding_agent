@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .evidence import save_json_file
 
@@ -155,4 +155,4 @@ def _record_artifact(bundle: EvidenceBundle, metadata_key: str, path: Path) -> N
 def _load_json(path: Path) -> dict[str, Any]:
     import json
 
-    return json.loads(path.read_text(encoding="utf-8"))
+    return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))

@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 import httpx
 
@@ -123,18 +123,18 @@ def extract_json(text: str) -> dict:
             stripped = match.group(1).strip()
 
     try:
-        return json.loads(stripped)
+        return cast(dict, json.loads(stripped))
     except json.JSONDecodeError:
         start = stripped.find("{")
         end = stripped.rfind("}")
         if start != -1 and end != -1 and end > start:
             candidate = stripped[start : end + 1]
-            return json.loads(candidate)
+            return cast(dict, json.loads(candidate))
         raise ValueError(f"LLM did not return valid JSON: {stripped[:200]!r}") from None
 
 
 def repair_json_response(
-    client: OpenAICompatibleClient,
+    client: SupportsChat,
     original_messages: list[dict[str, str]],
     bad_text: str,
     max_tokens: int,

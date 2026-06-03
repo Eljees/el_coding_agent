@@ -4,9 +4,11 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+RichConsole: type | None
+RichTable: type | None
 try:  # pragma: no cover - exercised implicitly when rich is installed
-    from rich.console import Console as RichConsole  # type: ignore
-    from rich.table import Table as RichTable  # type: ignore
+    from rich.console import Console as RichConsole
+    from rich.table import Table as RichTable
 except Exception:
     RichConsole = None
     RichTable = None
