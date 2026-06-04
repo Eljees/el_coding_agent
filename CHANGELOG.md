@@ -8,6 +8,13 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Added
+- Full project documentation under `docs/`: overview, architecture
+  (module map + run flow), complete CLI reference, configuration, the
+  safety model, the evidence-first workflow (runs/CVE/TruffleHog),
+  capability-plugin guide, development/CI, and troubleshooting (git-lock
+  and venv-relocation recovery).  Linked from the README.
+
 ### Removed
 - Pruned stale top-level files: `CHATGPT_HANDOFF.md` (self-marked as
   superseded by AGENTS.md), `GUI_ZERO_RESULTS_PLAYBOOK.md` (playbook for a

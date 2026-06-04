@@ -3,6 +3,10 @@
 `local-codex-lite` is a minimal local coding agent MVP for Windows / PowerShell.
 It is designed to work against a local OpenAI-compatible vLLM backend and to stay small, readable, and safe.
 
+📚 **Full documentation lives in [`docs/`](docs/README.md)** — overview,
+architecture, CLI reference, configuration, safety model, evidence workflow,
+plugin guide, development/CI, and troubleshooting.
+
 Repository root for this agent:
 
 ```text
