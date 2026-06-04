@@ -3,7 +3,7 @@
 ## Setup
 
 ```powershell
-.\setup.ps1                 # creates .venv and installs -e ".[dev]"
+.\scripts\setup.ps1                 # creates .venv and installs -e ".[dev]"
 # or manually:
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -42,9 +42,10 @@ matrix (Ubuntu 3.11/3.12 + a Windows 3.12 job), a no-LLM CLI smoke job, and a
 non-blocking `ruff-canary` job on the latest ruff. `mutmut.yml` runs scoped
 mutation testing weekly.
 
-> Note: the canonical remote is GitLab, but the CI workflow is GitHub Actions.
-> A GitLab push does **not** trigger it — run the gates locally, or add a
-> mirroring `.gitlab-ci.yml`.
+> The canonical remote is GitLab; `.gitlab-ci.yml` mirrors the GitHub Actions
+> gates (lint + format + mypy + pytest with the 65% floor) so a GitLab push
+> is actually verified. Keep tool versions in lockstep across `pyproject.toml`,
+> `.pre-commit-config.yaml`, both CI files.
 
 ## Testing notes
 

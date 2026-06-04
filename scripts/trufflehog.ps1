@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string[]]$RepoUrl,
     [string]$RepoFile,
@@ -11,7 +9,9 @@ param(
     [switch]$KeepClones
 )
 
-Set-Location $PSScriptRoot
+$ErrorActionPreference = "Stop"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $RepoRoot
 
 $args = @("tools\trufflehog_scan_gitlab.py")
 foreach ($url in $RepoUrl) {

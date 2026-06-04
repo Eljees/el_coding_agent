@@ -8,7 +8,19 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Changed
+- Tidied the repository root: the PowerShell helpers (`setup`, `run`,
+  `doctor`, `ask`, `trufflehog`) moved into `scripts/`.  Each now resolves
+  the repo root as its parent dir (so it still operates on the project, not
+  on `scripts/`), and `param()` is correctly the first statement.  README,
+  CONTRIBUTING and docs references updated to `.\scripts\*.ps1`.
+
 ### Added
+- `.gitlab-ci.yml` mirroring the GitHub Actions gates (stdlib smoke, then
+  ruff lint + format-check + mypy + pytest with the 65% coverage floor) so
+  pushes to the GitLab remote are actually verified.
+- `tests/test_rich_compat.py` covering the stdlib `SimpleConsole`/`SimpleTable`
+  fallback (rich_compat.py 43%->~95%).
 - Full project documentation under `docs/`: overview, architecture
   (module map + run flow), complete CLI reference, configuration, the
   safety model, the evidence-first workflow (runs/CVE/TruffleHog),

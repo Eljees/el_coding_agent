@@ -4,6 +4,6 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $RepoRoot
 python -m local_codex_lite ask $Question
-

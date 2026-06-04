@@ -76,8 +76,8 @@ PowerShell:
 
 ```powershell
 cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
-.\setup.ps1
-.\doctor.ps1
+.\scripts\setup.ps1
+.\scripts\doctor.ps1
 ```
 
 Manual setup:
@@ -99,11 +99,11 @@ the repo ships a small helper instead of hard-coding the proxy:
 cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
 copy tools\proxy.local.ps1.example tools\proxy.local.ps1
 notepad tools\proxy.local.ps1   # set the actual port
-.\setup.ps1 -WithPipIni
+.\scripts\setup.ps1 -WithPipIni
 ```
 
 `tools\proxy.local.ps1` is `.gitignored` (machine-specific).  When it
-exists, `setup.ps1` dot-sources it before `pip install`, which routes the
+exists, `scripts\setup.ps1` dot-sources it before `pip install`, which routes the
 install through your proxy.  Passing `-WithPipIni` also copies
 `tools\pip.ini.template` to `.venv\pip.ini`, so subsequent `pip install`
 calls inside the venv reuse the proxy automatically.
@@ -149,10 +149,10 @@ python -m local_codex_lite logs latest
 
 ```powershell
 cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
-.\doctor.ps1
-.\ask.ps1 "Что это за проект?"
-.\run.ps1 "Добавь короткий README" -DryRun
-.\run.ps1 "Добавь короткий README" -Apply
+.\scripts\doctor.ps1
+.\scripts\ask.ps1 "Что это за проект?"
+.\scripts\run.ps1 "Добавь короткий README" -DryRun
+.\scripts\run.ps1 "Добавь короткий README" -Apply
 ```
 
 ## Command center
@@ -383,8 +383,8 @@ If you want to reproduce TruffleHog scans from a list of GitLab repositories, us
 ```powershell
 $env:GITLAB_USER="your.user"
 $env:GITLAB_TOKEN="your-token"
-.\trufflehog.ps1 -RepoUrl "https://gitlab.example.com/group/project.git"
-.\trufflehog.ps1 -RepoFile .\repos.txt
+.\scripts\trufflehog.ps1 -RepoUrl "https://gitlab.example.com/group/project.git"
+.\scripts\trufflehog.ps1 -RepoFile .\repos.txt
 ```
 
 The helper:

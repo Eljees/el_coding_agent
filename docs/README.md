@@ -21,8 +21,8 @@ small and readable.
 ## 30-second tour
 
 ```powershell
-.\setup.ps1                              # create .venv, install -e ".[dev]"
-.\doctor.ps1                             # check config, git, the LLM endpoint
+.\scripts\setup.ps1                              # create .venv, install -e ".[dev]"
+.\scripts\doctor.ps1                             # check config, git, the LLM endpoint
 python -m local_codex_lite run "fix the bug in foo.py" --dry-run
 python -m local_codex_lite run "fix the bug in foo.py" --apply
 ```

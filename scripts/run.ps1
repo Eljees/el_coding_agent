@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$Task,
@@ -8,7 +6,9 @@ param(
     [switch]$Exec
 )
 
-Set-Location $PSScriptRoot
+$ErrorActionPreference = "Stop"
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $RepoRoot
 
 $args = @("run", $Task)
 if ($DryRun) { $args += "--dry-run" }

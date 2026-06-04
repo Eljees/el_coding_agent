@@ -9,10 +9,10 @@ non-negotiable rules and the full architecture notes.
 
 ```powershell
 cd D:\!ya_drive_sync\YandexDisk\rostel\code\el_coding_agent
-.\setup.ps1                       # creates .venv and installs [dev]
+.\scripts\setup.ps1                       # creates .venv and installs [dev]
 # Optional: route pip through a local proxy
 copy tools\proxy.local.ps1.example tools\proxy.local.ps1
-.\setup.ps1 -WithPipIni
+.\scripts\setup.ps1 -WithPipIni
 ```
 
 Once the venv is active, the standard loop is:

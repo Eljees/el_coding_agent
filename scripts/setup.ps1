@@ -11,16 +11,20 @@
       - Pass -WithPipIni to also copy tools\pip.ini.template into
         .venv\pip.ini (with $env:HTTPS_PROXY substituted).  After that any
         pip invocation that uses this venv picks up the proxy automatically.
+
+    This script lives in scripts/ and always operates on the repository root
+    (its parent directory).
 #>
 param(
     [switch]$WithPipIni
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Set-Location $RepoRoot
 
 # Per-developer proxy override (gitignored).
-$proxyLocal = Join-Path $PSScriptRoot "tools\proxy.local.ps1"
+$proxyLocal = Join-Path $RepoRoot "tools\proxy.local.ps1"
 if (Test-Path $proxyLocal) {
     Write-Host "[setup] applying tools\proxy.local.ps1" -ForegroundColor DarkCyan
     . $proxyLocal
@@ -30,8 +34,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 if ($WithPipIni) {
-    $template = Join-Path $PSScriptRoot "tools\pip.ini.template"
-    $target   = Join-Path $PSScriptRoot ".venv\pip.ini"
+    $template = Join-Path $RepoRoot "tools\pip.ini.template"
+    $target   = Join-Path $RepoRoot ".venv\pip.ini"
     if (-not $env:HTTPS_PROXY) {
         Write-Warning "-WithPipIni was passed but `$env:HTTPS_PROXY is empty; create tools\proxy.local.ps1 first."
     } elseif (-not (Test-Path $template)) {
