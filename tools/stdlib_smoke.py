@@ -13,6 +13,7 @@ Usage:
     python tools/stdlib_smoke.py                # run the default set
     python tools/stdlib_smoke.py tests/foo.py   # run specific files
 """
+
 from __future__ import annotations
 
 import importlib
@@ -43,6 +44,7 @@ DEFAULT_FILES = (
 
 
 # --- tiny pytest shim ----------------------------------------------------
+
 
 class _SkipException(Exception):
     pass
@@ -89,8 +91,8 @@ def _install_pytest_shim() -> None:
     m.fixture = _fixture
     m.fail = lambda msg="": (_ for _ in ()).throw(AssertionError(msg))
     mark = types.SimpleNamespace()
-    mark.parametrize = lambda *a, **kw: (lambda fn: fn)
-    mark.skipif = lambda *a, **kw: (lambda fn: fn)
+    mark.parametrize = lambda *a, **kw: lambda fn: fn
+    mark.skipif = lambda *a, **kw: lambda fn: fn
     m.mark = mark
     sys.modules["pytest"] = m
 
@@ -99,6 +101,7 @@ _install_pytest_shim()
 
 
 # --- fixtures ------------------------------------------------------------
+
 
 class _Missing:
     pass
@@ -188,6 +191,7 @@ class MonkeyPatch:
 
 # --- runner --------------------------------------------------------------
 
+
 def _load_module(path: Path):
     spec = importlib.util.spec_from_file_location(f"_stdlib_smoke_{path.stem}", path)
     mod = importlib.util.module_from_spec(spec)
@@ -269,10 +273,7 @@ def main(argv):
         for k, v in c.items():
             total[k] += v
         all_failures.extend(result["failures"])
-        print(
-            f"{path.name}: pass={c['pass']} fail={c['fail']} "
-            f"error={c['error']} skip={c['skip']}"
-        )
+        print(f"{path.name}: pass={c['pass']} fail={c['fail']} error={c['error']} skip={c['skip']}")
     print()
     print(
         f"TOTAL: pass={total['pass']} fail={total['fail']} "

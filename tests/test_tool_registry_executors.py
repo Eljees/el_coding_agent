@@ -5,6 +5,7 @@
 dynamically dispatched today, so they could silently rot if a target is renamed
 or a cli re-export is dropped. This test keeps them honest.
 """
+
 from __future__ import annotations
 
 import importlib

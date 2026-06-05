@@ -20,7 +20,9 @@ def repo_name(url: str) -> str:
     return url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
 
 
-def run(cmd: list[str], *, cwd: Path | None = None, timeout: int = 1200) -> subprocess.CompletedProcess[str]:
+def run(
+    cmd: list[str], *, cwd: Path | None = None, timeout: int = 1200
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=str(cwd) if cwd else None,
@@ -136,7 +138,9 @@ def write_json(path: Path, data: object) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Clone GitLab repos and run TruffleHog baseline scans.")
+    parser = argparse.ArgumentParser(
+        description="Clone GitLab repos and run TruffleHog baseline scans."
+    )
     parser.add_argument("--repo-url", action="append", help="Repository URL; can be repeated.")
     parser.add_argument("--repo-file", help="Text file with one repository URL per line.")
     parser.add_argument("--git-user", default=os.environ.get("GITLAB_USER", "").strip())
@@ -158,7 +162,9 @@ def main() -> int:
         default=1,
         help="Git clone depth to use for repository checkout.",
     )
-    parser.add_argument("--keep-clones", action="store_true", help="Keep cloned repos after the scan.")
+    parser.add_argument(
+        "--keep-clones", action="store_true", help="Keep cloned repos after the scan."
+    )
     args = parser.parse_args()
 
     urls = load_urls(args)
@@ -169,8 +175,16 @@ def main() -> int:
 
     repo_root = Path(__file__).resolve().parents[1]
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    cache_root = Path(args.cache_root) if args.cache_root else repo_root / ".local-codex-lite" / "trufflehog_cache"
-    out_root = Path(args.out_root) if args.out_root else repo_root / ".local-codex-lite" / "trufflehog_runs"
+    cache_root = (
+        Path(args.cache_root)
+        if args.cache_root
+        else repo_root / ".local-codex-lite" / "trufflehog_cache"
+    )
+    out_root = (
+        Path(args.out_root)
+        if args.out_root
+        else repo_root / ".local-codex-lite" / "trufflehog_runs"
+    )
     run_cache = cache_root / timestamp
     run_out = out_root / timestamp
     clones_dir = run_cache / "clones"
@@ -272,11 +286,15 @@ def main() -> int:
         "failures": failures,
     }
     write_json(baseline_dir / "baseline_total.json", total)
-    write_json(baseline_dir / "manifest.json", {"timestamp": timestamp, "image": args.image, "urls": urls})
+    write_json(
+        baseline_dir / "manifest.json", {"timestamp": timestamp, "image": args.image, "urls": urls}
+    )
     status = {
         "status": "ok" if failures == 0 else ("failed" if failures == len(results) else "partial"),
         "error_code": first_issue["error_code"] if first_issue else None,
-        "message": "scan completed successfully" if failures == 0 else f"{failures} repository scan(s) failed",
+        "message": "scan completed successfully"
+        if failures == 0
+        else f"{failures} repository scan(s) failed",
         "evidence_complete": failures == 0,
     }
     if first_issue:

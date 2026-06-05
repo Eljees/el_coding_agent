@@ -132,9 +132,7 @@ def test_post_apply_syntax_gate_restores_then_repairs(tmp_path, monkeypatch) -> 
     _init_git_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     state: dict = {}
-    monkeypatch.setattr(
-        "local_codex_lite.planner.OpenAICompatibleClient", _stub_factory(state)
-    )
+    monkeypatch.setattr("local_codex_lite.planner.OpenAICompatibleClient", _stub_factory(state))
     monkeypatch.setattr("local_codex_lite.runner.load_config", lambda root: AgentConfig())
 
     with contextlib.redirect_stdout(io.StringIO()):
@@ -160,9 +158,7 @@ def test_max_patch_attempts_exhausted_returns_1_and_restores(tmp_path, monkeypat
     _init_git_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
     # make_plan still runs through the stub client; make_patch/repair are stubbed.
-    monkeypatch.setattr(
-        "local_codex_lite.planner.OpenAICompatibleClient", _stub_factory({})
-    )
+    monkeypatch.setattr("local_codex_lite.planner.OpenAICompatibleClient", _stub_factory({}))
     monkeypatch.setattr("local_codex_lite.runner.load_config", lambda root: AgentConfig())
     monkeypatch.setattr(runner, "make_patch", lambda *a, **k: _broken_diff(1))
     repair_calls = {"n": 1}
@@ -188,9 +184,7 @@ def test_patch_generation_exception_returns_1(tmp_path, monkeypatch, capsys) -> 
     failure record rather than propagating the exception."""
     _init_git_repo(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "local_codex_lite.planner.OpenAICompatibleClient", _stub_factory({})
-    )
+    monkeypatch.setattr("local_codex_lite.planner.OpenAICompatibleClient", _stub_factory({}))
     monkeypatch.setattr("local_codex_lite.runner.load_config", lambda root: AgentConfig())
 
     def boom(*a, **k):

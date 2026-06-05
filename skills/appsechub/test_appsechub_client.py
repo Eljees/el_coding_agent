@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline unit tests for appsechub_client pure logic (no network)."""
+
 import os
 import sys
 
@@ -22,7 +23,9 @@ def test_parse_app_url():
 
 
 def test_build_issue_dto():
-    dto = hub.build_issue_dto(89, source="trufflehog", severities=["HIGH"], page_index=2, page_size=50)
+    dto = hub.build_issue_dto(
+        89, source="trufflehog", severities=["HIGH"], page_index=2, page_size=50
+    )
     assert dto["appIds"] == [89]
     assert dto["source"] == "trufflehog"
     assert dto["severities"] == ["HIGH"]
@@ -54,7 +57,13 @@ def _sample():
     return [
         {"source": "trufflehog", "type": "AWS", "severity": "HIGH", "state": "NEW"},
         {"source": "trufflehog", "type": "github", "severity": "CRITICAL", "state": "REPEATED"},
-        {"source": "trufflehog", "type": "AWS", "severity": "HIGH", "state": "NEW", "status": "False Positive"},
+        {
+            "source": "trufflehog",
+            "type": "AWS",
+            "severity": "HIGH",
+            "state": "NEW",
+            "status": "False Positive",
+        },
         {"source": "sca", "type": "CVE-2021-1", "severity": "MEDIUM", "state": "NEW"},
         {"tool": "TruffleHog", "type": "PrivateKey", "severity": "CRITICAL", "state": "NEW"},
     ]

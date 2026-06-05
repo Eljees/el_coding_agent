@@ -26,9 +26,7 @@ if TYPE_CHECKING:  # avoid importing the intent module at runtime
 _RUN_INTENTS = {"run.preview", "run.apply", "run.exec"}
 
 
-def should_create_project_workspace(
-    task: str, decision: IntentDecision | None = None
-) -> bool:
+def should_create_project_workspace(task: str, decision: IntentDecision | None = None) -> bool:
     """Whether a task should run in a fresh project workspace.
 
     Only "run"-style intents qualify; informational intents never spawn a

@@ -19,6 +19,7 @@ Contract:
   treat it as 'satisfied by default'; you'll want to either match an
   existing slot or upstream a PR to extend the validator.
 """
+
 from __future__ import annotations
 
 from local_codex_lite.capabilities import Capability

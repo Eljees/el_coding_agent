@@ -27,6 +27,7 @@ CLI:
   python appsechub_client.py issues        <app_id|url> [--source trufflehog] [--severity HIGH ...] [--max 1000]
   python appsechub_client.py breakdown     <app_id|url> [--source trufflehog] [--by source,type,severity]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -81,9 +82,7 @@ def verify_tls() -> bool:
 
 
 def _auth_headers() -> dict[str, str]:
-    token = _env_first(
-        ["HUB_API_TOKEN", "APPSECHUB_API_TOKEN", "APPSECHUB_TOKEN", "HUB_TOKEN"], ""
-    )
+    token = _env_first(["HUB_API_TOKEN", "APPSECHUB_API_TOKEN", "APPSECHUB_TOKEN", "HUB_TOKEN"], "")
     if not token:
         return {}
     header = _env_first(["HUB_API_TOKEN_HEADER"], "Authorization")
@@ -258,7 +257,9 @@ def _detector_of(issue: dict[str, Any]) -> str:
     return "unknown"
 
 
-def breakdown(issues: list[dict[str, Any]], by: Iterable[str] = ("source", "severity")) -> dict[str, Any]:
+def breakdown(
+    issues: list[dict[str, Any]], by: Iterable[str] = ("source", "severity")
+) -> dict[str, Any]:
     """Count issues grouped by one or more fields. Returns {field: {value: count}}."""
     out: dict[str, dict[str, int]] = {}
     for field in by:
@@ -289,7 +290,10 @@ def quality_metrics(issues: list[dict[str, Any]]) -> dict[str, Any]:
     fp = sum(
         1
         for i in issues
-        if any(t in _norm(i.get("state")) + _norm(i.get("status")) for t in ("falsepositive", "fp", "notanissue", "wontfix"))
+        if any(
+            t in _norm(i.get("state")) + _norm(i.get("status"))
+            for t in ("falsepositive", "fp", "notanissue", "wontfix")
+        )
     )
     return {
         "total": total,
@@ -303,7 +307,9 @@ def quality_metrics(issues: list[dict[str, Any]]) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Network calls
 # --------------------------------------------------------------------------- #
-def list_scanners(session: requests.Session | None = None, with_issue: bool = False) -> list[dict[str, Any]]:
+def list_scanners(
+    session: requests.Session | None = None, with_issue: bool = False
+) -> list[dict[str, Any]]:
     session = session or make_session()
     data = _get(session, "/tool/scanner", params={"withIssue": str(bool(with_issue)).lower()})
     return data if isinstance(data, list) else []
@@ -419,7 +425,9 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "app_id": _resolve(args.app),
                     "total_fetched": len(rows),
-                    "breakdown": breakdown(rows, by=[b.strip() for b in args.by.split(",") if b.strip()]),
+                    "breakdown": breakdown(
+                        rows, by=[b.strip() for b in args.by.split(",") if b.strip()]
+                    ),
                     "trufflehog_types": trufflehog_types(rows),
                     "quality": quality_metrics(rows),
                 }

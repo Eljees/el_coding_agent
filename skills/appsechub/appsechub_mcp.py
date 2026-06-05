@@ -23,6 +23,7 @@ Register in the agent's MCP config (stdio), e.g.:
 
 All tools are read-only: they fetch and aggregate issues, never mutate state.
 """
+
 from __future__ import annotations
 
 import os
@@ -38,7 +39,7 @@ try:
 except Exception as exc:  # pragma: no cover
     raise SystemExit(
         "The 'mcp' package is required to run the AppSecHub MCP server.\n"
-        "Install it with:  pip install \"mcp[cli]\"\n"
+        'Install it with:  pip install "mcp[cli]"\n'
         f"Import error: {exc}"
     )
 
