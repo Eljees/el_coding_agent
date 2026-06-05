@@ -22,6 +22,10 @@ straight into `## [Unreleased]`.
   re-imports them, so `from local_codex_lite.ui import ...` call sites and tests
   keep working; the logic is now unit-testable without Tkinter.  The new module
   imports `IntentDecision` only under `TYPE_CHECKING` to stay import-light.
+- Extracted the GUI persistence (window geometry + task-history load/save and
+  the de-dupe/cap transform) out of `ui.py` into a new
+  `local_codex_lite/ui_state.py`.  The `CommandCenterUI` persistence methods are
+  now thin delegators, and the file I/O is unit-tested without Tkinter.
 
 ### Fixed
 - Friendly Python-version guard in `local_codex_lite/__init__.py`: a 3.10
@@ -52,6 +56,9 @@ straight into `## [Unreleased]`.
 - `tests/test_task_heuristics.py`: direct unit coverage for the extracted
   task heuristics module (CVE severity selection, duration formatting,
   project-workspace routing, and the temporary-cwd context manager).
+- `tests/test_ui_state.py`: covers the extracted GUI persistence helpers --
+  geometry round-trip, task-history load/save, corrupt/non-list JSON handling,
+  and the de-dupe/cap `push_task` transform.
 - `skills/appsechub/` skill: read-only AppSecHub client + MCP wrapper that
   fetches and analyzes an application's issues (counts, severity mix, scanner
   breakdown, TruffleHog detector types, quality metrics).

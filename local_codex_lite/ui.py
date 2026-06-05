@@ -38,10 +38,13 @@ from .task_heuristics import (
     temporary_cwd,
 )
 from .tool_registry import default_tools, tool_brief_lines
-
-_HISTORY_MAX = 50
-_HISTORY_FILE = ".local-codex-lite/task_history.json"
-_GEOMETRY_FILE = ".local-codex-lite/ui_geometry.txt"
+from .ui_state import (
+    load_geometry,
+    load_task_history,
+    push_task,
+    save_geometry,
+    save_task_history,
+)
 
 
 class CommandCenterUI:
@@ -384,44 +387,19 @@ class CommandCenterUI:
     # ------------------------------------------------------------------
 
     def _load_geometry(self) -> str | None:
-        try:
-            geo_file = self._base_workspace_root / _GEOMETRY_FILE
-            geo = geo_file.read_text(encoding="utf-8").strip()
-            return geo if geo else None
-        except Exception:
-            return None
+        return load_geometry(self._base_workspace_root)
 
     def _save_geometry(self) -> None:
-        try:
-            geo_file = self._base_workspace_root / _GEOMETRY_FILE
-            geo_file.parent.mkdir(parents=True, exist_ok=True)
-            geo_file.write_text(self.root.geometry(), encoding="utf-8")
-        except Exception:
-            pass
+        save_geometry(self._base_workspace_root, self.root.geometry())
 
     def _load_task_history(self) -> None:
-        try:
-            hist_file = self._base_workspace_root / _HISTORY_FILE
-            data = json.loads(hist_file.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                self._task_history = [str(t) for t in data][:_HISTORY_MAX]
-        except Exception:
-            self._task_history = []
+        self._task_history = load_task_history(self._base_workspace_root)
 
     def _save_task_to_history(self, task: str) -> None:
         if not task:
             return
-        # Move to front, deduplicate
-        self._task_history = [task] + [t for t in self._task_history if t != task]
-        self._task_history = self._task_history[:_HISTORY_MAX]
-        try:
-            hist_file = self._base_workspace_root / _HISTORY_FILE
-            hist_file.parent.mkdir(parents=True, exist_ok=True)
-            hist_file.write_text(
-                json.dumps(self._task_history, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-        except Exception:
-            pass
+        self._task_history = push_task(self._task_history, task)
+        save_task_history(self._base_workspace_root, self._task_history)
         self._refresh_history_combo()
 
     def _refresh_history_combo(self) -> None:
