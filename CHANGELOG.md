@@ -26,6 +26,10 @@ straight into `## [Unreleased]`.
   the de-dupe/cap transform) out of `ui.py` into a new
   `local_codex_lite/ui_state.py`.  The `CommandCenterUI` persistence methods are
   now thin delegators, and the file I/O is unit-tested without Tkinter.
+- Extracted the workspace-routing decision out of `ui.py._prepare_workspace`
+  into a pure `task_heuristics.plan_workspace` returning a `WorkspacePlan`
+  (whether to use a project workspace and whether a fresh one must be created).
+  The GUI method now just acts on the plan; the branching is unit-tested.
 
 ### Fixed
 - Friendly Python-version guard in `local_codex_lite/__init__.py`: a 3.10

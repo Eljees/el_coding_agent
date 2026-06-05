@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,6 +36,40 @@ def should_create_project_workspace(task: str, decision: IntentDecision | None =
     if decision is not None and decision.intent not in _RUN_INTENTS:
         return False
     return should_use_project_workspace(task)
+
+
+@dataclass(frozen=True)
+class WorkspacePlan:
+    """Outcome of :func:`plan_workspace`.
+
+    ``use_project`` - run in a dedicated project workspace rather than the base
+    repo.  ``needs_new`` - a fresh project directory must be created (only
+    meaningful when ``use_project`` is True).
+    """
+
+    use_project: bool
+    needs_new: bool
+
+
+def plan_workspace(
+    *,
+    project_mode: bool,
+    task: str,
+    decision: IntentDecision | None,
+    at_base: bool,
+    task_changed: bool,
+) -> WorkspacePlan:
+    """Decide how to route a task to a workspace.
+
+    Pure: the caller passes the current state as booleans (``at_base`` = the
+    active workspace is still the base repo; ``task_changed`` = the task differs
+    from the one the active workspace was created for) so the branching logic is
+    testable without a GUI.  A new directory is needed when the task changed or
+    we are still sitting at the base repo.
+    """
+    if project_mode and should_create_project_workspace(task, decision):
+        return WorkspacePlan(use_project=True, needs_new=task_changed or at_base)
+    return WorkspacePlan(use_project=False, needs_new=False)
 
 
 # Task-text markers that ask for a broader (MEDIUM) CVE triage threshold.

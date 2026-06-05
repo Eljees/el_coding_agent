@@ -59,3 +59,58 @@ def test_temporary_cwd_changes_and_restores(tmp_path: Path) -> None:
     with th.temporary_cwd(tmp_path):
         assert Path.cwd() == tmp_path.resolve()
     assert Path.cwd() == before
+
+
+_CREATE_TASK = "создай новый GUI калькулятор"
+
+
+def test_plan_workspace_disabled_when_project_mode_off() -> None:
+    plan = th.plan_workspace(
+        project_mode=False, task=_CREATE_TASK, decision=None, at_base=True, task_changed=True
+    )
+    assert plan.use_project is False
+    assert plan.needs_new is False
+
+
+def test_plan_workspace_creates_new_when_at_base() -> None:
+    plan = th.plan_workspace(
+        project_mode=True, task=_CREATE_TASK, decision=None, at_base=True, task_changed=False
+    )
+    assert plan.use_project is True
+    assert plan.needs_new is True
+
+
+def test_plan_workspace_creates_new_when_task_changed() -> None:
+    plan = th.plan_workspace(
+        project_mode=True, task=_CREATE_TASK, decision=None, at_base=False, task_changed=True
+    )
+    assert plan.use_project is True
+    assert plan.needs_new is True
+
+
+def test_plan_workspace_reuses_existing_when_same_task_off_base() -> None:
+    plan = th.plan_workspace(
+        project_mode=True, task=_CREATE_TASK, decision=None, at_base=False, task_changed=False
+    )
+    assert plan.use_project is True
+    assert plan.needs_new is False  # reuse the already-created project workspace
+
+
+def test_plan_workspace_false_for_non_run_intent() -> None:
+    decision = types.SimpleNamespace(intent="evidence.cve_scan")
+    plan = th.plan_workspace(
+        project_mode=True, task=_CREATE_TASK, decision=decision, at_base=True, task_changed=True
+    )
+    assert plan.use_project is False
+    assert plan.needs_new is False
+
+
+def test_plan_workspace_false_for_fix_phrase() -> None:
+    plan = th.plan_workspace(
+        project_mode=True,
+        task="исправь баг в patcher.py",
+        decision=None,
+        at_base=True,
+        task_changed=True,
+    )
+    assert plan.use_project is False

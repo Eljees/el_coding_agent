@@ -34,6 +34,7 @@ from .skill_registry import discover_skills, skill_brief_lines
 from .task_heuristics import (
     cve_min_severity_for_task,
     format_duration,
+    plan_workspace,
     should_create_project_workspace,
     temporary_cwd,
 )
@@ -1123,11 +1124,15 @@ class CommandCenterUI:
     def _prepare_workspace(
         self, task: str, decision: IntentDecision | None, *, create: bool
     ) -> None:
-        if self.project_mode_var.get() and should_create_project_workspace(task, decision):
-            if create and (
-                self._active_workspace_task != task
-                or self._active_workspace_root == self._base_workspace_root
-            ):
+        plan = plan_workspace(
+            project_mode=self.project_mode_var.get(),
+            task=task,
+            decision=decision,
+            at_base=self._active_workspace_root == self._base_workspace_root,
+            task_changed=self._active_workspace_task != task,
+        )
+        if plan.use_project:
+            if create and plan.needs_new:
                 self._active_workspace_root = create_project_workspace(
                     self._base_workspace_root, task
                 )
