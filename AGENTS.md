@@ -270,6 +270,10 @@ Current skills:
 on artifact directories with automatic archive unpacking and high/critical report generation.
 Default CVE triage uses `--min-severity HIGH`; lower the threshold only when the task explicitly asks for a broader report.
 `cve-bin-tool` `json` and `json2` outputs use different internal shapes and must not be parsed as if they were the same payload.
+- `appsechub/` — read-only AppSecHub client (`appsechub_client.py`) + MCP wrapper
+(`appsechub_mcp.py`) that fetch and analyze an application's issues: counts, severity
+mix, scanner/source breakdown, TruffleHog detector types, and quality metrics. Auth via
+`HUB_API_TOKEN`; base via `HUB_URL`. Never mutates AppSecHub state.
 
 ### Logging
 Each run writes under `.local-codex-lite/runs/<timestamp>/`:

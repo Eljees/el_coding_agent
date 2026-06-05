@@ -40,6 +40,17 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
             "needs_input", "unknown", "Describe the task first.", "Enter a task to analyze."
         )
 
+    if not capabilities:
+        # Defensive: built-ins are always present today, but guard against a
+        # misconfigured registry so the `max(..., default=(0, capabilities[0], …))`
+        # below can never raise IndexError on an empty list.
+        return _fallback_decision(
+            "needs_input",
+            "unknown",
+            "No capabilities are registered to handle this task.",
+            "Check the capability registry or reinstall plugins.",
+        )
+
     scored: list[tuple[int, Capability, list[str]]] = []
     for capability in capabilities:
         matched = [keyword for keyword in capability.keywords if keyword in lower]

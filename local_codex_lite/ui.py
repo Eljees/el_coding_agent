@@ -4,7 +4,6 @@ import argparse
 import contextlib
 import io
 import json
-import os
 import sys
 import threading
 import time
@@ -30,52 +29,19 @@ from .intent import (
     extract_artifact_output_path,
     recognize_intent,
 )
-from .project_workspace import create_project_workspace, should_use_project_workspace
+from .project_workspace import create_project_workspace
 from .skill_registry import discover_skills, skill_brief_lines
+from .task_heuristics import (
+    cve_min_severity_for_task,
+    format_duration,
+    should_create_project_workspace,
+    temporary_cwd,
+)
 from .tool_registry import default_tools, tool_brief_lines
 
 _HISTORY_MAX = 50
 _HISTORY_FILE = ".local-codex-lite/task_history.json"
 _GEOMETRY_FILE = ".local-codex-lite/ui_geometry.txt"
-
-
-def should_create_project_workspace(task: str, decision: IntentDecision | None = None) -> bool:
-    if decision is not None and decision.intent not in {"run.preview", "run.apply", "run.exec"}:
-        return False
-    return should_use_project_workspace(task)
-
-
-_CVE_MEDIUM_HINTS = (
-    "medium",
-    "med",
-    "полный",
-    "расширенный",
-    "включая medium",
-    "начиная с medium",
-)
-
-
-def cve_min_severity_for_task(task: str) -> str:
-    lowered = task.lower()
-    if any(marker in lowered for marker in _CVE_MEDIUM_HINTS):
-        return "MEDIUM"
-    return "HIGH"
-
-
-def format_duration(seconds: float) -> str:
-    total = max(0, int(seconds))
-    minutes, remainder = divmod(total, 60)
-    return f"{minutes:02d}:{remainder:02d}"
-
-
-@contextlib.contextmanager
-def temporary_cwd(path: Path):
-    previous = Path.cwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(previous)
 
 
 class CommandCenterUI:

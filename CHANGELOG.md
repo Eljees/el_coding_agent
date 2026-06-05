@@ -15,12 +15,48 @@ straight into `## [Unreleased]`.
   on `scripts/`), and `param()` is correctly the first statement.  README,
   CONTRIBUTING and docs references updated to `.\scripts\*.ps1`.
 
+### Changed
+- Extracted the Tk-free domain heuristics (`should_create_project_workspace`,
+  `cve_min_severity_for_task`, `format_duration`, `temporary_cwd`) out of the
+  `ui.py` god-class into a new `local_codex_lite/task_heuristics.py`.  `ui.py`
+  re-imports them, so `from local_codex_lite.ui import ...` call sites and tests
+  keep working; the logic is now unit-testable without Tkinter.  The new module
+  imports `IntentDecision` only under `TYPE_CHECKING` to stay import-light.
+
+### Fixed
+- Friendly Python-version guard in `local_codex_lite/__init__.py`: a 3.10
+  interpreter now fails with a clear "requires Python 3.11+" message instead
+  of a cryptic `ImportError: cannot import name 'UTC'` from a deep submodule.
+- `recognize_intent` no longer assumes a non-empty capability list -- an empty
+  registry returns a `needs_input` fallback instead of risking `IndexError`
+  on `capabilities[0]`.
+
 ### Added
 - `.gitlab-ci.yml` mirroring the GitHub Actions gates (stdlib smoke, then
   ruff lint + format-check + mypy + pytest with the 65% coverage floor) so
   pushes to the GitLab remote are actually verified.
 - `tests/test_rich_compat.py` covering the stdlib `SimpleConsole`/`SimpleTable`
   fallback (rich_compat.py 43%->~95%).
+- `tests/test_runner_apply.py`: an end-to-end `--apply` test (plan -> patch
+  -> validate -> backup -> git apply -> result) driven by a content-aware
+  stub LLM against a throwaway git repo -- the apply path had no direct
+  coverage before.
+- `tests/test_tool_registry_executors.py`: guards that every
+  `ToolDefinition.executor` dotted-path still resolves to a real callable, so
+  the descriptive metadata can't silently rot when a target is renamed.
+- `tests/test_runner_repair_loop.py`: covers the runner's failure-recovery
+  paths that the happy-path apply test does not reach -- the post-apply Python
+  syntax gate restoring backups then repairing, `max_patch_attempts`
+  exhaustion leaving the file pristine, and the patch-generation exception
+  branch.
+- `tests/test_task_heuristics.py`: direct unit coverage for the extracted
+  task heuristics module (CVE severity selection, duration formatting,
+  project-workspace routing, and the temporary-cwd context manager).
+- `skills/appsechub/` skill: read-only AppSecHub client + MCP wrapper that
+  fetches and analyzes an application's issues (counts, severity mix, scanner
+  breakdown, TruffleHog detector types, quality metrics).
+- `docs/audit/AUDIT_AND_PLAN_20260606.md`: deep read-only audit and phased
+  remediation plan.
 - Full project documentation under `docs/`: overview, architecture
   (module map + run flow), complete CLI reference, configuration, the
   safety model, the evidence-first workflow (runs/CVE/TruffleHog),

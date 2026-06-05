@@ -13,7 +13,6 @@ from pathlib import Path
 
 from local_codex_lite.container_errors import classify_container_error
 
-
 DEFAULT_IMAGE = "trufflesecurity/trufflehog:3.94.1"
 
 
@@ -291,7 +290,7 @@ def main() -> int:
     return 1 if failures else 0
 
 
-def _issue_payload(issue) -> dict[str, object]:  # noqa: ANN001
+def _issue_payload(issue) -> dict[str, object]:
     return {
         "error_code": issue.code,
         "title": issue.title,
