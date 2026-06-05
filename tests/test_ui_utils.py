@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from local_codex_lite import ui
+from local_codex_lite import ui, ui_state
 from local_codex_lite.intent import IntentDecision
 
 # ---------------------------------------------------------------------------
@@ -152,13 +152,13 @@ def test_load_task_history_reads_existing_list(tmp_path: Path) -> None:
 
 
 def test_load_task_history_caps_at_history_max(tmp_path: Path) -> None:
-    overflow = [f"task {i}" for i in range(ui._HISTORY_MAX + 25)]
+    overflow = [f"task {i}" for i in range(ui_state.HISTORY_MAX + 25)]
     hist = tmp_path / ".local-codex-lite" / "task_history.json"
     hist.parent.mkdir(parents=True)
     hist.write_text(json.dumps(overflow), encoding="utf-8")
     fake = _fake_ui(tmp_path)
     ui.CommandCenterUI._load_task_history(fake)
-    assert len(fake._task_history) == ui._HISTORY_MAX
+    assert len(fake._task_history) == ui_state.HISTORY_MAX
     assert fake._task_history[0] == "task 0"
 
 
