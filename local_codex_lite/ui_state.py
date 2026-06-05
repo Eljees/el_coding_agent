@@ -60,8 +60,6 @@ def save_task_history(base_root: Path, history: list[str]) -> None:
     try:
         hist_file = base_root / HISTORY_FILE
         hist_file.parent.mkdir(parents=True, exist_ok=True)
-        hist_file.write_text(
-            json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        hist_file.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass

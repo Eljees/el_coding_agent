@@ -117,5 +117,29 @@ def breakdown_issues(
     }
 
 
+@mcp.tool()
+def compare_scans(
+    app: str,
+    old_scan: int,
+    new_scan: int,
+    source: str | None = None,
+    max_items: int = 5000,
+) -> dict[str, Any]:
+    """Delta of issues between two scans of an application.
+
+    Returns added (new findings), removed (fixed / no longer detected), and
+    unchanged counts plus per-severity breakdowns and the full added/removed
+    lists. 'app' may be an id or URL; 'source' optionally restricts to one
+    scanner (e.g. 'trufflehog').
+    """
+    return hub.compare_scans(
+        hub.parse_app_url(app),
+        old_scan,
+        new_scan,
+        source=source,
+        max_items=max_items,
+    )
+
+
 if __name__ == "__main__":
     mcp.run()

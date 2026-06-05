@@ -35,7 +35,6 @@ from .task_heuristics import (
     cve_min_severity_for_task,
     format_duration,
     plan_workspace,
-    should_create_project_workspace,
     temporary_cwd,
 )
 from .tool_registry import default_tools, tool_brief_lines

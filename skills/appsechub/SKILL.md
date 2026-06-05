@@ -43,12 +43,22 @@ python skills\appsechub\appsechub_client.py scanners --with-issue
 python skills\appsechub\appsechub_client.py summary  <app_id|url>
 python skills\appsechub\appsechub_client.py issues   <app_id|url> --source trufflehog --max 1000
 python skills\appsechub\appsechub_client.py breakdown <app_id|url> --by source,severity,type
+python skills\appsechub\appsechub_client.py compare  <app_id|url> --old-scan <id> --new-scan <id> [--source trufflehog]
 ```
 
 The same operations are exposed over MCP (`appsechub` server) as
 `parse_app_url`, `list_scanners`, `get_app_summary`, `list_issues`,
-`breakdown_issues` — prefer those tools when the MCP server is connected; fall
-back to the CLI runner otherwise.
+`breakdown_issues`, `compare_scans` — prefer those tools when the MCP server is
+connected; fall back to the CLI runner otherwise.
+
+## Comparing scans (delta)
+
+`compare <app> --old-scan A --new-scan B` returns the issue delta between two
+scans of the same application: `added` (new findings), `removed` (fixed / no
+longer detected), `unchanged`, per-severity breakdowns, and `net_change`.
+Identity is the Hub's persistent issue `id` (composite fallback when absent).
+Get scan ids from `releaseObject/{id}/scans` or the scan history in the GUI; use
+this to track whether a release introduced or cleared findings.
 
 ## Workflow
 

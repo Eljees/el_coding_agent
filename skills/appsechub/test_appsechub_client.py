@@ -95,6 +95,50 @@ def test_quality_metrics():
     assert 0.19 < q["false_positive_rate"] < 0.21  # 1/5
 
 
+def test_build_issue_dto_scan_ids():
+    dto = hub.build_issue_dto(89, scan_ids=[101, 102])
+    assert dto["scanIds"] == [101, 102]
+    assert "scanIds" not in hub.build_issue_dto(89)  # omitted when empty
+
+
+def test_issue_key_prefers_id():
+    assert hub.issue_key({"id": 7, "type": "AWS"}) == "id:7"
+    # no id -> composite key that is stable for identical descriptive fields
+    a = hub.issue_key({"appId": 89, "source": "trufflehog", "type": "AWS"})
+    b = hub.issue_key({"appId": 89, "source": "trufflehog", "type": "AWS"})
+    c = hub.issue_key({"appId": 89, "source": "trufflehog", "type": "GitHub"})
+    assert a == b and a != c and a.startswith("k:")
+
+
+def test_diff_issues_by_id():
+    old = [
+        {"id": 1, "severity": "HIGH"},
+        {"id": 2, "severity": "LOW"},
+        {"id": 3, "severity": "CRITICAL"},
+    ]
+    new = [
+        {"id": 2, "severity": "LOW"},  # unchanged
+        {"id": 3, "severity": "CRITICAL"},  # unchanged
+        {"id": 4, "severity": "HIGH"},  # added
+    ]
+    d = hub.diff_issues(old, new)
+    assert d["old_total"] == 3 and d["new_total"] == 3
+    assert d["added_count"] == 1 and d["removed_count"] == 1
+    assert d["unchanged_count"] == 2
+    assert d["net_change"] == 0
+    assert d["added_by_severity"] == {"HIGH": 1}
+    assert d["removed_by_severity"] == {"HIGH": 1}  # id:1 was HIGH
+    assert [i["id"] for i in d["added"]] == [4]
+    assert [i["id"] for i in d["removed"]] == [1]
+
+
+def test_diff_issues_empty_old_all_added():
+    new = [{"id": 1, "severity": "HIGH"}, {"id": 2, "severity": "LOW"}]
+    d = hub.diff_issues([], new)
+    assert d["added_count"] == 2 and d["removed_count"] == 0
+    assert d["net_change"] == 2
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

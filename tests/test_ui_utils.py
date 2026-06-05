@@ -16,6 +16,7 @@ import pytest
 
 from local_codex_lite import ui, ui_state
 from local_codex_lite.intent import IntentDecision
+from local_codex_lite.task_heuristics import should_create_project_workspace
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -78,23 +79,23 @@ def _decision(intent: str) -> IntentDecision:
 
 def test_should_create_project_workspace_true_for_creation_phrase() -> None:
     # No decision -- should_use_project_workspace gates on the task text.
-    assert ui.should_create_project_workspace("создай новый GUI калькулятор") is True
+    assert should_create_project_workspace("создай новый GUI калькулятор") is True
 
 
 def test_should_create_project_workspace_false_for_fix_phrase() -> None:
-    assert ui.should_create_project_workspace("исправь баг в patcher.py") is False
+    assert should_create_project_workspace("исправь баг в patcher.py") is False
 
 
 def test_should_create_project_workspace_false_when_intent_not_run() -> None:
     # A creation-like task but routed to logs.latest must NOT create a
     # generated_projects/ folder.
     decision = _decision("logs.latest")
-    assert ui.should_create_project_workspace("создай новый калькулятор", decision) is False
+    assert should_create_project_workspace("создай новый калькулятор", decision) is False
 
 
 def test_should_create_project_workspace_true_for_run_preview_intent() -> None:
     decision = _decision("run.preview")
-    assert ui.should_create_project_workspace("создай новый калькулятор", decision) is True
+    assert should_create_project_workspace("создай новый калькулятор", decision) is True
 
 
 def test_temporary_cwd_restores_previous(tmp_path: Path) -> None:

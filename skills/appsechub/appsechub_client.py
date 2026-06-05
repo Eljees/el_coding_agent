@@ -184,11 +184,14 @@ def build_issue_dto(
     types: list[str] | None = None,
     category: str | None = None,
     state: str | None = None,
+    scan_ids: list[int] | None = None,
     page_index: int = 0,
     page_size: int = 200,
 ) -> dict[str, Any]:
     """Build the IssueBriefDataRequestDto payload sent as ?dto=<json>."""
     dto: dict[str, Any] = {"appIds": [int(app_id)], "pageIndex": page_index, "pageSize": page_size}
+    if scan_ids:
+        dto["scanIds"] = [int(s) for s in scan_ids]
     if source:
         dto["source"] = source
     if source_exact:
@@ -304,6 +307,56 @@ def quality_metrics(issues: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# Fields used to build a composite identity when an issue has no stable ``id``.
+_KEY_FIELDS = ("appId", "source", "type", "category", "cveId", "lineNumber", "branch")
+
+
+def issue_key(issue: dict[str, Any]) -> str:
+    """Stable identity for an issue across scans.
+
+    Prefers the Hub's persistent ``id`` (the same finding keeps its id between
+    scans); falls back to a composite of descriptive fields when ``id`` is
+    missing, so two snapshots can still be diffed.
+    """
+    iid = issue.get("id")
+    if iid not in (None, "", 0):
+        return f"id:{iid}"
+    return "k:" + "|".join(str(issue.get(f, "")) for f in _KEY_FIELDS)
+
+
+def _sev_counts(items: list[dict[str, Any]]) -> dict[str, int]:
+    c = Counter(str(i.get("severity", "UNKNOWN") or "UNKNOWN").upper() for i in items)
+    return dict(c.most_common())
+
+
+def diff_issues(old: list[dict[str, Any]], new: list[dict[str, Any]]) -> dict[str, Any]:
+    """Delta between two issue snapshots (e.g. two scans of the same app).
+
+    ``added`` are issues present only in ``new`` (newly introduced), ``removed``
+    only in ``old`` (fixed / no longer detected).  Identity is by
+    :func:`issue_key`.  Returns counts, per-severity breakdowns, and the full
+    added/removed lists.
+    """
+    old_by = {issue_key(i): i for i in old}
+    new_by = {issue_key(i): i for i in new}
+    added_keys = new_by.keys() - old_by.keys()
+    removed_keys = old_by.keys() - new_by.keys()
+    added = [new_by[k] for k in added_keys]
+    removed = [old_by[k] for k in removed_keys]
+    return {
+        "old_total": len(old),
+        "new_total": len(new),
+        "added_count": len(added),
+        "removed_count": len(removed),
+        "unchanged_count": len(new_by.keys() & old_by.keys()),
+        "net_change": len(new) - len(old),
+        "added_by_severity": _sev_counts(added),
+        "removed_by_severity": _sev_counts(removed),
+        "added": added,
+        "removed": removed,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Network calls
 # --------------------------------------------------------------------------- #
@@ -352,6 +405,41 @@ def list_issues(app_id: int, **kwargs: Any) -> list[dict[str, Any]]:
     return list(iter_issues(app_id, **kwargs))
 
 
+def fetch_scan_issues(
+    app_id: int,
+    scan_id: int,
+    *,
+    session: requests.Session | None = None,
+    max_items: int | None = None,
+    **filters: Any,
+) -> list[dict[str, Any]]:
+    """All issues an application had in one specific scan (via the scanIds filter)."""
+    return list_issues(
+        app_id, session=session, scan_ids=[int(scan_id)], max_items=max_items, **filters
+    )
+
+
+def compare_scans(
+    app_id: int,
+    old_scan: int,
+    new_scan: int,
+    *,
+    session: requests.Session | None = None,
+    source: str | None = None,
+    max_items: int | None = None,
+) -> dict[str, Any]:
+    """Compute the issue delta between two scans of the same application."""
+    session = session or make_session()
+    old = fetch_scan_issues(app_id, old_scan, session=session, source=source, max_items=max_items)
+    new = fetch_scan_issues(app_id, new_scan, session=session, source=source, max_items=max_items)
+    return {
+        "app_id": int(app_id),
+        "old_scan": int(old_scan),
+        "new_scan": int(new_scan),
+        **diff_issues(old, new),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
@@ -393,6 +481,13 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--by", default="source,severity,type")
     sp.add_argument("--max", type=int, dest="max_items", default=5000)
 
+    sp = sub.add_parser("compare", help="Delta of issues between two scans of an application")
+    sp.add_argument("app")
+    sp.add_argument("--old-scan", type=int, required=True, dest="old_scan")
+    sp.add_argument("--new-scan", type=int, required=True, dest="new_scan")
+    sp.add_argument("--source")
+    sp.add_argument("--max", type=int, dest="max_items", default=5000)
+
     args = p.parse_args(argv)
 
     try:
@@ -431,6 +526,17 @@ def main(argv: list[str] | None = None) -> int:
                     "trufflehog_types": trufflehog_types(rows),
                     "quality": quality_metrics(rows),
                 }
+            )
+            return 0
+        if args.cmd == "compare":
+            _emit(
+                compare_scans(
+                    _resolve(args.app),
+                    args.old_scan,
+                    args.new_scan,
+                    source=args.source,
+                    max_items=args.max_items,
+                )
             )
             return 0
     except AppSecHubError as e:

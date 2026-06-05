@@ -31,6 +31,7 @@ python skills\appsechub\appsechub_client.py parse-url "https://appsechub.ssdlc.s
 python skills\appsechub\appsechub_client.py summary 89
 python skills\appsechub\appsechub_client.py issues 89 --source trufflehog --max 1000
 python skills\appsechub\appsechub_client.py breakdown 89 --source trufflehog
+python skills\appsechub\appsechub_client.py compare 89 --old-scan 1001 --new-scan 1042
 ```
 
 ## Подключение MCP-сервера
@@ -57,7 +58,8 @@ pip install "mcp[cli]"
 ```
 
 Инструменты MCP: `parse_app_url`, `list_scanners`, `get_app_summary`,
-`list_issues`, `breakdown_issues`.
+`list_issues`, `breakdown_issues`, `compare_scans` (дельта issues между двумя
+сканами: added / removed / unchanged + разбивка по severity).
 
 ## Пример сценария
 
