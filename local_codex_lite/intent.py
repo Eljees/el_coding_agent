@@ -77,6 +77,14 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
         ):
             matched.append("phrase:cve scan")
             score += 3
+        if capability.id == "appsechub.issues" and any(
+            marker in lower for marker in ("appsechub", "апсекхаб", "аппсекхаб", "appprofile")
+        ):
+            # An explicit Hub mention must outweigh cve_scan's "уязвим" bonus:
+            # "уязвимости приложения 89 в апсекхабе" is a Hub query, not a
+            # local artifact scan.
+            matched.append("phrase:appsechub app")
+            score += 4
         scored.append((score, capability, matched))
 
     score, capability, matched_keywords = max(

@@ -253,6 +253,8 @@ def default_capabilities() -> list[Capability]:
             ),
             keywords=(
                 "appsechub",
+                "апсекхаб",
+                "аппсекхаб",
                 "appprofile",
                 "issues",
                 "issues проекта",
@@ -260,6 +262,8 @@ def default_capabilities() -> list[Capability]:
                 "срабатыван",
                 "типы срабатываний",
                 "качество срабатываний",
+                "уязвимости приложения",
+                "уязвимостей приложения",
                 "секрет",
                 "trufflehog",
             ),
