@@ -152,6 +152,17 @@ def scan_trend(
 
 
 @mcp.tool()
+def get_scan_dynamic(app: str, from_date: int | None = None) -> dict[str, Any]:
+    """Per-day scan dynamics for an application (metrics/scanDynamic).
+
+    Returns the Hub's aggregated time series (qgPassed/qgFailed/qgSkipped/
+    broken and similar) -- the native trend source on Hub builds that do not
+    use release objects. 'app' may be an id or URL; from_date is epoch millis.
+    """
+    return hub.scan_dynamic(hub.parse_app_url(app), from_date=from_date)
+
+
+@mcp.tool()
 def compare_scans(
     app: str,
     old_scan: int,

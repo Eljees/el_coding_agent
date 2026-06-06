@@ -170,7 +170,7 @@ def _with_fake_get(fake, fn):
         hub._get = real
 
 
-def test_list_app_scans_normalizes_and_keeps_raw():
+def test_list_app_scans_resolves_release_objects():
     payload = {
         "entities": [
             {"id": 101, "date": "2026-05-01", "tool": "trufflehog", "status": "FINISHED"},
@@ -179,35 +179,49 @@ def test_list_app_scans_normalizes_and_keeps_raw():
     }
 
     def fake_get(session, path, params=None):
-        assert path == "/releaseObject/89/scans"
+        if path == "/releaseObject":
+            assert params == {"appIds": 89, "pageIndex": 0, "pageSize": 200}
+            return {"entities": [{"id": 555, "version": "1.0"}]}
+        assert path == "/releaseObject/555/scans"
         return payload
 
     out = _with_fake_get(fake_get, lambda: hub.list_app_scans(89))
     assert out["app_id"] == 89 and out["count"] == 2
+    assert out["release_object_ids"] == [555]
     assert out["scans"][0] == {
         "id": 101,
         "ts": "2026-05-01",
         "tool": "trufflehog",
         "status": "FINISHED",
+        "release_object_id": 555,
     }
-    assert out["scans"][1] == {"id": 102, "ts": None, "tool": None, "status": None}
+    assert out["scans"][1]["id"] == 102 and out["scans"][1]["release_object_id"] == 555
     assert "raw" not in out
     with_raw = _with_fake_get(fake_get, lambda: hub.list_app_scans(89, include_raw=True))
-    assert with_raw["raw"] == payload
+    assert with_raw["raw"] == {"555": payload}
 
 
-def test_list_app_scans_bare_list_and_empty_response():
-    # bare-list body (no paging envelope)
-    bare = _with_fake_get(lambda s, p, params=None: [{"id": 5}], lambda: hub.list_app_scans(1))
+def test_list_app_scans_fallback_and_empty_response():
+    # no release objects found -> id treated as a releaseObject id directly
+    def fake_get_bare(session, path, params=None):
+        if path == "/releaseObject":
+            return {"entities": []}
+        assert path == "/releaseObject/1/scans"
+        return [{"id": 5}]
+
+    bare = _with_fake_get(fake_get_bare, lambda: hub.list_app_scans(1))
     assert bare["count"] == 1 and bare["scans"][0]["id"] == 5
-    # empty / unrecognized body -> empty list, no exception
-    empty = _with_fake_get(lambda s, p, params=None: {}, lambda: hub.list_app_scans(1))
+    assert bare["release_object_ids"] == [1]
+
+    # empty / unrecognized scan body -> empty list, no exception
+    def fake_get_empty(session, path, params=None):
+        return {} if path != "/releaseObject" else {"entities": []}
+
+    empty = _with_fake_get(fake_get_empty, lambda: hub.list_app_scans(1))
     assert empty["count"] == 0 and empty["scans"] == []
 
 
 def test_scan_trend_three_scans():
-    import json as _json
-
     by_scan = {
         101: [{"id": 1, "severity": "HIGH"}, {"id": 2, "severity": "LOW"}],
         102: [
@@ -220,9 +234,10 @@ def test_scan_trend_three_scans():
 
     def fake_get(session, path, params=None):
         assert path == "/issue/v2"
-        dto = _json.loads(params["dto"])
-        assert dto["appIds"] == [89]
-        return {"entities": by_scan[dto["scanIds"][0]]}
+        # DTO fields are flattened into query params (lists comma-joined).
+        assert params["appIds"] == "89"
+        assert params["sort"] == 1
+        return {"filteredEntities": by_scan[int(params["scanIds"])]}
 
     out = _with_fake_get(fake_get, lambda: hub.scan_trend(89, [101, 102, 103]))
     assert out["app_id"] == 89 and out["scan_ids"] == [101, 102, 103]
@@ -250,6 +265,168 @@ def test_scan_trend_requires_two_ids():
             raise AssertionError(f"expected ValueError for {bad!r}")
         except ValueError:
             pass
+
+
+def test_normalize_severity_codes_and_strings():
+    # numeric codes (live Hub): 0=LOW 1=MEDIUM 2=HIGH 3=CRITICAL
+    assert hub.normalize_severity(0) == "LOW"
+    assert hub.normalize_severity("1") == "MEDIUM"
+    assert hub.normalize_severity(2) == "HIGH"
+    assert hub.normalize_severity(3) == "CRITICAL"
+    # string severities pass through upper-cased; unknown stays visible
+    assert hub.normalize_severity("High") == "HIGH"
+    assert hub.normalize_severity(None) == "UNKNOWN"
+    assert hub.normalize_severity(7) == "7"
+
+
+def test_detector_prefers_category_for_bucket_types():
+    # live Hub: type is a scan-kind bucket, detector lives in category
+    live = {"type": "SAST", "category": "URI", "tool": "trufflehog", "source": "x.json"}
+    assert hub._detector_of(live) == "URI"
+    # builds where type carries the detector keep the old behaviour
+    classic = {"type": "AWS", "category": "Secrets"}
+    assert hub._detector_of(classic) == "AWS"
+    assert hub._detector_of({}) == "unknown"
+
+
+def test_quality_metrics_counts_accepted_risk_as_fp_like():
+    issues = [
+        {"severity": 3, "status": "False Positive"},
+        {"severity": 2, "status": "Accepted risk"},
+        {"severity": 0, "status": "To verify"},
+        {"severity": 1, "status": "Open"},
+    ]
+    q = hub.quality_metrics(issues)
+    assert q["false_positive_like"] == 2
+    assert q["by_severity"] == {"CRITICAL": 1, "HIGH": 1, "LOW": 1, "MEDIUM": 1}
+
+
+def test_dto_query_params_flatten():
+    dto = hub.build_issue_dto(89, source="trufflehog", severities=["HIGH", "LOW"], scan_ids=[1, 2])
+    params = hub._dto_query_params(dto)
+    assert params["appIds"] == "89"
+    assert params["severities"] == "HIGH,LOW"
+    assert params["scanIds"] == "1,2"
+    assert params["sort"] == 1
+    assert params["source"] == "trufflehog"
+
+
+def test_scan_dynamic():
+    def fake_get(session, path, params=None):
+        assert path == "/metrics/scanDynamic"
+        assert params == {"appIds": 89, "fromDate": 123}
+        return {"scanResultsTrend": {"qgPassed": [{"value": 1}]}}
+
+    out = _with_fake_get(fake_get, lambda: hub.scan_dynamic(89, from_date=123))
+    assert out["app_id"] == 89
+    assert "scanResultsTrend" in out["dynamic"]
+
+
+class _FakeResponse:
+    def __init__(self, status_code, body="{}"):
+        self.status_code = status_code
+        self.text = body
+        self.headers = {"Content-Type": "application/json"}
+
+    def json(self):
+        import json as _json
+
+        return _json.loads(self.text)
+
+
+class _FakeSession:
+    """Stands in for requests.Session: scripted GET statuses + recorded POSTs."""
+
+    def __init__(self, get_statuses):
+        self._get_statuses = list(get_statuses)
+        self.post_calls = []
+        self.headers = {"Authorization": "Bearer stale-token"}
+
+    def get(self, url, params=None, timeout=None, verify=None):
+        return _FakeResponse(self._get_statuses.pop(0), '{"ok": true}')
+
+    def post(self, url, data=None, headers=None, timeout=None, verify=None):
+        self.post_calls.append({"url": url, "data": data, "headers": headers})
+        return _FakeResponse(200)
+
+
+def _with_env(env, fn):
+    """Run fn() with os.environ patched (and restored afterwards).
+
+    Removals happen *before* assignments: on Windows ``os.environ`` is
+    case-insensitive, so popping ``HUB_login`` after setting ``HUB_LOGIN``
+    would silently erase the value we just set.
+    """
+    saved = {k: os.environ.get(k) for k in env}
+    for k, v in env.items():
+        if v is None:
+            os.environ.pop(k, None)
+    os.environ.update({k: v for k, v in env.items() if v is not None})
+    try:
+        return fn()
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+_NO_CRED_ENV = {
+    k: None
+    for k in (
+        "HUB_login",
+        "HUB_LOGIN",
+        "HUB_USERNAME",
+        "HUB_USER",
+        "HUB_pwd",
+        "HUB_PWD",
+        "HUB_PASSWORD",
+        "HUB_PASS",
+    )
+}
+
+
+def test_login_requires_credentials():
+    def check():
+        try:
+            hub.login(_FakeSession([]))
+            raise AssertionError("expected AppSecHubError without credentials")
+        except hub.AppSecHubError:
+            pass
+
+    _with_env(_NO_CRED_ENV, check)
+
+
+def test_get_falls_back_to_form_login_on_401():
+    env = dict(_NO_CRED_ENV)
+    env.update({"HUB_LOGIN": "user@corp", "HUB_PWD": "s3cret"})
+    session = _FakeSession([401, 200])  # first GET rejected, retry succeeds
+
+    out = _with_env(env, lambda: hub._get(session, "/tool/scanner"))
+    assert out == {"ok": True}
+    assert len(session.post_calls) == 1
+    call = session.post_calls[0]
+    assert call["url"].endswith("/auth/login")
+    assert call["data"] == {"username": "user@corp", "password": "s3cret"}
+    assert call["headers"]["X-Login-Ajax-Call"] == "true"
+    assert getattr(session, "_hub_authenticated", False) is True
+    # stale token header must be dropped so the cookie wins on retry
+    assert "Authorization" not in session.headers
+
+
+def test_get_no_retry_without_credentials():
+    session = _FakeSession([401])
+
+    def check():
+        try:
+            hub._get(session, "/tool/scanner")
+            raise AssertionError("expected AppSecHubError on 401 without creds")
+        except hub.AppSecHubError as exc:
+            assert exc.status == 401
+
+    _with_env(_NO_CRED_ENV, check)
+    assert session.post_calls == []
 
 
 if __name__ == "__main__":

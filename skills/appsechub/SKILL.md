@@ -27,13 +27,18 @@ Set these environment variables before calling the tools:
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `HUB_API_TOKEN` | API token (also accepts `APPSECHUB_TOKEN`/`HUB_TOKEN`) | — (required) |
+| `HUB_API_TOKEN` | API token (also accepts `APPSECHUB_TOKEN`/`HUB_TOKEN`) | — |
+| `HUB_login` / `HUB_LOGIN` | Username for form-login fallback | — |
+| `HUB_pwd` / `HUB_PWD` | Password for form-login fallback | — |
 | `HUB_URL` | API base, ends with `/hub/rest` | `https://appsechub.ssdlc.soc.rt.ru/hub/rest` |
 | `HUB_VERIFY_TLS` | `0` to skip cert check on internal hosts | `1` |
 
 The token is sent as `Authorization: Bearer <token>`. Override header/scheme with
 `HUB_API_TOKEN_HEADER` / `HUB_API_TOKEN_SCHEME` if the Hub build expects something
-else. These are the same variables the `eltriage` project uses.
+else. **Many Hub builds reject static Bearer tokens** — when a request gets
+401/403 and `HUB_login`+`HUB_pwd` are set, the client automatically logs in via
+`POST /auth/login` (form, session cookie) and retries. Same variables as the
+`eltriage` project.
 
 ## Tool actions (deterministic runner)
 
@@ -46,6 +51,7 @@ python skills\appsechub\appsechub_client.py breakdown <app_id|url> --by source,s
 python skills\appsechub\appsechub_client.py scans    <app_id|url> [--raw]
 python skills\appsechub\appsechub_client.py trend    <app_id|url> --scans id1,id2,... [--source trufflehog]
 python skills\appsechub\appsechub_client.py compare  <app_id|url> --old-scan <id> --new-scan <id> [--source trufflehog]
+python skills\appsechub\appsechub_client.py dynamic  <app_id|url> [--from-date <epoch_ms>]
 ```
 
 The same operations are exposed over MCP (`appsechub` server) as

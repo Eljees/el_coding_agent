@@ -12,9 +12,14 @@ Endpoints used (from the AppSecHub OpenAPI spec, server ``/hub/rest``):
 
 Authentication mirrors the existing ``eltriage.hub_api`` conventions so the same
 environment variables work in both projects:
-  * Token (preferred): HUB_API_TOKEN | APPSECHUB_API_TOKEN | APPSECHUB_TOKEN | HUB_TOKEN
+  * Token (tried first): HUB_API_TOKEN | APPSECHUB_API_TOKEN | APPSECHUB_TOKEN | HUB_TOKEN
       header  HUB_API_TOKEN_HEADER (default "Authorization")
       scheme  HUB_API_TOKEN_SCHEME (default "Bearer")
+  * Login/password fallback (form POST /auth/login, session cookies):
+      HUB_login | HUB_LOGIN | HUB_USERNAME | HUB_USER
+      HUB_pwd   | HUB_PWD   | HUB_PASSWORD | HUB_PASS
+    Used automatically when a request gets 401/403 (many Hub builds reject
+    static Bearer tokens and require an authenticated session).
   * Base URL: HUB_URL | APPSECHUB_URL | APPSEC_HUB_URL
       default https://appsechub.ssdlc.soc.rt.ru/hub/rest
   * TLS verify: HUB_VERIFY_TLS = 1/0 (default 1)
@@ -55,8 +60,9 @@ DEFAULT_BASE_URL = "https://appsechub.ssdlc.soc.rt.ru/hub/rest"
 DEFAULT_TIMEOUT = int(os.getenv("APPSECHUB_HTTP_TIMEOUT", os.getenv("ELTRIAGE_HTTP_TIMEOUT", "60")))
 
 # Possible keys for the paged entity list across Hub builds.
-_ENTITY_KEYS = ("entities", "content", "items", "data", "elements")
-_TOTAL_KEYS = ("totalElements", "total", "totalCount", "count")
+# "filteredEntities"/"totalEntitiesCount" confirmed live on appsechub.ssdlc.soc.rt.ru (2026-06).
+_ENTITY_KEYS = ("entities", "filteredEntities", "content", "items", "data", "elements")
+_TOTAL_KEYS = ("totalElements", "totalEntitiesCount", "total", "totalCount", "count")
 
 
 # --------------------------------------------------------------------------- #
@@ -98,6 +104,13 @@ def _auth_headers() -> dict[str, str]:
     return {header: token}
 
 
+def _credentials() -> tuple[str, str]:
+    """Login/password pair for the form-based fallback (mirrors eltriage.hub_api)."""
+    user = _env_first(["HUB_login", "HUB_LOGIN", "HUB_USERNAME", "HUB_USER"], "")
+    pwd = _env_first(["HUB_pwd", "HUB_PWD", "HUB_PASSWORD", "HUB_PASS"], "")
+    return user, pwd
+
+
 def make_session() -> requests.Session:
     s = requests.Session()
     s.headers.update({"Accept": "application/json", "Content-Type": "application/json"})
@@ -113,9 +126,54 @@ class AppSecHubError(RuntimeError):
         self.body = body
 
 
+AUTH_PATH = "/auth/login"
+
+
+def login(session: requests.Session) -> None:
+    """Authenticate *session* via the Hub's form login (``POST /auth/login``).
+
+    Mirrors ``eltriage.hub_api.authenticate`` password mode: form-urlencoded
+    ``username``/``password`` plus the ``X-Login-Ajax-Call`` header; the JSESSION
+    cookie stored on the session carries auth for subsequent requests.
+    """
+    user, pwd = _credentials()
+    if not user or not pwd:
+        raise AppSecHubError(
+            "No credentials for form login: set HUB_login + HUB_pwd (or a working HUB_API_TOKEN)."
+        )
+    # Drop the (rejected) token header: leaving a stale ``Authorization`` on the
+    # session makes some Hub builds 401 even with a valid login cookie.
+    token_header = _env_first(["HUB_API_TOKEN_HEADER"], "Authorization")
+    getattr(session, "headers", {}).pop(token_header, None)
+    url = f"{base_url()}{AUTH_PATH}"
+    resp = session.post(
+        url,
+        data={"username": user, "password": pwd},
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Login-Ajax-Call": "true",
+        },
+        timeout=DEFAULT_TIMEOUT,
+        verify=verify_tls(),
+    )
+    if resp.status_code >= 400:
+        raise AppSecHubError(
+            f"HTTP {resp.status_code} for {AUTH_PATH} (form login)",
+            resp.status_code,
+            url,
+            (resp.text or "")[:500],
+        )
+    session._hub_authenticated = True  # type: ignore[attr-defined]
+
+
 def _get(session: requests.Session, path: str, params: dict[str, Any] | None = None) -> Any:
     url = f"{base_url()}{path}"
     resp = session.get(url, params=params, timeout=DEFAULT_TIMEOUT, verify=verify_tls())
+    if resp.status_code in (401, 403) and not getattr(session, "_hub_authenticated", False):
+        user, pwd = _credentials()
+        if user and pwd:
+            login(session)
+            resp = session.get(url, params=params, timeout=DEFAULT_TIMEOUT, verify=verify_tls())
     if resp.status_code >= 400:
         raise AppSecHubError(
             f"HTTP {resp.status_code} for {path}", resp.status_code, url, (resp.text or "")[:500]
@@ -191,8 +249,18 @@ def build_issue_dto(
     page_index: int = 0,
     page_size: int = 200,
 ) -> dict[str, Any]:
-    """Build the IssueBriefDataRequestDto payload sent as ?dto=<json>."""
-    dto: dict[str, Any] = {"appIds": [int(app_id)], "pageIndex": page_index, "pageSize": page_size}
+    """Build the IssueBriefDataRequestDto field set for /issue/v2.
+
+    Spring binds the DTO from individual query parameters (see
+    :func:`_dto_query_params`); ``sort`` is the only field the live Hub marks
+    ``NotNull``, so it is always present.
+    """
+    dto: dict[str, Any] = {
+        "appIds": [int(app_id)],
+        "sort": 1,
+        "pageIndex": page_index,
+        "pageSize": page_size,
+    }
     if scan_ids:
         dto["scanIds"] = [int(s) for s in scan_ids]
     if source:
@@ -255,8 +323,30 @@ def trufflehog_label(detector: Any) -> str:
     return str(detector or "unknown")
 
 
+# ``type`` values that are scan-kind buckets, not detectors (live Hub returns
+# type=SAST/SCA_S for every issue; the TruffleHog detector then lives in
+# ``category``: URI, Alchemy, Postgres, JWT, ...).
+_TYPE_BUCKETS = {"sast", "sca", "scas", "scasecurity", "scalicense", "scal", "dast", "iast"}
+
+# Numeric severity codes used by the live Hub (mapping confirmed against
+# /issue/summary on appsechub.ssdlc.soc.rt.ru: counts match exactly).
+_SEVERITY_CODES = {"0": "LOW", "1": "MEDIUM", "2": "HIGH", "3": "CRITICAL"}
+
+
+def normalize_severity(value: Any) -> str:
+    """Render a Hub severity (numeric code or string) as a canonical label."""
+    s = str(value if value is not None else "UNKNOWN").strip() or "UNKNOWN"
+    return _SEVERITY_CODES.get(s, s.upper())
+
+
 def _detector_of(issue: dict[str, Any]) -> str:
-    for f in ("type", "category", "threatGroup"):
+    type_v = str(issue.get("type") or "")
+    candidates = (
+        ("category", "type", "threatGroup")
+        if _norm(type_v) in _TYPE_BUCKETS
+        else ("type", "category", "threatGroup")
+    )
+    for f in candidates:
         v = issue.get(f)
         if v:
             return str(v)
@@ -271,7 +361,10 @@ def breakdown(
     for field in by:
         c: Counter = Counter()
         for it in issues:
-            c[str(it.get(field, "unknown") or "unknown")] += 1
+            if field == "severity":
+                c[normalize_severity(it.get("severity"))] += 1
+            else:
+                c[str(it.get(field, "unknown") or "unknown")] += 1
         out[field] = dict(c.most_common())
     return out
 
@@ -290,15 +383,16 @@ def trufflehog_types(issues: list[dict[str, Any]]) -> dict[str, int]:
 def quality_metrics(issues: list[dict[str, Any]]) -> dict[str, Any]:
     """Lightweight quality signals over a fetched issue set."""
     total = len(issues)
-    sev = Counter(str(i.get("severity", "UNKNOWN") or "UNKNOWN").upper() for i in issues)
+    sev = Counter(normalize_severity(i.get("severity")) for i in issues)
     status = Counter(str(i.get("state", i.get("status", "?")) or "?") for i in issues)
-    # FP proxy: issues whose status normalizes to a false-positive-like state.
+    # FP proxy: issues whose status normalizes to a false-positive-like state
+    # ("Accepted risk" is the live Hub's wont-fix analogue).
     fp = sum(
         1
         for i in issues
         if any(
             t in _norm(i.get("state")) + _norm(i.get("status"))
-            for t in ("falsepositive", "fp", "notanissue", "wontfix")
+            for t in ("falsepositive", "fp", "notanissue", "wontfix", "acceptedrisk")
         )
     )
     return {
@@ -328,7 +422,7 @@ def issue_key(issue: dict[str, Any]) -> str:
 
 
 def _sev_counts(items: list[dict[str, Any]]) -> dict[str, int]:
-    c = Counter(str(i.get("severity", "UNKNOWN") or "UNKNOWN").upper() for i in items)
+    c = Counter(normalize_severity(i.get("severity")) for i in items)
     return dict(c.most_common())
 
 
@@ -421,6 +515,23 @@ def get_app_summary(app_id: int, session: requests.Session | None = None) -> dic
     return _get(session, "/issue/summary", params={"application": int(app_id)})
 
 
+def _dto_query_params(dto: dict[str, Any]) -> dict[str, Any]:
+    """Flatten a DTO dict into /issue/v2 query parameters.
+
+    The live Hub does **not** accept ``?dto=<json>``: Spring binds the
+    ``IssueBriefDataRequestDto`` from individual query params, with list
+    fields passed comma-separated (confirmed live; matches
+    ``eltriage/hub/issue_fetch.py``).
+    """
+    params: dict[str, Any] = {}
+    for key, value in dto.items():
+        if isinstance(value, (list, tuple)):
+            params[key] = ",".join(str(v) for v in value)
+        else:
+            params[key] = value
+    return params
+
+
 def iter_issues(
     app_id: int,
     *,
@@ -435,7 +546,7 @@ def iter_issues(
     seen = 0
     while True:
         dto = build_issue_dto(app_id, page_index=page_index, page_size=page_size, **filters)
-        page = _get(session, "/issue/v2", params={"dto": json.dumps(dto)})
+        page = _get(session, "/issue/v2", params=_dto_query_params(dto))
         rows = _entities(page)
         if not rows:
             break
@@ -467,28 +578,71 @@ def fetch_scan_issues(
     )
 
 
+def list_release_objects(
+    app_id: int,
+    *,
+    session: requests.Session | None = None,
+) -> list[dict[str, Any]]:
+    """Release objects of an application via GET /releaseObject?appIds=<id>.
+
+    A release object is the Hub's unit that owns scan history (an application
+    has one or more); ``/releaseObject/{id}/scans`` takes a *release object*
+    id, not an application id.
+    """
+    session = session or make_session()
+    data = _get(
+        session,
+        "/releaseObject",
+        params={"appIds": int(app_id), "pageIndex": 0, "pageSize": 200},
+    )
+    rows = _entities(data)
+    if not rows and isinstance(data, list):
+        rows = data
+    return [r for r in rows if isinstance(r, dict)]
+
+
 def list_app_scans(
     app_id: int,
     *,
     session: requests.Session | None = None,
     include_raw: bool = False,
 ) -> dict[str, Any]:
-    """Scan history of an application via GET /releaseObject/{id}/scans.
+    """Scan history of an application.
 
-    Returns ``{app_id, count, scans}`` where each scan is normalized to
-    ``{id, ts, tool, status}`` (see :func:`normalize_scan`); fields the Hub
-    build does not expose come back as ``None``.  With ``include_raw=True``
-    the untouched API response is attached under ``raw``.
+    Resolves the app's release objects (``/releaseObject?appIds=``) and
+    aggregates ``GET /releaseObject/{roId}/scans`` for each; every scan row is
+    normalized to ``{id, ts, tool, status, release_object_id}`` (see
+    :func:`normalize_scan`).  If no release objects are found, falls back to
+    treating *app_id* as a release object id directly.  With
+    ``include_raw=True`` the untouched per-release-object responses are
+    attached under ``raw``.
     """
     session = session or make_session()
-    data = _get(session, f"/releaseObject/{int(app_id)}/scans")
-    rows = _entities(data)
-    if not rows and isinstance(data, dict) and any(k in data for k in _SCAN_ID_KEYS):
-        rows = [data]  # tolerate a single-object response
-    scans = [normalize_scan(r) for r in rows]
-    out: dict[str, Any] = {"app_id": int(app_id), "count": len(scans), "scans": scans}
+    release_objects = list_release_objects(app_id, session=session)
+    ro_ids = [ro.get("id") for ro in release_objects if ro.get("id") is not None]
+    if not ro_ids:
+        ro_ids = [int(app_id)]  # fallback: caller may have passed a releaseObject id
+    scans: list[dict[str, Any]] = []
+    raw: dict[str, Any] = {}
+    for ro_id in ro_ids:
+        data = _get(session, f"/releaseObject/{int(ro_id)}/scans")
+        if include_raw:
+            raw[str(ro_id)] = data
+        rows = _entities(data)
+        if not rows and isinstance(data, dict) and any(k in data for k in _SCAN_ID_KEYS):
+            rows = [data]  # tolerate a single-object response
+        for r in rows:
+            scan = normalize_scan(r)
+            scan["release_object_id"] = ro_id
+            scans.append(scan)
+    out: dict[str, Any] = {
+        "app_id": int(app_id),
+        "release_object_ids": ro_ids,
+        "count": len(scans),
+        "scans": scans,
+    }
     if include_raw:
-        out["raw"] = data
+        out["raw"] = raw
     return out
 
 
@@ -535,6 +689,26 @@ def scan_trend(
             row["removed_by_severity"] = d["removed_by_severity"]
         rows.append(row)
     return {"app_id": int(app_id), "scan_ids": ids, "trend": rows}
+
+
+def scan_dynamic(
+    app_id: int,
+    *,
+    session: requests.Session | None = None,
+    from_date: int | None = None,
+) -> dict[str, Any]:
+    """Scan dynamics time series via GET /metrics/scanDynamic (confirmed live).
+
+    The Hub aggregates per-day scan results (qgPassed/qgFailed/qgSkipped/broken
+    and similar series) for the application -- the native "trend" source on
+    builds where release objects are unused.  *from_date* is epoch millis.
+    """
+    session = session or make_session()
+    params: dict[str, Any] = {"appIds": int(app_id)}
+    if from_date is not None:
+        params["fromDate"] = int(from_date)
+    data = _get(session, "/metrics/scanDynamic", params=params)
+    return {"app_id": int(app_id), "dynamic": data}
 
 
 def compare_scans(
@@ -609,6 +783,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--source")
     sp.add_argument("--max", type=int, dest="max_items", default=5000)
 
+    sp = sub.add_parser("dynamic", help="Per-day scan dynamics (metrics/scanDynamic)")
+    sp.add_argument("app")
+    sp.add_argument("--from-date", type=int, dest="from_date", help="Epoch millis lower bound")
+
     sp = sub.add_parser("compare", help="Delta of issues between two scans of an application")
     sp.add_argument("app")
     sp.add_argument("--old-scan", type=int, required=True, dest="old_scan")
@@ -669,6 +847,9 @@ def main(argv: list[str] | None = None) -> int:
                     max_items=args.max_items,
                 )
             )
+            return 0
+        if args.cmd == "dynamic":
+            _emit(scan_dynamic(_resolve(args.app), from_date=args.from_date))
             return 0
         if args.cmd == "compare":
             _emit(
