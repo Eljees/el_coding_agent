@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import threading
 import time
@@ -18,17 +17,16 @@ except Exception as exc:
 else:
     _TK_IMPORT_ERROR = None
 
-from . import ui_runners
+from . import ui_commands, ui_runners
 from .capabilities import capability_brief_lines, discover_capabilities
 from .intent import (
     IntentDecision,
-    decision_as_dict,
     recognize_intent,
 )
 from .project_workspace import create_project_workspace
 from .skill_registry import discover_skills, skill_brief_lines
 from .task_heuristics import (
-    format_duration,
+    format_duration,  # noqa: F401  # re-exported as ui.format_duration for tests/back-compat
     plan_workspace,
 )
 from .tool_registry import default_tools, tool_brief_lines
@@ -64,7 +62,9 @@ class CommandCenterUI:
         # Task history
         self._task_history: list[str] = []
         # workspace_var created before _build so status bar can reference it
-        self.workspace_var = tk.StringVar(value=f"workspace: {self._base_workspace_root}")
+        self.workspace_var = tk.StringVar(
+            value=ui_commands.workspace_status(self._base_workspace_root)
+        )
         self._load_task_history()
         self._build()
 
@@ -399,9 +399,7 @@ class CommandCenterUI:
     def _refresh_history_combo(self) -> None:
         if not hasattr(self, "_history_combo"):
             return
-        # Show first line of each task as the label
-        labels = [t.splitlines()[0][:120] if t else "" for t in self._task_history]
-        self._history_combo["values"] = labels
+        self._history_combo["values"] = ui_commands.history_labels(self._task_history)
 
     def _on_history_select(self, *_args) -> None:
         idx = self._history_combo.current()
@@ -443,49 +441,18 @@ class CommandCenterUI:
         )
         if not path:
             return
-        try:
-            Path(path).write_text(content, encoding="utf-8")
-        except Exception as exc:
-            self._append_command_output(f"\nExport failed: {exc}")
+        error = ui_commands.export_output_text(path, content)
+        if error is not None:
+            self._append_command_output(error)
 
     # ------------------------------------------------------------------
     # Status bar probe (background thread)
     # ------------------------------------------------------------------
 
     def _probe_status(self) -> None:
-        import subprocess as _sp
-        import urllib.request as _ur
-
-        # CVE-bin-tool
-        try:
-            r = _sp.run(
-                ["cve-bin-tool", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=8,
-            )
-            ver = (r.stdout.strip() or r.stderr.strip()).split("\n")[0]
-            cve_status = f"cve-bin-tool: {ver}" if ver else "cve-bin-tool: ok"
-        except FileNotFoundError:
-            cve_status = "cve-bin-tool: not found"
-        except Exception:
-            cve_status = "cve-bin-tool: error"
+        cve_status = ui_runners.probe_cve_status()
         self.root.after(0, lambda s=cve_status: self._status_cve_var.set(s))  # type: ignore[misc]
-
-        # LLM endpoint
-        base_url = "http://localhost:8015/v1"
-        try:
-            from .config import load_config
-
-            cfg = load_config(self._base_workspace_root)
-            base_url = cfg.llm.base_url
-        except Exception:
-            pass
-        try:
-            _ur.urlopen(base_url.rstrip("/") + "/models", timeout=4)
-            llm_status = f"LLM: {base_url} ok"
-        except Exception:
-            llm_status = f"LLM: {base_url} (unreachable)"
+        llm_status = ui_runners.probe_llm_status(self._base_workspace_root)
         self.root.after(0, lambda s=llm_status: self._status_llm_var.set(s))  # type: ignore[misc]
 
     # ------------------------------------------------------------------
@@ -506,27 +473,7 @@ class CommandCenterUI:
         ).start()
 
     def _chat_worker(self, messages: list[dict[str, str]]) -> None:
-        try:
-            from .config import load_config
-            from .llm_client import OpenAICompatibleClient
-
-            cfg = load_config(self._active_workspace_root)
-            client = OpenAICompatibleClient(cfg.llm)
-            full_messages = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful coding assistant embedded in a local agent tool. "
-                        "Answer questions about the code, tasks, and evidence concisely and accurately. "
-                        "Do not generate patches unless explicitly asked."
-                    ),
-                },
-                *messages,
-            ]
-            response = client.chat(full_messages, max_tokens=1024)
-            answer = response.text.strip()
-        except Exception as exc:
-            answer = f"[Error: {exc}]"
+        answer = ui_runners.chat_worker(messages, self._active_workspace_root)
         self.root.after(0, lambda a=answer: self._chat_on_response(a))  # type: ignore[misc]
 
     def _chat_on_response(self, answer: str) -> None:
@@ -572,24 +519,19 @@ class CommandCenterUI:
         self._set_text(self.command_text, content)
 
     def _append_command_output(self, content: str) -> None:
-        combined = self._command_output_cache
-        if combined:
-            combined += "\n"
-        combined += content
-        self._write_command_output(combined)
+        self._write_command_output(ui_commands.append_output(self._command_output_cache, content))
 
     def _write_intent(self, decision: IntentDecision) -> None:
         self._last_decision = decision
-        self.can_do_var.set(f"can do: {decision.can_do}")
-        self.requires_apply_var.set(f"requires apply: {decision.requires_apply}")
-        self.requires_exec_var.set(f"requires exec: {decision.requires_exec}")
-        self.missing_inputs_var.set(
-            f"missing inputs: {', '.join(decision.missing_inputs) if decision.missing_inputs else '-'}"
+        can_do, requires_apply, requires_exec, missing, safe_action = (
+            ui_commands.decision_status_labels(decision)
         )
-        self.safe_action_var.set(f"safe next action: {decision.safe_next_action}")
-        self._intent_output_cache = json.dumps(
-            decision_as_dict(decision), ensure_ascii=False, indent=2
-        )
+        self.can_do_var.set(can_do)
+        self.requires_apply_var.set(requires_apply)
+        self.requires_exec_var.set(requires_exec)
+        self.missing_inputs_var.set(missing)
+        self.safe_action_var.set(safe_action)
+        self._intent_output_cache = ui_commands.decision_json(decision)
         self._set_text(self.intent_text, self._intent_output_cache)
         self._update_action_buttons()
 
@@ -600,24 +542,7 @@ class CommandCenterUI:
         self.tool_list.selection_clear(0, "end")
         self.skill_list.selection_clear(0, "end")
         capability = self.capabilities[index[0]]
-        lines = [
-            f"id: {capability.id}",
-            f"title: {capability.title}",
-            f"safety: {capability.safety_level}",
-            f"requires_apply: {capability.requires_apply}",
-            f"requires_exec: {capability.requires_exec}",
-            "",
-            "description:",
-            capability.description,
-            "",
-            "examples:",
-        ]
-        lines.extend(f"- {item}" for item in capability.examples)
-        lines.extend(["", "cli:", capability.cli_equivalent])
-        self.capability_detail.configure(state="normal")
-        self.capability_detail.delete("1.0", "end")
-        self.capability_detail.insert("1.0", "\n".join(lines))
-        self.capability_detail.configure(state="disabled")
+        self._set_text(self.capability_detail, ui_commands.capability_detail_text(capability))
 
     def _show_tool_detail(self, *_args) -> None:
         index = self.tool_list.curselection()
@@ -626,22 +551,7 @@ class CommandCenterUI:
         self.capability_list.selection_clear(0, "end")
         self.skill_list.selection_clear(0, "end")
         tool = self.tools[index[0]]
-        lines = [
-            f"name: {tool.name}",
-            f"safety: {tool.safety_level}",
-            f"requires_exec: {tool.requires_exec}",
-            f"executor: {tool.executor}",
-            "",
-            "description:",
-            tool.description,
-            "",
-            "schema:",
-            json.dumps(tool.schema, ensure_ascii=False, indent=2),
-        ]
-        self.capability_detail.configure(state="normal")
-        self.capability_detail.delete("1.0", "end")
-        self.capability_detail.insert("1.0", "\n".join(lines))
-        self.capability_detail.configure(state="disabled")
+        self._set_text(self.capability_detail, ui_commands.tool_detail_text(tool))
 
     def _show_skill_detail(self, *_args) -> None:
         index = self.skill_list.curselection()
@@ -650,17 +560,7 @@ class CommandCenterUI:
         self.capability_list.selection_clear(0, "end")
         self.tool_list.selection_clear(0, "end")
         skill = self.skills[index[0]]
-        lines = [
-            f"name: {skill.name}",
-            f"path: {skill.path}",
-            "",
-            "summary:",
-            skill.summary,
-        ]
-        self.capability_detail.configure(state="normal")
-        self.capability_detail.delete("1.0", "end")
-        self.capability_detail.insert("1.0", "\n".join(lines))
-        self.capability_detail.configure(state="disabled")
+        self._set_text(self.capability_detail, ui_commands.skill_detail_text(skill))
 
     # ------------------------------------------------------------------
     # Agent tab: button handlers
@@ -676,10 +576,7 @@ class CommandCenterUI:
         self._write_intent(decision)
         self._prepare_workspace(task, decision, create=False)
         self._save_task_to_history(task)
-        self._write_command_output(
-            "Intent analysis completed in-process.\n\n"
-            + json.dumps(decision_as_dict(decision), ensure_ascii=False, indent=2)
-        )
+        self._write_command_output(ui_commands.analyze_completed_message(decision))
 
     def preview(self) -> None:
         task = self._task()
@@ -690,17 +587,8 @@ class CommandCenterUI:
         decision = recognize_intent(task, self.capabilities)
         self._write_intent(decision)
         self._save_task_to_history(task)
-        if decision.intent == "evidence.artifacts.inspect":
-            self._run_background(
-                "artifacts inspect",
-                task,
-                lambda current_task: self._artifact_worker(current_task, extract=False),
-            )
-            return
-        if decision.intent == "evidence.cve_scan":
-            self._run_background("cve scan", task, self._cve_worker)
-            return
-        self._run_background("preview", task, self._preview_worker)
+        action = ui_commands.action_for_preview(decision.intent)
+        self._run_background(action.label, task, self._worker_for_action(action))
 
     def logs_latest(self) -> None:
         self._run_background("logs latest", "", self._logs_latest_worker)
@@ -713,21 +601,8 @@ class CommandCenterUI:
         decision = self._last_decision or recognize_intent(task, self.capabilities)
         self._write_intent(decision)
         self._save_task_to_history(task)
-        if decision.intent == "evidence.artifacts.inspect":
-            self._run_background(
-                "artifacts extract",
-                task,
-                lambda current_task: self._artifact_worker(current_task, extract=True),
-            )
-            return
-        if decision.intent == "evidence.cve_scan":
-            self._run_background("cve scan", task, self._cve_worker)
-            return
-        self._run_background(
-            "apply",
-            task,
-            lambda current_task: self._run_worker(current_task, apply=True, exec_=False),
-        )
+        action = ui_commands.action_for_apply(decision.intent)
+        self._run_background(action.label, task, self._worker_for_action(action))
 
     def exec_changes(self) -> None:
         task = self._task()
@@ -735,10 +610,19 @@ class CommandCenterUI:
             self._write_command_output("Enter a task first.")
             return
         self._save_task_to_history(task)
-        self._run_background(
-            "apply + exec",
-            task,
-            lambda current_task: self._run_worker(current_task, apply=True, exec_=True),
+        action = ui_commands.action_for_exec()
+        self._run_background(action.label, task, self._worker_for_action(action))
+
+    def _worker_for_action(self, action: ui_commands.BackgroundAction):
+        """Map a dispatched :class:`BackgroundAction` to a bound worker callable."""
+        if action.kind == "artifact":
+            return lambda current_task: self._artifact_worker(current_task, extract=action.extract)
+        if action.kind == "cve":
+            return self._cve_worker
+        if action.kind == "preview":
+            return self._preview_worker
+        return lambda current_task: self._run_worker(
+            current_task, apply=action.apply, exec_=action.exec_
         )
 
     # ------------------------------------------------------------------
@@ -781,23 +665,15 @@ class CommandCenterUI:
             self._write_command_output("Stopped by user.")
             self._update_action_buttons()
             return
-        if output:
-            output = output.strip()
-            output = (
-                output + f"\n\ncompleted in {format_duration(time.time() - self._busy_started_at)}"
-            )
+        output = ui_commands.finalize_run_output(output, time.time() - self._busy_started_at)
         self._write_command_output(output)
-        lower = output.lower()
-        self._preview_ready = (
-            "patch preview ok" in lower or "patch applied" in lower or "run completed" in lower
-        )
+        self._preview_ready = ui_commands.is_preview_ready(output)
         self._update_action_buttons()
 
     def _schedule_busy_heartbeat(self) -> None:
         if not self._busy:
             return
-        elapsed = format_duration(time.time() - self._busy_started_at)
-        heartbeat = f"still running: {elapsed}"
+        heartbeat = ui_commands.heartbeat_message(time.time() - self._busy_started_at)
         if not self._busy_lines or self._busy_lines[-1] != heartbeat:
             self._busy_lines.append(heartbeat)
             self._append_command_output(heartbeat)
@@ -832,28 +708,11 @@ class CommandCenterUI:
     # ------------------------------------------------------------------
 
     def _update_action_buttons(self) -> None:
-        apply_state = "disabled"
-        exec_state = "disabled"
-        if not self._busy and self._last_decision is not None:
-            if (
-                (
-                    self._last_decision.intent == "evidence.artifacts.inspect"
-                    and self._last_decision.can_do == "yes"
-                )
-                or (
-                    self._last_decision.intent == "evidence.cve_scan"
-                    and self._last_decision.can_do == "yes"
-                )
-                or (
-                    self._preview_ready
-                    and self._last_decision.intent in {"run.preview", "run.apply", "run.exec"}
-                )
-            ):
-                apply_state = "normal"
-            if self._preview_ready and (
-                self._last_decision.intent == "run.exec" or self._last_decision.requires_exec
-            ):
-                exec_state = "normal"
+        apply_state, exec_state = ui_commands.action_button_states(
+            busy=self._busy,
+            decision=self._last_decision,
+            preview_ready=self._preview_ready,
+        )
         self.apply_button.configure(state=apply_state)
         self.exec_button.configure(state=exec_state)
 
@@ -951,19 +810,9 @@ class CommandCenterUI:
         self._copy_text(text)
 
     def _copy_all_output(self) -> None:
-        combined = "\n\n".join(
-            part
-            for part in (
-                "IntentDecision JSON:\n" + self._intent_output_cache
-                if self._intent_output_cache
-                else "",
-                "Command output:\n" + self._command_output_cache
-                if self._command_output_cache
-                else "",
-            )
-            if part
+        self._copy_text(
+            ui_commands.combined_copy_text(self._intent_output_cache, self._command_output_cache)
         )
-        self._copy_text(combined)
 
     def _paste_evidence(self) -> None:
         try:
@@ -996,11 +845,11 @@ class CommandCenterUI:
                 )
                 self._active_workspace_task = task
             if create:
-                self.workspace_var.set(f"workspace: {self._active_workspace_root}")
+                self.workspace_var.set(ui_commands.workspace_status(self._active_workspace_root))
         else:
             self._active_workspace_root = self._base_workspace_root
             self._active_workspace_task = ""
-            self.workspace_var.set(f"workspace: {self._active_workspace_root}")
+            self.workspace_var.set(ui_commands.workspace_status(self._active_workspace_root))
 
 
 def run_command_center_ui(autoclose_ms: int | None = None) -> int:

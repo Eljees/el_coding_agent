@@ -21,6 +21,13 @@ from pathlib import Path
 from .intent import extract_artifact_input_path, extract_artifact_output_path
 from .task_heuristics import cve_min_severity_for_task, temporary_cwd
 
+# System prompt for the Chat tab's LLM conversation.
+CHAT_SYSTEM_PROMPT = (
+    "You are a helpful coding assistant embedded in a local agent tool. "
+    "Answer questions about the code, tasks, and evidence concisely and accurately. "
+    "Do not generate patches unless explicitly asked."
+)
+
 
 @contextlib.contextmanager
 def redirect_optional_stdin(evidence_text: str):
@@ -181,3 +188,63 @@ def run_worker(
         lambda a: cli_module._run_task(task, a), args, workspace_root, evidence_text
     )
     return _fmt(output, code, "Run")
+
+
+def chat_worker(messages: list[dict[str, str]], workspace_root: Path) -> str:
+    """Send the chat *messages* to the configured LLM and return the answer.
+
+    Any failure (missing config, unreachable endpoint, ...) is rendered as an
+    ``[Error: ...]`` line so the GUI can display it inline instead of crashing.
+    """
+    try:
+        from .config import load_config
+        from .llm_client import OpenAICompatibleClient
+
+        cfg = load_config(workspace_root)
+        client = OpenAICompatibleClient(cfg.llm)
+        full_messages = [
+            {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+            *messages,
+        ]
+        response = client.chat(full_messages, max_tokens=1024)
+        return response.text.strip()
+    except Exception as exc:
+        return f"[Error: {exc}]"
+
+
+def probe_cve_status() -> str:
+    """Return the one-line cve-bin-tool availability status for the status bar."""
+    import subprocess as _sp
+
+    try:
+        r = _sp.run(
+            ["cve-bin-tool", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+        )
+        ver = (r.stdout.strip() or r.stderr.strip()).split("\n")[0]
+        return f"cve-bin-tool: {ver}" if ver else "cve-bin-tool: ok"
+    except FileNotFoundError:
+        return "cve-bin-tool: not found"
+    except Exception:
+        return "cve-bin-tool: error"
+
+
+def probe_llm_status(base_root: Path) -> str:
+    """Return the one-line LLM endpoint reachability status for the status bar."""
+    import urllib.request as _ur
+
+    base_url = "http://localhost:8015/v1"
+    try:
+        from .config import load_config
+
+        cfg = load_config(base_root)
+        base_url = cfg.llm.base_url
+    except Exception:
+        pass
+    try:
+        _ur.urlopen(base_url.rstrip("/") + "/models", timeout=4)
+        return f"LLM: {base_url} ok"
+    except Exception:
+        return f"LLM: {base_url} (unreachable)"

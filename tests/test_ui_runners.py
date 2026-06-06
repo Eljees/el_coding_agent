@@ -287,3 +287,133 @@ def test_run_worker_no_output_returns_finished(tmp_path: Path, monkeypatch) -> N
     result = run_worker("fix bug", tmp_path, "", apply=True, exec_=True)
     assert "Run" in result
     assert "exit code" in result
+
+
+# ---------------------------------------------------------------------------
+# chat_worker
+# ---------------------------------------------------------------------------
+
+
+class _FakeLLMResponse:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def test_chat_worker_prepends_system_prompt_and_strips_answer(tmp_path: Path, monkeypatch) -> None:
+    import local_codex_lite.config as config_mod
+    import local_codex_lite.llm_client as llm_mod
+    from local_codex_lite.ui_runners import CHAT_SYSTEM_PROMPT, chat_worker
+
+    seen_messages: list[list[dict[str, str]]] = []
+
+    class _FakeClient:
+        def __init__(self, llm_config) -> None:
+            pass
+
+        def chat(self, messages, max_tokens=None, status_label=None):
+            seen_messages.append(messages)
+            return _FakeLLMResponse("  the answer  \n")
+
+    monkeypatch.setattr(config_mod, "load_config", lambda root: config_mod.AgentConfig())
+    monkeypatch.setattr(llm_mod, "OpenAICompatibleClient", _FakeClient)
+    answer = chat_worker([{"role": "user", "content": "hi"}], tmp_path)
+    assert answer == "the answer"
+    assert seen_messages[0][0] == {"role": "system", "content": CHAT_SYSTEM_PROMPT}
+    assert seen_messages[0][1] == {"role": "user", "content": "hi"}
+
+
+def test_chat_worker_renders_errors_inline(tmp_path: Path, monkeypatch) -> None:
+    import local_codex_lite.config as config_mod
+    from local_codex_lite.ui_runners import chat_worker
+
+    def boom(root):
+        raise RuntimeError("config exploded")
+
+    monkeypatch.setattr(config_mod, "load_config", boom)
+    answer = chat_worker([{"role": "user", "content": "hi"}], tmp_path)
+    assert answer == "[Error: config exploded]"
+
+
+# ---------------------------------------------------------------------------
+# Status bar probes
+# ---------------------------------------------------------------------------
+
+
+def test_probe_cve_status_reports_version(monkeypatch) -> None:
+    import subprocess
+
+    from local_codex_lite.ui_runners import probe_cve_status
+
+    class _Result:
+        stdout = "CVE Binary Tool v3.4\nextra line"
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
+    assert probe_cve_status() == "cve-bin-tool: CVE Binary Tool v3.4"
+
+
+def test_probe_cve_status_falls_back_to_stderr_then_ok(monkeypatch) -> None:
+    import subprocess
+
+    from local_codex_lite.ui_runners import probe_cve_status
+
+    class _Result:
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
+    assert probe_cve_status() == "cve-bin-tool: ok"
+
+
+def test_probe_cve_status_not_found(monkeypatch) -> None:
+    import subprocess
+
+    from local_codex_lite.ui_runners import probe_cve_status
+
+    def raise_not_found(*a, **k):
+        raise FileNotFoundError("no cve-bin-tool")
+
+    monkeypatch.setattr(subprocess, "run", raise_not_found)
+    assert probe_cve_status() == "cve-bin-tool: not found"
+
+
+def test_probe_cve_status_generic_error(monkeypatch) -> None:
+    import subprocess
+
+    from local_codex_lite.ui_runners import probe_cve_status
+
+    def raise_timeout(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(subprocess, "run", raise_timeout)
+    assert probe_cve_status() == "cve-bin-tool: error"
+
+
+def test_probe_llm_status_ok(tmp_path: Path, monkeypatch) -> None:
+    import urllib.request
+    from types import SimpleNamespace
+
+    import local_codex_lite.config as config_mod
+    from local_codex_lite.ui_runners import probe_llm_status
+
+    fake_cfg = SimpleNamespace(llm=SimpleNamespace(base_url="http://example:9000/v1"))
+    monkeypatch.setattr(config_mod, "load_config", lambda root: fake_cfg)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda url, timeout=4: object())
+    assert probe_llm_status(tmp_path) == "LLM: http://example:9000/v1 ok"
+
+
+def test_probe_llm_status_unreachable_uses_default_url(tmp_path: Path, monkeypatch) -> None:
+    import urllib.request
+
+    import local_codex_lite.config as config_mod
+    from local_codex_lite.ui_runners import probe_llm_status
+
+    def config_boom(root):
+        raise RuntimeError("no config")
+
+    def urlopen_boom(url, timeout=4):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(config_mod, "load_config", config_boom)
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_boom)
+    assert probe_llm_status(tmp_path) == "LLM: http://localhost:8015/v1 (unreachable)"
