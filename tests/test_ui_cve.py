@@ -3,20 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 
 from local_codex_lite import cli_evidence, ui
+from local_codex_lite.task_heuristics import cve_min_severity_for_task, format_duration
 
 
 def test_cve_min_severity_for_task_defaults_to_high() -> None:
-    assert ui.cve_min_severity_for_task(r"проверь на cve артефакт D:\artifacts\demo.rpm") == "HIGH"
+    assert cve_min_severity_for_task(r"проверь на cve артефакт D:\artifacts\demo.rpm") == "HIGH"
 
 
 def test_cve_min_severity_for_task_detects_medium_request() -> None:
-    assert ui.cve_min_severity_for_task("сделай полный cve отчёт включая medium") == "MEDIUM"
-    assert ui.cve_min_severity_for_task("нужен расширенный отчёт по cve") == "MEDIUM"
+    assert cve_min_severity_for_task("сделай полный cve отчёт включая medium") == "MEDIUM"
+    assert cve_min_severity_for_task("нужен расширенный отчёт по cve") == "MEDIUM"
 
 
 def test_format_duration_renders_mm_ss() -> None:
-    assert ui.format_duration(5) == "00:05"
-    assert ui.format_duration(125) == "02:05"
+    assert format_duration(5) == "00:05"
+    assert format_duration(125) == "02:05"
 
 
 def test_initial_progress_message_lists_cve_stages() -> None:

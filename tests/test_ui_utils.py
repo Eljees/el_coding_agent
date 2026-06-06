@@ -16,7 +16,11 @@ import pytest
 
 from local_codex_lite import ui, ui_state
 from local_codex_lite.intent import IntentDecision
-from local_codex_lite.task_heuristics import should_create_project_workspace
+from local_codex_lite.task_heuristics import (
+    cve_min_severity_for_task,
+    should_create_project_workspace,
+    temporary_cwd,
+)
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -37,7 +41,7 @@ from local_codex_lite.task_heuristics import should_create_project_workspace
     ],
 )
 def test_cve_min_severity_for_task(task: str, expected: str) -> None:
-    assert ui.cve_min_severity_for_task(task) == expected
+    assert cve_min_severity_for_task(task) == expected
 
 
 @pytest.mark.parametrize(
@@ -104,7 +108,7 @@ def test_temporary_cwd_restores_previous(tmp_path: Path) -> None:
     pointing into a generated_projects/ folder forever."""
     original = Path.cwd()
     try:
-        with ui.temporary_cwd(tmp_path):
+        with temporary_cwd(tmp_path):
             assert Path.cwd().resolve() == tmp_path.resolve()
             raise RuntimeError("boom")
     except RuntimeError:

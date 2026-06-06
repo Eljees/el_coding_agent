@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import argparse
-import contextlib
-import io
 import json
 import sys
 import threading
@@ -21,21 +18,18 @@ except Exception as exc:
 else:
     _TK_IMPORT_ERROR = None
 
+from . import ui_runners
 from .capabilities import capability_brief_lines, discover_capabilities
 from .intent import (
     IntentDecision,
     decision_as_dict,
-    extract_artifact_input_path,
-    extract_artifact_output_path,
     recognize_intent,
 )
 from .project_workspace import create_project_workspace
 from .skill_registry import discover_skills, skill_brief_lines
 from .task_heuristics import (
-    cve_min_severity_for_task,
     format_duration,
     plan_workspace,
-    temporary_cwd,
 )
 from .tool_registry import default_tools, tool_brief_lines
 from .ui_state import (
@@ -810,151 +804,28 @@ class CommandCenterUI:
         self.root.after(3000, self._schedule_busy_heartbeat)
 
     def _initial_progress_message(self, label: str, task: str) -> str:
-        lines = [f"Running {label}...", f"Workspace: {self._active_workspace_root}"]
-        if label == "cve scan":
-            input_root = extract_artifact_input_path(task)
-            extract_to = extract_artifact_output_path(task)
-            severity = cve_min_severity_for_task(task)
-            lines.extend(
-                [
-                    "CVE scan started.",
-                    f"input={input_root or '-'}",
-                    f"min_severity={severity}",
-                    f"extract_to={extract_to or 'default beside artifact'}",
-                    "stage=resolve input",
-                    "stage=unpack artifacts if needed",
-                    "stage=run cve-bin-tool",
-                    "stage=write evidence and reports",
-                    "cve-bin-tool will run next; this can take several minutes.",
-                ]
-            )
-        return "\n".join(lines)
+        return ui_runners.initial_progress_message(label, task, self._active_workspace_root)
 
     # ------------------------------------------------------------------
     # Workers
     # ------------------------------------------------------------------
 
     def _preview_worker(self, task: str) -> str:
-        from . import cli as cli_module
-
-        buffer = io.StringIO()
-        evidence_text = self._evidence()
-        args = argparse.Namespace(
-            task=task, evidence_file=[], evidence_stdin=bool(evidence_text), rag=False
-        )
-        with (
-            temporary_cwd(self._active_workspace_root),
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-            self._redirect_optional_stdin(evidence_text),
-        ):
-            code = cli_module.cmd_preview(args)
-        output = buffer.getvalue().strip()
-        if output:
-            return output + (f"\n\n(exit code: {code})" if code else "")
-        return f"Preview finished with exit code {code}"
+        return ui_runners.preview_worker(task, self._active_workspace_root, self._evidence())
 
     def _logs_latest_worker(self, _task: str) -> str:
-        from . import cli as cli_module
-
-        buffer = io.StringIO()
-        args = argparse.Namespace()
-        with (
-            temporary_cwd(self._active_workspace_root),
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-        ):
-            code = cli_module.cmd_logs_latest(args)
-        output = buffer.getvalue().strip()
-        if output:
-            return output + (f"\n\n(exit code: {code})" if code else "")
-        return f"Logs latest finished with exit code {code}"
+        return ui_runners.logs_latest_worker(self._active_workspace_root)
 
     def _artifact_worker(self, task: str, *, extract: bool) -> str:
-        from . import cli as cli_module
-
-        input_root = extract_artifact_input_path(task)
-        if not input_root:
-            return "Artifact input path not found in task."
-        extract_to = extract_artifact_output_path(task)
-        buffer = io.StringIO()
-        args = argparse.Namespace(
-            input_root=input_root,
-            extract_to=extract_to or None,
-            extract_to_flag=None,
-            extract=extract,
-            max_depth=2,
-            max_files=2000,
-            max_total_bytes=500_000_000,
-        )
-        with (
-            temporary_cwd(self._active_workspace_root),
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-        ):
-            code = cli_module.cmd_evidence_artifacts_inspect(args)
-        output = buffer.getvalue().strip()
-        if output:
-            return output + (f"\n\n(exit code: {code})" if code else "")
-        return f"Artifact inspection finished with exit code {code}"
+        return ui_runners.artifact_worker(task, self._active_workspace_root, extract=extract)
 
     def _cve_worker(self, task: str) -> str:
-        from . import cli as cli_module
-
-        input_root = extract_artifact_input_path(task)
-        if not input_root:
-            return "CVE scan input path not found in task."
-        extract_to = extract_artifact_output_path(task)
-        severity = cve_min_severity_for_task(task)
-        buffer = io.StringIO()
-        args = argparse.Namespace(
-            action_or_input=input_root,
-            input_root=None,
-            extract_to=extract_to or None,
-            output_dir=None,
-            install=False,
-            update_db=False,
-            skip_unpack=False,
-            offline=False,
-            min_severity=severity,
-            format="json,md,high-critical-md",
-        )
-        with (
-            temporary_cwd(self._active_workspace_root),
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-        ):
-            code = cli_module.cmd_evidence_cve_scan(args)
-        output = buffer.getvalue().strip()
-        if output:
-            return output + (f"\n\n(exit code: {code})" if code else "")
-        return f"CVE scan finished with exit code {code}"
+        return ui_runners.cve_worker(task, self._active_workspace_root)
 
     def _run_worker(self, task: str, *, apply: bool, exec_: bool) -> str:
-        from . import cli as cli_module
-
-        buffer = io.StringIO()
-        evidence_text = self._evidence()
-        args = argparse.Namespace(
-            task=task,
-            dry_run=False,
-            apply=apply,
-            exec=exec_,
-            assume_clarification=True,
-            evidence_file=[],
-            evidence_stdin=bool(evidence_text),
+        return ui_runners.run_worker(
+            task, self._active_workspace_root, self._evidence(), apply=apply, exec_=exec_
         )
-        with (
-            temporary_cwd(self._active_workspace_root),
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-            self._redirect_optional_stdin(evidence_text),
-        ):
-            code = cli_module._run_task(task, args)
-        output = buffer.getvalue().strip()
-        if output:
-            return output + (f"\n\n(exit code: {code})" if code else "")
-        return f"Run finished with exit code {code}"
 
     # ------------------------------------------------------------------
     # Button state
@@ -1107,18 +978,6 @@ class CommandCenterUI:
 
     def _clear_evidence(self) -> None:
         self.evidence_text.delete("1.0", "end")
-
-    @contextlib.contextmanager
-    def _redirect_optional_stdin(self, evidence_text: str):
-        if not evidence_text:
-            yield
-            return
-        previous = sys.stdin
-        sys.stdin = io.StringIO(evidence_text)
-        try:
-            yield
-        finally:
-            sys.stdin = previous
 
     def _prepare_workspace(
         self, task: str, decision: IntentDecision | None, *, create: bool
