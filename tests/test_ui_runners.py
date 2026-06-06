@@ -14,8 +14,11 @@ import pytest
 from local_codex_lite.ui_runners import (
     _capture,
     _fmt,
+    appsechub_skill_path,
+    appsechub_worker,
     artifact_worker,
     cve_worker,
+    extract_appsechub_app,
     initial_progress_message,
     logs_latest_worker,
     preview_worker,
@@ -417,3 +420,60 @@ def test_probe_llm_status_unreachable_uses_default_url(tmp_path: Path, monkeypat
     monkeypatch.setattr(config_mod, "load_config", config_boom)
     monkeypatch.setattr(urllib.request, "urlopen", urlopen_boom)
     assert probe_llm_status(tmp_path) == "LLM: http://localhost:8015/v1 (unreachable)"
+
+
+# ---------------------------------------------------------------------------
+# appsechub_worker
+# ---------------------------------------------------------------------------
+
+
+def test_extract_appsechub_app_url_and_id_forms() -> None:
+    url = "https://appsechub.ssdlc.soc.rt.ru/#/appprofile/89/issues"
+    assert extract_appsechub_app(f"посмотри issues проекта {url}") == url
+    assert extract_appsechub_app("сколько срабатываний у проекта 89") == "89"
+    assert extract_appsechub_app("issues app 42") == "42"
+    assert extract_appsechub_app("почини баг в parser.py") == ""
+
+
+def test_appsechub_skill_path_points_at_repo_skill() -> None:
+    p = appsechub_skill_path()
+    assert p.name == "appsechub_client.py"
+    assert p.parent.name == "appsechub"
+
+
+def test_appsechub_worker_without_app_reference_explains() -> None:
+    out = appsechub_worker("почини баг")
+    assert "could not find an application reference" in out
+
+
+def test_appsechub_worker_runs_skill_subprocess(monkeypatch) -> None:
+    import subprocess
+    from types import SimpleNamespace
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd, capture_output=True, text=True, timeout=600):
+        captured["cmd"] = cmd
+        return SimpleNamespace(returncode=0, stdout='{"app_id": 89}', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    out = appsechub_worker("посмотри типы trufflehog у проекта 89")
+    assert out == '{"app_id": 89}'
+    cmd = captured["cmd"]
+    assert cmd[0] == sys.executable
+    assert cmd[1].endswith("appsechub_client.py")
+    assert cmd[2:4] == ["breakdown", "89"]
+    assert cmd[4:6] == ["--source", "trufflehog"]
+
+
+def test_appsechub_worker_reports_failure_exit_code(monkeypatch) -> None:
+    import subprocess
+    from types import SimpleNamespace
+
+    def fake_run(cmd, capture_output=True, text=True, timeout=600):
+        return SimpleNamespace(returncode=2, stdout="", stderr='{"error": "HTTP 401"}')
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    out = appsechub_worker("issues проекта 89")
+    assert "failed (exit 2)" in out
+    assert "HTTP 401" in out

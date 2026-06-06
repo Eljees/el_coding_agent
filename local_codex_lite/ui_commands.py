@@ -54,6 +54,8 @@ def action_for_preview(intent: str) -> BackgroundAction:
         return BackgroundAction(label="artifacts inspect", kind="artifact", extract=False)
     if intent == "evidence.cve_scan":
         return BackgroundAction(label="cve scan", kind="cve")
+    if intent == "appsechub.issues":
+        return BackgroundAction(label="appsechub breakdown", kind="appsechub")
     return BackgroundAction(label="preview", kind="preview")
 
 

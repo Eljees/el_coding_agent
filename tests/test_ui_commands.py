@@ -80,6 +80,12 @@ def test_action_for_preview_cve_intent() -> None:
     assert action.kind == "cve"
 
 
+def test_action_for_preview_appsechub_intent() -> None:
+    action = action_for_preview("appsechub.issues")
+    assert action.label == "appsechub breakdown"
+    assert action.kind == "appsechub"
+
+
 def test_action_for_preview_default_is_preview() -> None:
     action = action_for_preview("run.preview")
     assert action == BackgroundAction(label="preview", kind="preview")

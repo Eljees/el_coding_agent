@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -210,6 +211,60 @@ def chat_worker(messages: list[dict[str, str]], workspace_root: Path) -> str:
         return response.text.strip()
     except Exception as exc:
         return f"[Error: {exc}]"
+
+
+# Application reference inside a task: full appprofile URL or "проект(а) 89".
+_APPSECHUB_URL_RE = re.compile(r"https?://\S*appprofile/\d+\S*", re.IGNORECASE)
+_APPSECHUB_ID_RE = re.compile(r"(?:проект[ауе]?|app|приложени[ея])\s*[№#]?\s*(\d+)", re.IGNORECASE)
+
+
+def extract_appsechub_app(task: str) -> str:
+    """Pull an AppSecHub application reference (URL or numeric id) out of *task*."""
+    m = _APPSECHUB_URL_RE.search(task)
+    if m:
+        return m.group(0).rstrip(".,;)")
+    m = _APPSECHUB_ID_RE.search(task)
+    if m:
+        return m.group(1)
+    return ""
+
+
+def appsechub_skill_path() -> Path:
+    """Path to the appsechub skill client inside this agent's repository."""
+    return Path(__file__).resolve().parents[1] / "skills" / "appsechub" / "appsechub_client.py"
+
+
+def appsechub_worker(task: str) -> str:
+    """Run a read-only AppSecHub breakdown for the application named in *task*.
+
+    Delegates to the ``appsechub`` skill client in a subprocess (same command
+    the capability's ``cli_equivalent`` documents), so the GUI needs neither
+    ``requests`` imported in-process nor the skill on ``sys.path``.  Restricts
+    to the TruffleHog scanner when the task mentions secrets/trufflehog.
+    """
+    import subprocess
+
+    app = extract_appsechub_app(task)
+    if not app:
+        return (
+            "AppSecHub: could not find an application reference in the task.\n"
+            "Paste the appprofile URL (https://.../#/appprofile/<id>/issues) "
+            "or write e.g. 'проект 89'."
+        )
+    cmd = [sys.executable, str(appsechub_skill_path()), "breakdown", app]
+    lowered = task.lower()
+    if "trufflehog" in lowered or "трюфел" in lowered or "секрет" in lowered:
+        cmd += ["--source", "trufflehog"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    except FileNotFoundError:
+        return "AppSecHub: python executable not found for the skill subprocess."
+    except subprocess.TimeoutExpired:
+        return "AppSecHub: query timed out (10 min)."
+    output = (r.stdout or "").strip() or (r.stderr or "").strip()
+    if r.returncode != 0:
+        return f"AppSecHub query failed (exit {r.returncode}):\n{output}"
+    return output
 
 
 def probe_cve_status() -> str:

@@ -619,6 +619,8 @@ class CommandCenterUI:
             return lambda current_task: self._artifact_worker(current_task, extract=action.extract)
         if action.kind == "cve":
             return self._cve_worker
+        if action.kind == "appsechub":
+            return self._appsechub_worker
         if action.kind == "preview":
             return self._preview_worker
         return lambda current_task: self._run_worker(
@@ -697,6 +699,9 @@ class CommandCenterUI:
 
     def _cve_worker(self, task: str) -> str:
         return ui_runners.cve_worker(task, self._active_workspace_root)
+
+    def _appsechub_worker(self, task: str) -> str:
+        return ui_runners.appsechub_worker(task)
 
     def _run_worker(self, task: str, *, apply: bool, exec_: bool) -> str:
         return ui_runners.run_worker(
