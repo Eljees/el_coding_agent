@@ -65,6 +65,8 @@ dev = [
   "mypy==1.14.1",
   "pre-commit>=3.7",
   "types-PyYAML>=6.0",
+  # Needed by skills/appsechub tests (pytest tests/ skills/).
+  "requests>=2.31",
 ]
 rich = [
   "rich>=13.7",

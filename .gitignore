@@ -25,3 +25,6 @@ coverage.xml
 
 # Per-developer proxy override loaded by setup.ps1; ship .example only.
 tools/proxy.local.ps1
+
+# Local Claude agent session settings.
+.claude/

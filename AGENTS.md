@@ -27,11 +27,12 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 > reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `439 passed, 1 skipped` (2026-06-06; `testpaths = ["tests"]`;
-  includes 10 new runner failure-path tests (runner.py 100%) and
-  13 new planner branch tests (planner.py 82%); overall coverage 74%)
-- Skills tests (`skills/appsechub/test_appsechub_client.py`, 11 tests) are outside the
-  default `testpaths`; run explicitly with `python -m pytest tests/ skills/` → **450 passed**
+- Last known clean test run: `507 passed` (2026-06-06 evening, after plan A-C + phase D;
+  `testpaths = ["tests"]`; overall coverage 78%; runner.py 100%, trufflehog.py 95%,
+  llm_client.py 96%, replay.py 99%, ui_runners.py 100%)
+- Skills tests (`skills/appsechub/test_appsechub_client.py`, 11 tests) are **intentionally**
+  outside the default `testpaths` (they exercise the skill, not the package); run explicitly
+  with `python -m pytest tests/ skills/`. Requires `requests` (now in `[dev]` extras).
 - Toolchain pinned: `ruff==0.15.15`, `mypy==1.14.1` in both `[dev]` and
   `.pre-commit-config.yaml`; `ruff check`/`ruff format --check` are clean
 - `cve-bin-tool` confirmed installed: `mode=executable`, `version=3.4`

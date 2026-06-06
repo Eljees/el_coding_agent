@@ -23,7 +23,7 @@ from .task_heuristics import cve_min_severity_for_task, temporary_cwd
 
 
 @contextlib.contextmanager
-def redirect_optional_stdin(evidence_text: str):  # type: ignore[return]
+def redirect_optional_stdin(evidence_text: str):
     """Temporarily replace ``sys.stdin`` with an in-memory string.
 
     When *evidence_text* is non-empty the context manager patches ``sys.stdin``
