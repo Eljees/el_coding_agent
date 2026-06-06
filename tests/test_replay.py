@@ -253,3 +253,136 @@ def test_build_parser_replay_apply_and_profile() -> None:
     ns = parser.parse_args(["replay", "20260516-abc", "--apply", "--profile", "fast"])
     assert ns.apply is True
     assert ns.profile == "fast"
+
+
+# ---------------------------------------------------------------------------
+# _extract_touched_paths edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_extract_touched_paths_skips_dev_null(tmp_path: Path) -> None:
+    """--- a//dev/null is an unusual but valid patch line; raw becomes /dev/null
+    which must be filtered out (line 63-64 branch)."""
+    patch = "--- a//dev/null\n+++ b/new_file.py\n"
+    paths = _extract_touched_paths(patch, tmp_path)
+    names = [p.name for p in paths]
+    assert names == ["new_file.py"]
+    assert all("dev" not in n for n in names)
+
+
+def test_extract_touched_paths_deduplicates_across_diff_and_plus(tmp_path: Path) -> None:
+    """--- a/foo.py and +++ b/foo.py both resolve to 'foo.py'; only one Path
+    should appear in the result (line 65-66 dedup branch)."""
+    patch = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new\n"
+    paths = _extract_touched_paths(patch, tmp_path)
+    assert len(paths) == 1
+    assert paths[0] == tmp_path / "foo.py"
+
+
+# ---------------------------------------------------------------------------
+# cmd_replay: UnknownProfileError
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_replay_unknown_profile_returns_1(tmp_path: Path, monkeypatch) -> None:
+    _init_git_repo(tmp_path, {"foo.py": "x = 1\n"})
+    diff = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n"
+    _make_source_run(tmp_path, "20260516-abc", task="t", plan={"summary": "p"}, patch=diff)
+    monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile="nonexistent_profile",
+        )
+    )
+    assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# cmd_replay: apply failure path
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_replay_apply_failure_returns_nonzero(tmp_path: Path, monkeypatch) -> None:
+    """When git apply fails (non-zero returncode), cmd_replay must return the
+    error code and leave the workspace unchanged."""
+    from local_codex_lite.patcher import ApplyResult
+
+    _init_git_repo(tmp_path, {"foo.py": "x = 1\n"})
+    diff = "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n"
+    _make_source_run(tmp_path, "20260516-abc", task="t", plan={"summary": "p"}, patch=diff)
+    monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        replay,
+        "apply_patch",
+        lambda *a, **kw: ApplyResult(
+            returncode=1, stdout="", stderr="patch does not apply", strategy="git_root_relative"
+        ),
+    )
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile=None,
+        )
+    )
+    assert rc != 0
+    assert (tmp_path / "foo.py").read_text(encoding="utf-8") == "x = 1\n"
+
+
+# ---------------------------------------------------------------------------
+# cmd_replay: syntax error after apply
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_replay_syntax_error_restores_backup(tmp_path: Path, monkeypatch) -> None:
+    """After a successful apply that produces a syntax error, cmd_replay must
+    restore the backup and return 1."""
+    from local_codex_lite.patcher import ApplyResult, SyntaxIssue
+
+    original = "x = 1\n"
+    _init_git_repo(tmp_path, {"foo.py": original})
+    diff = (
+        "diff --git a/foo.py b/foo.py\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1 +1 @@\n"
+        f"-{original.rstrip()}\n"
+        "+x = 2\n"
+    )
+    _make_source_run(tmp_path, "20260516-abc", task="t", plan={"summary": "p"}, patch=diff)
+    monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
+
+    # Simulate apply succeeding…
+    monkeypatch.setattr(
+        replay,
+        "apply_patch",
+        lambda *a, **kw: ApplyResult(
+            returncode=0, stdout="", stderr="", strategy="git_root_relative"
+        ),
+    )
+    # …but the AST gate detecting a syntax problem.
+    monkeypatch.setattr(
+        replay,
+        "validate_python_syntax",
+        lambda paths: [SyntaxIssue(path=paths[0], detail="line 1: invalid syntax")],
+    )
+    # restore_from_run_backups just needs to return a list of restored paths.
+    monkeypatch.setattr(
+        replay,
+        "restore_from_run_backups",
+        lambda touched, base, run_dir: [str(p) for p in touched],
+    )
+
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile=None,
+        )
+    )
+    assert rc == 1

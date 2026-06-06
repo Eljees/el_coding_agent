@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -109,6 +110,22 @@ def default_tools() -> list[ToolDefinition]:
             requires_exec=False,
         ),
     ]
+
+
+def resolve_executor(executor: str) -> object:
+    """Resolve a dotted-path *executor* string to the callable it names.
+
+    Used internally for dispatch and by ``tests/test_tool_registry_executors.py``
+    to guard that executor strings don't silently rot when targets are renamed.
+
+    Raises ``ModuleNotFoundError`` or ``AttributeError`` if the path is invalid.
+    """
+    module_path, _, attr = executor.rpartition(".")
+    if not module_path:
+        raise AttributeError(f"executor {executor!r} has no module component")
+    module = importlib.import_module(module_path)
+    target = getattr(module, attr)
+    return target
 
 
 def tool_brief_lines(tools: list[ToolDefinition]) -> list[str]:

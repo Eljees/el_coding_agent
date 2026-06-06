@@ -19,8 +19,9 @@ _DANGEROUS_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     # Windows del with /s (and optional /q, /f) -- destructive recursive delete.
-    re.compile(r"\bdel\s+(?:/[sqf]\s+){1,3}", re.IGNORECASE),
-    re.compile(r"\bdel\s+/s\b", re.IGNORECASE),
+    # Matches: ``del /s target``, ``del /s /q target``, ``del /s`` (bare).
+    # \b after each flag prevents matching /sfoo (flag concatenated into a name).
+    re.compile(r"\bdel\s+(?:/[sqf]\b\s*)+", re.IGNORECASE),
     # PowerShell recursive remove.
     re.compile(r"\bremove-item\s+(?:[^|]*\s)?-recurse\b", re.IGNORECASE),
     # ``format c:`` style disk wipes -- narrowly target ``format <drive>:``.

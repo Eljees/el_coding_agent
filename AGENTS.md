@@ -20,16 +20,18 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 
 ---
 
-## Current state (updated 2026-05-31)
+## Current state (updated 2026-06-06)
 
 > Canonical change history lives in `CHANGELOG.md`.  The dated
 > "session log" blocks in this file are point-in-time snapshots kept for
 > reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `457 passed` (2026-06-06, full suite;
+- Last known clean test run: `439 passed, 1 skipped` (2026-06-06; `testpaths = ["tests"]`;
   includes 10 new runner failure-path tests (runner.py 100%) and
   13 new planner branch tests (planner.py 82%); overall coverage 74%)
+- Skills tests (`skills/appsechub/test_appsechub_client.py`, 11 tests) are outside the
+  default `testpaths`; run explicitly with `python -m pytest tests/ skills/` → **450 passed**
 - Toolchain pinned: `ruff==0.15.15`, `mypy==1.14.1` in both `[dev]` and
   `.pre-commit-config.yaml`; `ruff check`/`ruff format --check` are clean
 - `cve-bin-tool` confirmed installed: `mode=executable`, `version=3.4`
@@ -67,14 +69,6 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 - **Hotkeys**: F5 = Analyze, Ctrl+Enter = Preview, Ctrl+Shift+Enter = Apply (bound on `task_text`;
   return "break" so default newline is suppressed). Chat Ctrl+Enter remains isolated.
 - **Export button**: saves current command output to a user-chosen file via `filedialog`.
-
-### New test files (untracked, pending commit)
-
-- `tests/test_cli_evidence.py` — 5 tests: script resolution, capture_output, stderr capture,
-  missing-script exit code.
-- `tests/test_config.py` — 6 tests: defaults, serialization, roundtrip, missing file, path
-  structure, safety flags (`require_apply_flag`, `require_exec_flag`).
-- `tests/test_intent.py` — 13 tests: routing, path extraction, missing inputs, decision dict shape.
 
 ### Verification commands
 
