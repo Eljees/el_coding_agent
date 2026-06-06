@@ -6,7 +6,11 @@ from pathlib import Path
 
 from local_codex_lite import cli, runner
 from local_codex_lite.config import AgentConfig
-from local_codex_lite.patch_errors import classify_patch_apply, classify_patch_validation
+from local_codex_lite.patch_errors import (
+    classify_patch_apply,
+    classify_patch_validation,
+    classify_post_apply_runtime,
+)
 from local_codex_lite.prompts import patch_repair_prompt_for_issue
 
 
@@ -45,6 +49,16 @@ def test_classifies_unsafe_path_as_not_retryable() -> None:
 
     assert error.code == "unsafe_path"
     assert error.retryable is False
+
+
+def test_classifies_post_apply_runtime_as_retryable() -> None:
+    error = classify_post_apply_runtime(
+        "app.py: exit code 1\nTraceback (most recent call last): ..."
+    )
+
+    assert error.code == "post_apply_runtime"
+    assert error.retryable is True
+    assert "traceback" in error.suggested_action.lower()
 
 
 def test_unknown_fallback_is_retryable() -> None:

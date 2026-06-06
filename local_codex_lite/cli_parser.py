@@ -42,6 +42,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="run suggested commands after a successful apply",
     )
+    p_run.add_argument(
+        "--smoke",
+        action="store_true",
+        help="after a successful apply, smoke-run touched entrypoint scripts "
+        "(executes generated code; opt-in, see docs/safety.md)",
+    )
     p_run.add_argument("--assume-clarification", action="store_true")
     p_run.add_argument("--evidence-file", action="append", default=[])
     p_run.add_argument("--evidence-stdin", action="store_true")

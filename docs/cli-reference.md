@@ -122,6 +122,7 @@ Usage: `local-codex-lite run <task> [options]`
 | `--dry-run` |  |
 | `--apply` |  |
 | `--exec` | run suggested commands after a successful apply |
+| `--smoke` | after a successful apply, smoke-run touched entrypoint scripts (executes generated code; opt-in, see docs/safety.md) |
 | `--assume-clarification` |  |
 | `--evidence-file EVIDENCE_FILE` | repeatable |
 | `--evidence-stdin` |  |

@@ -15,7 +15,13 @@ llm:
   max_tokens: 2048
   timeout: 120.0
   retries: 2
+  suggest_timeout_seconds: 120  # hard deadline for the whole suggest-commands stage
 ```
+
+`timeout` bounds a single HTTP request; `suggest_timeout_seconds` bounds the
+post-apply "suggest commands" stage as a whole (retries and context-shrinking
+attempts multiply the per-request timeout). On deadline the suggestions are
+skipped (`commands_skipped.json` in the run dir) and the run still succeeds.
 
 ### Named profiles
 
@@ -55,10 +61,12 @@ safety:
   require_exec_flag: true      # commands need --exec
   allow_sensitive_read: false  # block reading .env / *secret* / *token*
   max_patch_attempts: 4        # repair budget per run
+  smoke_run_default: false     # post-apply smoke run executes generated code; opt-in
+  smoke_timeout_seconds: 10    # per-script smoke deadline; long-lived scripts pass
 ```
 
 See [safety](safety.md). Override the patch budget for one run with
-`--max-patch-attempts`.
+`--max-patch-attempts`; enable the smoke run for one run with `--smoke`.
 
 ## RAG
 

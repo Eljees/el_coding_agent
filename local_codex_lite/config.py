@@ -15,6 +15,13 @@ class LLMConfig(BaseModel):
     max_tokens: int = 2048
     timeout: float = 120.0
     retries: int = 2
+    # Hard wall-clock deadline (seconds) for the post-apply "suggest
+    # commands" stage as a whole.  The per-request ``timeout`` above still
+    # applies to each HTTP call, but retries plus context-shrinking attempts
+    # can multiply it; a busy vLLM has kept this stage hanging for many
+    # minutes.  Suggestions are advisory, so on deadline the runner skips
+    # them instead of stalling the whole run.
+    suggest_timeout_seconds: int = 120
 
 
 class WorkspaceConfig(BaseModel):
@@ -57,6 +64,10 @@ class SafetyConfig(BaseModel):
     require_exec_flag: bool = True
     allow_sensitive_read: bool = False
     max_patch_attempts: int = 4
+    # Post-apply smoke run executes generated code, so it is opt-in:
+    # enable per run with ``--smoke`` or persistently with this flag.
+    smoke_run_default: bool = False
+    smoke_timeout_seconds: int = 10
 
 
 class RagConfig(BaseModel):

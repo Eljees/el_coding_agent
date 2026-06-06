@@ -6,6 +6,9 @@ llm:
   max_tokens: 2048
   timeout: 120.0
   retries: 2
+  # Hard wall-clock deadline for the suggest-commands stage as a whole;
+  # on timeout the suggestions are skipped and the run still succeeds.
+  suggest_timeout_seconds: 120
 # Optional named LLM profiles; activate one for a single run via
 # `--profile <name>` on `run` / `preview` / `ask` / `review`.
 # Without --profile the agent uses the `llm:` block above as before.
@@ -53,6 +56,10 @@ safety:
   require_exec_flag: true
   allow_sensitive_read: false
   max_patch_attempts: 4
+  # Post-apply smoke run executes generated entrypoint scripts: opt-in only.
+  # Enable per run with `run --smoke` or persistently here.
+  smoke_run_default: false
+  smoke_timeout_seconds: 10
 rag:
   provider: "keyword"
   enabled: true

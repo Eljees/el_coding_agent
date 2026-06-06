@@ -20,6 +20,8 @@ import argparse
 import contextlib
 import json
 import sys
+import threading
+from pathlib import Path
 
 from .cli_utils import (
     console,
@@ -46,7 +48,7 @@ from .cli_utils import (
 from .cli_utils import (
     selected_files as _selected_files,
 )
-from .config import UnknownProfileError, apply_profile, load_config
+from .config import AgentConfig, UnknownProfileError, apply_profile, load_config
 from .evidence import save_evidence
 from .evidence_mode import (
     create_evidence_bundle,
@@ -59,9 +61,11 @@ from .logging_utils import dump_json, dump_text, session_dir
 from .patch_errors import (
     classify_patch_apply,
     classify_patch_validation,
+    classify_post_apply_runtime,
     classify_python_syntax_error,
 )
 from .patcher import (
+    RuntimeFixContext,
     apply_patch,
     backup_paths,
     detect_runtime_fix_context,
@@ -79,6 +83,7 @@ from .planner import (
 from .project_workspace import resolve_task_workspace
 from .retrying import classify_httpx_exception, strategy_for_issue
 from .safety import run_command
+from .smoke import SmokeResult, find_entrypoint_scripts, smoke_run_script
 
 
 def run_task(task: str, args: argparse.Namespace) -> int:
@@ -414,6 +419,69 @@ def _run_task_body(
                 )
                 console.print(f"Run logs: {run_dir}")
                 return 1
+            # Post-apply smoke gate (opt-in: --smoke or safety.smoke_run_default).
+            # The patch parses, but a small model still ships plenty of runtime
+            # mistakes; running touched entrypoint scripts catches startup
+            # crashes and feeds the model its OWN traceback via the repair loop.
+            if getattr(args, "smoke", False) or cfg.safety.smoke_run_default:
+                smoke_failures = _run_smoke_checks(touched, root, run_dir, cfg)
+                if smoke_failures:
+                    restored = restore_from_run_backups(touched, root, run_dir)
+                    detail = "\n\n".join(
+                        f"{item.script.name}: exit code {item.returncode}\n{item.detail}"
+                        for item in smoke_failures
+                    )
+                    console.print(
+                        f"[red]Smoke run failed after apply[/red] for {len(smoke_failures)} "
+                        f"script(s); restored {restored} from backups."
+                    )
+                    smoke_error = classify_post_apply_runtime(detail)
+                    result["applied"] = False
+                    result["patch_error"] = smoke_error
+                    dump_json(run_dir / "result.json", result)
+                    _print_patch_error(smoke_error, patch_attempts)
+                    _log_patch_error(
+                        run_dir, "post_apply_smoke", patch_attempts, smoke_error, detail
+                    )
+                    if patch_attempts < max_patch_attempts:
+                        console.print(
+                            "[yellow]Repairing patch and retrying after smoke failure...[/yellow]"
+                        )
+                        patch = repair_patch_with_error(
+                            task,
+                            plan,
+                            patch,
+                            detail,
+                            smoke_error.code,
+                            root,
+                            cfg,
+                            extra_context=evidence_text,
+                            repair_attempt=patch_attempts,
+                            runtime_fix=runtime_fix,
+                        )
+                        dump_json(
+                            run_dir / "smoke_issue.json",
+                            {"patch_error": smoke_error, "detail": detail},
+                        )
+                        continue
+                    dump_json(
+                        run_dir / "failure.json",
+                        {
+                            "stage": "post_apply_smoke",
+                            "patch_error": smoke_error,
+                            "detail": detail,
+                        },
+                    )
+                    write_status(
+                        evidence_bundle,
+                        status="failed",
+                        error_code=smoke_error.code,
+                        message=smoke_error.detail,
+                        evidence_complete=False,
+                        extra={"suggested_action": smoke_error.suggested_action},
+                    )
+                    console.print(f"Run logs: {run_dir}")
+                    return 1
             result["apply_returncode"] = 0
             result["applied"] = True
             result["patch_error"] = apply_error
@@ -492,9 +560,30 @@ def _run_task_body(
         return apply_result.returncode
 
     console.print("[bold]Suggesting commands...[/bold]")
-    commands = suggest_commands(
-        task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text, runtime_fix=runtime_fix
-    )
+    # Suggestions are advisory; a busy vLLM must never stall the whole run
+    # (per-request timeouts multiply across retries and context variants, so
+    # this stage has been observed hanging for ~25 minutes).  Enforce a hard
+    # wall-clock deadline and skip on any timeout or error.
+    suggest_timeout = float(cfg.llm.suggest_timeout_seconds)
+    try:
+        commands = _suggest_commands_with_deadline(
+            task,
+            plan,
+            root,
+            cfg,
+            run_dir=run_dir,
+            extra_context=evidence_text,
+            runtime_fix=runtime_fix,
+            timeout_s=suggest_timeout,
+        )
+    except Exception as exc:
+        reason = f"{exc.__class__.__name__}: {exc}"
+        dump_json(
+            run_dir / "commands_skipped.json",
+            {"stage": "commands", "reason": reason, "timeout_seconds": suggest_timeout},
+        )
+        console.print(f"[yellow]Suggestions skipped: {reason}[/yellow]")
+        commands = {"commands": []}
     commands = _normalize_suggested_commands(commands)
     dump_json(run_dir / "commands.json", commands)
     console.print("\n[bold]Commands[/bold]")
@@ -527,3 +616,86 @@ def _run_task_body(
         evidence_complete=True,
     )
     return 0
+
+
+def _run_smoke_checks(
+    touched: list[Path],
+    root: Path,
+    run_dir: Path,
+    cfg: AgentConfig,
+) -> list[SmokeResult]:
+    """Smoke-run every touched entrypoint script; return the failures.
+
+    All outcomes (ok / timed-out-and-killed / failed) are recorded in the
+    run directory as ``smoke.json`` so the evidence trail shows exactly what
+    was executed and why the run proceeded or looped back into repair.
+    """
+    scripts = find_entrypoint_scripts(touched)
+    results = [
+        smoke_run_script(script, root, timeout_s=float(cfg.safety.smoke_timeout_seconds))
+        for script in scripts
+    ]
+    if results:
+        dump_json(
+            run_dir / "smoke.json",
+            [
+                {
+                    "script": str(item.script),
+                    "ok": item.ok,
+                    "returncode": item.returncode,
+                    "timed_out": item.timed_out,
+                    "detail": item.detail,
+                }
+                for item in results
+            ],
+        )
+    return [item for item in results if not item.ok]
+
+
+def _suggest_commands_with_deadline(
+    task: str,
+    plan: dict,
+    root: Path,
+    cfg: AgentConfig,
+    *,
+    run_dir: Path,
+    extra_context: str,
+    runtime_fix: RuntimeFixContext | None,
+    timeout_s: float,
+) -> dict:
+    """Call ``suggest_commands`` with a hard wall-clock deadline.
+
+    The LLM client's per-request timeout does not bound the stage as a
+    whole: client retries plus the planner's context-shrinking attempts
+    multiply it.  The call runs in a daemon thread; once the deadline
+    passes the thread is abandoned (it dies with the process) and a
+    ``TimeoutError`` is raised so the caller can skip suggestions instead
+    of stalling the run.
+    """
+    result_box: list[dict] = []
+    error_box: list[Exception] = []
+
+    def _worker() -> None:
+        try:
+            result_box.append(
+                suggest_commands(
+                    task,
+                    plan,
+                    root,
+                    cfg,
+                    run_dir=run_dir,
+                    extra_context=extra_context,
+                    runtime_fix=runtime_fix,
+                )
+            )
+        except Exception as exc:
+            error_box.append(exc)
+
+    thread = threading.Thread(target=_worker, name="suggest-commands", daemon=True)
+    thread.start()
+    thread.join(timeout_s)
+    if thread.is_alive():
+        raise TimeoutError(f"suggest_commands exceeded the {timeout_s:g}s deadline")
+    if error_box:
+        raise error_box[0]
+    return result_box[0]

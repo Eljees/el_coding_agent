@@ -33,6 +33,18 @@ not remove or weaken them.
 - **Bounded repair.** Patch repair is capped by `safety.max_patch_attempts`
   (default 4), overridable per run with `--max-patch-attempts`.
 
+## Post-apply smoke run (opt-in)
+
+`run --smoke` (or `safety.smoke_run_default: true`) executes every touched
+`.py` file that has an `if __name__ == "__main__"` guard after a successful
+apply, with a `safety.smoke_timeout_seconds` deadline (default 10 s). A
+non-zero exit restores the backups and feeds the captured traceback into the
+bounded repair loop (`post_apply_runtime`); a script still alive at the
+deadline is killed and treated as OK (GUI/mainloop and server scripts run
+forever by design). **This stage executes freshly generated code**, which is
+why it is off by default and must be enabled explicitly — turn it on only in
+workspaces where running the project's entrypoints is acceptable.
+
 ## Reporting
 
 Security issues: see [`SECURITY.md`](../SECURITY.md). Do not open public issues

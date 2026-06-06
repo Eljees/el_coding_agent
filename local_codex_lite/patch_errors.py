@@ -11,6 +11,7 @@ PatchErrorCode = Literal[
     "unsafe_path",
     "empty_patch",
     "python_syntax_error",
+    "post_apply_runtime",
     "unknown",
 ]
 
@@ -59,6 +60,11 @@ _PATCH_ERROR_DETAILS: dict[PatchErrorCode, tuple[str, bool, str]] = {
         "Python syntax error after apply",
         True,
         "Ask the model for a corrected diff that produces syntactically valid Python.",
+    ),
+    "post_apply_runtime": (
+        "Runtime failure in smoke run after apply",
+        True,
+        "Run the patch repair loop with the captured traceback so the model fixes its own error.",
     ),
     "unknown": (
         "Unknown patch error",
@@ -118,6 +124,17 @@ def _short_detail(value: str, limit: int = 500) -> str:
     if len(compact) <= limit:
         return compact
     return compact[: limit - 3] + "..."
+
+
+def classify_post_apply_runtime(detail: str) -> PatchErrorClassification:
+    """Build a PatchErrorClassification for a post-apply smoke-run failure.
+
+    Triggered when an applied patch is syntactically valid but a touched
+    entrypoint script crashes on startup (``smoke.smoke_run_script``).  The
+    *detail* is the stderr tail with the traceback -- exactly what the
+    repair prompt should feed back to the model.
+    """
+    return _classification("post_apply_runtime", detail)
 
 
 def classify_python_syntax_error(detail: str) -> PatchErrorClassification:
