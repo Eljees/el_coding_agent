@@ -27,9 +27,10 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 > reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `507 passed` (2026-06-06 evening, after plan A-C + phase D;
-  `testpaths = ["tests"]`; overall coverage 78%; runner.py 100%, trufflehog.py 95%,
-  llm_client.py 96%, replay.py 99%, ui_runners.py 100%)
+- Last known clean test run: `629 passed` (2026-06-06 night, after phases 0-4 of audit v3;
+  `testpaths = ["tests"]`; overall coverage 83%; runner.py 100%, cli.py 100%,
+  cli_review.py 100%, artifact_unpack.py 99%, ui_commands.py/ui_runners.py 100%;
+  ui.py reduced 1016→865 lines — remaining is Tk widget/binding code)
 - Skills tests (`skills/appsechub/test_appsechub_client.py`, 11 tests) are **intentionally**
   outside the default `testpaths` (they exercise the skill, not the package); run explicitly
   with `python -m pytest tests/ skills/`. Requires `requests` (now in `[dev]` extras).
