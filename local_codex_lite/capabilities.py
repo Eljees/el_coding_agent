@@ -237,6 +237,38 @@ def default_capabilities() -> list[Capability]:
             requires_exec=False,
             cli_equivalent='python -m local_codex_lite evidence cve-scan "<input_root>"',
         ),
+        Capability(
+            id="appsechub.issues",
+            title="AppSecHub issues & scan analysis",
+            description=(
+                "Read-only AppSecHub queries: issue counts, severity/source breakdowns, "
+                "TruffleHog secret types, quality metrics, scan history, and "
+                "scan-to-scan deltas/trends."
+            ),
+            examples=(
+                "посмотри issues проекта https://appsechub.ssdlc.soc.rt.ru/#/appprofile/89",
+                "сколько срабатываний у проекта 89",
+                "определи типы срабатываний trufflehog у appprofile 89",
+                "качество срабатываний и доля false positive",
+            ),
+            keywords=(
+                "appsechub",
+                "appprofile",
+                "issues",
+                "issues проекта",
+                "посмотри issues",
+                "срабатыван",
+                "типы срабатываний",
+                "качество срабатываний",
+                "секрет",
+                "trufflehog",
+            ),
+            required_inputs=("app",),
+            safety_level="read_only",
+            requires_apply=False,
+            requires_exec=False,
+            cli_equivalent=('python skills/appsechub/appsechub_client.py breakdown "<app_id|url>"'),
+        ),
     ]
 
 

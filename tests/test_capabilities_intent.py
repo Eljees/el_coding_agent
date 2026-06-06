@@ -20,6 +20,30 @@ def test_capability_registry_contains_expected_ids() -> None:
     assert "evidence.cve_scan" in ids
     assert "doctor" in ids
     assert "config.show" in ids
+    assert "appsechub.issues" in ids
+
+
+def test_appsechub_capability_is_read_only() -> None:
+    cap = next(item for item in default_capabilities() if item.id == "appsechub.issues")
+    assert cap.safety_level == "read_only"
+    assert cap.requires_apply is False
+    assert cap.requires_exec is False
+    assert "appsechub_client.py" in cap.cli_equivalent
+
+
+def test_recognize_appsechub_issues_phrase() -> None:
+    decision = recognize_intent("посмотри issues проекта", default_capabilities())
+    assert decision.intent == "appsechub.issues"
+    assert decision.can_do == "yes"
+    assert decision.requires_apply is False
+    assert decision.requires_exec is False
+
+
+def test_recognize_appsechub_url_with_trufflehog_types() -> None:
+    decision = recognize_intent(
+        "определи типы срабатываний trufflehog у appprofile 89", default_capabilities()
+    )
+    assert decision.intent == "appsechub.issues"
 
 
 def test_recognize_latest_logs() -> None:

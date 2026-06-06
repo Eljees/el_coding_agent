@@ -139,6 +139,119 @@ def test_diff_issues_empty_old_all_added():
     assert d["net_change"] == 2
 
 
+def test_normalize_scan_full_partial_empty():
+    # full record, alternative key spellings picked up
+    full = hub.normalize_scan(
+        {
+            "scanId": 101,
+            "startedAt": "2026-06-01T10:00:00Z",
+            "toolName": "trufflehog",
+            "state": "DONE",
+        }
+    )
+    assert full == {"id": 101, "ts": "2026-06-01T10:00:00Z", "tool": "trufflehog", "status": "DONE"}
+    # partial record -> missing fields are None, no exception
+    part = hub.normalize_scan({"id": 7})
+    assert part["id"] == 7
+    assert part["ts"] is None and part["tool"] is None and part["status"] is None
+    # garbage input -> all-None skeleton
+    none_scan = {"id": None, "ts": None, "tool": None, "status": None}
+    assert hub.normalize_scan("not-a-dict") == none_scan
+    assert hub.normalize_scan({}) == none_scan
+
+
+def _with_fake_get(fake, fn):
+    """Run fn() with hub._get replaced by fake (HTTP layer mocked, no network)."""
+    real = hub._get
+    hub._get = fake
+    try:
+        return fn()
+    finally:
+        hub._get = real
+
+
+def test_list_app_scans_normalizes_and_keeps_raw():
+    payload = {
+        "entities": [
+            {"id": 101, "date": "2026-05-01", "tool": "trufflehog", "status": "FINISHED"},
+            {"scanTaskId": 102},  # partial record must not break normalization
+        ]
+    }
+
+    def fake_get(session, path, params=None):
+        assert path == "/releaseObject/89/scans"
+        return payload
+
+    out = _with_fake_get(fake_get, lambda: hub.list_app_scans(89))
+    assert out["app_id"] == 89 and out["count"] == 2
+    assert out["scans"][0] == {
+        "id": 101,
+        "ts": "2026-05-01",
+        "tool": "trufflehog",
+        "status": "FINISHED",
+    }
+    assert out["scans"][1] == {"id": 102, "ts": None, "tool": None, "status": None}
+    assert "raw" not in out
+    with_raw = _with_fake_get(fake_get, lambda: hub.list_app_scans(89, include_raw=True))
+    assert with_raw["raw"] == payload
+
+
+def test_list_app_scans_bare_list_and_empty_response():
+    # bare-list body (no paging envelope)
+    bare = _with_fake_get(lambda s, p, params=None: [{"id": 5}], lambda: hub.list_app_scans(1))
+    assert bare["count"] == 1 and bare["scans"][0]["id"] == 5
+    # empty / unrecognized body -> empty list, no exception
+    empty = _with_fake_get(lambda s, p, params=None: {}, lambda: hub.list_app_scans(1))
+    assert empty["count"] == 0 and empty["scans"] == []
+
+
+def test_scan_trend_three_scans():
+    import json as _json
+
+    by_scan = {
+        101: [{"id": 1, "severity": "HIGH"}, {"id": 2, "severity": "LOW"}],
+        102: [
+            {"id": 2, "severity": "LOW"},
+            {"id": 3, "severity": "CRITICAL"},
+            {"id": 4, "severity": "HIGH"},
+        ],
+        103: [{"id": 3, "severity": "CRITICAL"}],
+    }
+
+    def fake_get(session, path, params=None):
+        assert path == "/issue/v2"
+        dto = _json.loads(params["dto"])
+        assert dto["appIds"] == [89]
+        return {"entities": by_scan[dto["scanIds"][0]]}
+
+    out = _with_fake_get(fake_get, lambda: hub.scan_trend(89, [101, 102, 103]))
+    assert out["app_id"] == 89 and out["scan_ids"] == [101, 102, 103]
+    first, second, third = out["trend"]
+    assert first["scan_id"] == 101 and first["total"] == 2
+    assert first["added"] is None and first["removed"] is None and first["net_change"] is None
+    assert second == {
+        "scan_id": 102,
+        "total": 3,
+        "by_severity": {"LOW": 1, "CRITICAL": 1, "HIGH": 1},
+        "added": 2,
+        "removed": 1,
+        "net_change": 1,
+        "added_by_severity": {"CRITICAL": 1, "HIGH": 1},
+        "removed_by_severity": {"HIGH": 1},
+    }
+    assert third["total"] == 1 and third["added"] == 0 and third["removed"] == 2
+    assert third["net_change"] == -2
+
+
+def test_scan_trend_requires_two_ids():
+    for bad in ([], [101]):
+        try:
+            hub.scan_trend(89, bad)
+            raise AssertionError(f"expected ValueError for {bad!r}")
+        except ValueError:
+            pass
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     passed = 0

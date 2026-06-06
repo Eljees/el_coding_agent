@@ -118,6 +118,40 @@ def breakdown_issues(
 
 
 @mcp.tool()
+def list_scans(app: str, include_raw: bool = False) -> dict[str, Any]:
+    """List an application's scans (scan history) via releaseObject/{id}/scans.
+
+    Returns {app_id, count, scans} with each scan normalized to
+    {id, ts, tool, status}; fields the Hub does not expose are null.
+    Set include_raw=True to also get the unmodified API response.
+    'app' may be an id or an AppSecHub URL.
+    """
+    return hub.list_app_scans(hub.parse_app_url(app), include_raw=include_raw)
+
+
+@mcp.tool()
+def scan_trend(
+    app: str,
+    scan_ids: list[int],
+    source: str | None = None,
+    max_items: int = 5000,
+) -> dict[str, Any]:
+    """Issue trend across 2+ scans of an application (pass ids oldest first).
+
+    Returns one row per scan: total, by_severity, and added/removed/net_change
+    against the previous scan (null on the first row). 'app' may be an id or
+    URL; 'source' optionally restricts to one scanner (e.g. 'trufflehog').
+    Get scan ids from list_scans.
+    """
+    return hub.scan_trend(
+        hub.parse_app_url(app),
+        scan_ids,
+        source=source,
+        max_items=max_items,
+    )
+
+
+@mcp.tool()
 def compare_scans(
     app: str,
     old_scan: int,

@@ -8,6 +8,7 @@ Endpoints used (from the AppSecHub OpenAPI spec, server ``/hub/rest``):
   * GET /issue/v2?dto=<json>        -- paginated brief issue list (the workhorse)
   * GET /issue/summary?application= -- severity rollup for one application
   * GET /tool/scanner               -- list of scanner tools
+  * GET /releaseObject/{id}/scans   -- scan history of one application
 
 Authentication mirrors the existing ``eltriage.hub_api`` conventions so the same
 environment variables work in both projects:
@@ -26,6 +27,8 @@ CLI:
   python appsechub_client.py summary       <app_id|url>
   python appsechub_client.py issues        <app_id|url> [--source trufflehog] [--severity HIGH ...] [--max 1000]
   python appsechub_client.py breakdown     <app_id|url> [--source trufflehog] [--by source,type,severity]
+  python appsechub_client.py scans         <app_id|url> [--raw]
+  python appsechub_client.py trend         <app_id|url> --scans id1,id2,... [--source trufflehog]
 """
 
 from __future__ import annotations
@@ -357,6 +360,51 @@ def diff_issues(old: list[dict[str, Any]], new: list[dict[str, Any]]) -> dict[st
     }
 
 
+# The exact shape of /releaseObject/{id}/scans is not pinned down across Hub
+# builds, so normalization is defensive: probe several plausible key names per
+# field and keep ``None`` for whatever is absent instead of raising.
+_SCAN_ID_KEYS = ("id", "scanId", "scanTaskId", "taskId")
+_SCAN_TS_KEYS = (
+    "ts",
+    "timestamp",
+    "date",
+    "created",
+    "createdAt",
+    "startTime",
+    "startedAt",
+    "finishTime",
+    "finishedAt",
+    "scanDate",
+    "lastScanTs",
+)
+_SCAN_TOOL_KEYS = ("tool", "toolName", "scanner", "scannerName", "source", "engine")
+_SCAN_STATUS_KEYS = ("status", "state", "scanStatus", "result")
+
+
+def _first_field(d: dict[str, Any], keys: Iterable[str]) -> Any:
+    for k in keys:
+        v = d.get(k)
+        if v not in (None, ""):
+            return v
+    return None
+
+
+def normalize_scan(raw: Any) -> dict[str, Any]:
+    """Reduce one raw scan record to {id, ts, tool, status}.
+
+    Missing or unrecognized fields become ``None`` -- never raises on a
+    partial or unexpected record.
+    """
+    if not isinstance(raw, dict):
+        return {"id": None, "ts": None, "tool": None, "status": None}
+    return {
+        "id": _first_field(raw, _SCAN_ID_KEYS),
+        "ts": _first_field(raw, _SCAN_TS_KEYS),
+        "tool": _first_field(raw, _SCAN_TOOL_KEYS),
+        "status": _first_field(raw, _SCAN_STATUS_KEYS),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Network calls
 # --------------------------------------------------------------------------- #
@@ -417,6 +465,76 @@ def fetch_scan_issues(
     return list_issues(
         app_id, session=session, scan_ids=[int(scan_id)], max_items=max_items, **filters
     )
+
+
+def list_app_scans(
+    app_id: int,
+    *,
+    session: requests.Session | None = None,
+    include_raw: bool = False,
+) -> dict[str, Any]:
+    """Scan history of an application via GET /releaseObject/{id}/scans.
+
+    Returns ``{app_id, count, scans}`` where each scan is normalized to
+    ``{id, ts, tool, status}`` (see :func:`normalize_scan`); fields the Hub
+    build does not expose come back as ``None``.  With ``include_raw=True``
+    the untouched API response is attached under ``raw``.
+    """
+    session = session or make_session()
+    data = _get(session, f"/releaseObject/{int(app_id)}/scans")
+    rows = _entities(data)
+    if not rows and isinstance(data, dict) and any(k in data for k in _SCAN_ID_KEYS):
+        rows = [data]  # tolerate a single-object response
+    scans = [normalize_scan(r) for r in rows]
+    out: dict[str, Any] = {"app_id": int(app_id), "count": len(scans), "scans": scans}
+    if include_raw:
+        out["raw"] = data
+    return out
+
+
+def scan_trend(
+    app_id: int,
+    scan_ids: list[int],
+    *,
+    session: requests.Session | None = None,
+    source: str | None = None,
+    max_items: int | None = None,
+) -> dict[str, Any]:
+    """Issue trend across 2+ scans of one application (oldest first).
+
+    Fetches each scan's snapshot once and diffs adjacent pairs with
+    :func:`diff_issues` -- the same engine :func:`compare_scans` uses, without
+    re-fetching shared snapshots.  Returns one row per scan: ``total``,
+    ``by_severity``, and ``added``/``removed``/``net_change`` against the
+    previous scan (``None`` on the first row).
+    """
+    ids = [int(s) for s in scan_ids]
+    if len(ids) < 2:
+        raise ValueError("trend needs at least two scan ids (chronological order)")
+    session = session or make_session()
+    snapshots = [
+        fetch_scan_issues(app_id, sid, session=session, source=source, max_items=max_items)
+        for sid in ids
+    ]
+    rows: list[dict[str, Any]] = []
+    for pos, (sid, issues) in enumerate(zip(ids, snapshots, strict=True)):
+        row: dict[str, Any] = {
+            "scan_id": sid,
+            "total": len(issues),
+            "by_severity": _sev_counts(issues),
+            "added": None,
+            "removed": None,
+            "net_change": None,
+        }
+        if pos > 0:
+            d = diff_issues(snapshots[pos - 1], issues)
+            row["added"] = d["added_count"]
+            row["removed"] = d["removed_count"]
+            row["net_change"] = d["net_change"]
+            row["added_by_severity"] = d["added_by_severity"]
+            row["removed_by_severity"] = d["removed_by_severity"]
+        rows.append(row)
+    return {"app_id": int(app_id), "scan_ids": ids, "trend": rows}
 
 
 def compare_scans(
@@ -481,6 +599,16 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--by", default="source,severity,type")
     sp.add_argument("--max", type=int, dest="max_items", default=5000)
 
+    sp = sub.add_parser("scans", help="List scans of an application (releaseObject/{id}/scans)")
+    sp.add_argument("app")
+    sp.add_argument("--raw", action="store_true", help="Attach the unmodified API response")
+
+    sp = sub.add_parser("trend", help="Issue trend across 2+ scans (oldest scan id first)")
+    sp.add_argument("app")
+    sp.add_argument("--scans", required=True, help="Comma-separated scan ids, oldest first")
+    sp.add_argument("--source")
+    sp.add_argument("--max", type=int, dest="max_items", default=5000)
+
     sp = sub.add_parser("compare", help="Delta of issues between two scans of an application")
     sp.add_argument("app")
     sp.add_argument("--old-scan", type=int, required=True, dest="old_scan")
@@ -526,6 +654,20 @@ def main(argv: list[str] | None = None) -> int:
                     "trufflehog_types": trufflehog_types(rows),
                     "quality": quality_metrics(rows),
                 }
+            )
+            return 0
+        if args.cmd == "scans":
+            _emit(list_app_scans(_resolve(args.app), include_raw=args.raw))
+            return 0
+        if args.cmd == "trend":
+            ids = [int(s) for s in str(args.scans).split(",") if s.strip()]
+            _emit(
+                scan_trend(
+                    _resolve(args.app),
+                    ids,
+                    source=args.source,
+                    max_items=args.max_items,
+                )
             )
             return 0
         if args.cmd == "compare":
