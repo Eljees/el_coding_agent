@@ -27,8 +27,9 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 > reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `419 passed` (2026-06-06, full
-  suite; hypothesis property test no longer skipped — added to count)
+- Last known clean test run: `457 passed` (2026-06-06, full suite;
+  includes 10 new runner failure-path tests (runner.py 100%) and
+  13 new planner branch tests (planner.py 82%); overall coverage 74%)
 - Toolchain pinned: `ruff==0.15.15`, `mypy==1.14.1` in both `[dev]` and
   `.pre-commit-config.yaml`; `ruff check`/`ruff format --check` are clean
 - `cve-bin-tool` confirmed installed: `mode=executable`, `version=3.4`
