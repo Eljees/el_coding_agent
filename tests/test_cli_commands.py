@@ -20,6 +20,30 @@ def test_normalize_suggested_commands_filters_prose_steps() -> None:
     }
 
 
+def test_normalize_suggested_commands_accepts_bare_list_payload() -> None:
+    # The LLM frequently returns the list without the {"commands": ...}
+    # envelope; this used to crash the --apply path with AttributeError.
+    payload = [
+        {"cmd": "pytest tests/", "reason": "verify", "risk": "low"},
+        "python demo.py",
+        {"not_cmd": "garbage"},
+    ]
+
+    normalized = _normalize_suggested_commands(payload)
+
+    assert normalized == {
+        "commands": [
+            {"cmd": "pytest tests/", "reason": "verify", "risk": "low"},
+            {"cmd": "python demo.py", "reason": "", "risk": ""},
+        ]
+    }
+
+
+def test_normalize_suggested_commands_rejects_non_dict_non_list() -> None:
+    assert _normalize_suggested_commands("run pytest") == {"commands": []}
+    assert _normalize_suggested_commands(None) == {"commands": []}
+
+
 def test_normalize_suggested_commands_filters_unix_only_commands() -> None:
     payload = {
         "commands": [

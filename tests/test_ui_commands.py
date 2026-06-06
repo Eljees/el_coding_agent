@@ -281,6 +281,15 @@ def test_finalize_run_output_keeps_empty_output_empty() -> None:
     assert finalize_run_output("", 10.0) == ""
 
 
+def test_finalize_run_output_appends_workspace_path() -> None:
+    from pathlib import Path
+
+    result = finalize_run_output("done", 5.0, workspace=Path("D:/proj/ws"))
+    assert result.endswith(f"results in: {Path('D:/proj/ws')}")
+    # empty output stays empty even with a workspace
+    assert finalize_run_output("", 5.0, workspace=Path("D:/proj/ws")) == ""
+
+
 @pytest.mark.parametrize(
     "output,expected",
     [

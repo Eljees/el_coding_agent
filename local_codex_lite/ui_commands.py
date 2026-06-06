@@ -188,11 +188,21 @@ def action_button_states(
 # ---------------------------------------------------------------------------
 
 
-def finalize_run_output(output: str, elapsed_seconds: float) -> str:
-    """Strip *output* and append the ``completed in MM:SS`` footer (if any output)."""
+def finalize_run_output(
+    output: str,
+    elapsed_seconds: float,
+    workspace: Path | None = None,
+) -> str:
+    """Strip *output*, append the ``completed in MM:SS`` footer and the workspace path.
+
+    The workspace line answers the perennial "а куда он это сделал?" -- every
+    finished job tells the user where to look for its results.
+    """
     if output:
         output = output.strip()
         output = output + f"\n\ncompleted in {format_duration(elapsed_seconds)}"
+        if workspace is not None:
+            output = output + f"\nresults in: {workspace}"
     return output
 
 

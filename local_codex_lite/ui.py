@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import threading
 import time
@@ -229,6 +230,11 @@ class CommandCenterUI:
             variable=self.project_mode_var,
         ).pack(side="left")
         ttk.Label(workspace_row, textvariable=self.workspace_var).pack(side="right")
+        ttk.Button(
+            workspace_row,
+            text="Open workspace",
+            command=self._open_workspace_folder,
+        ).pack(side="right", padx=(0, 8))
 
         # --- Decision panel ---
         status = ttk.LabelFrame(left, text="Decision")
@@ -667,7 +673,11 @@ class CommandCenterUI:
             self._write_command_output("Stopped by user.")
             self._update_action_buttons()
             return
-        output = ui_commands.finalize_run_output(output, time.time() - self._busy_started_at)
+        output = ui_commands.finalize_run_output(
+            output,
+            time.time() - self._busy_started_at,
+            workspace=self._active_workspace_root,
+        )
         self._write_command_output(output)
         self._preview_ready = ui_commands.is_preview_ready(output)
         self._update_action_buttons()
@@ -702,6 +712,13 @@ class CommandCenterUI:
 
     def _appsechub_worker(self, task: str) -> str:
         return ui_runners.appsechub_worker(task)
+
+    def _open_workspace_folder(self) -> None:
+        """Open the active workspace in Explorer so results are easy to find."""
+        try:
+            os.startfile(self._active_workspace_root)
+        except OSError as exc:
+            self._write_command_output(f"Could not open workspace folder: {exc}")
 
     def _run_worker(self, task: str, *, apply: bool, exec_: bool) -> str:
         return ui_runners.run_worker(

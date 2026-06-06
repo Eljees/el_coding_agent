@@ -112,12 +112,26 @@ def load_urls(repo_file: str | None, repo_urls: list[str] | None) -> list[str]:
     return ordered
 
 
-def normalize_suggested_commands(payload: dict) -> dict:
-    commands = payload.get("commands")
+def normalize_suggested_commands(payload: object) -> dict:
+    """Normalize the LLM's suggested-commands payload defensively.
+
+    Accepts the documented ``{"commands": [...]}`` envelope, a bare list (the
+    model frequently returns one), or garbage -- anything unexpected collapses
+    to ``{"commands": []}`` instead of crashing the apply path.
+    """
+    if isinstance(payload, list):
+        commands: object = payload
+    elif isinstance(payload, dict):
+        commands = payload.get("commands")
+    else:
+        return {"commands": []}
     if not isinstance(commands, list):
         return {"commands": []}
     normalized: list[dict[str, str]] = []
     for item in commands:
+        if isinstance(item, str):
+            # Bare command string -> wrap into the canonical shape.
+            item = {"cmd": item}
         if not isinstance(item, dict):
             continue
         cmd = str(item.get("cmd", "")).strip()

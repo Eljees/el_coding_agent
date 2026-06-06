@@ -46,6 +46,26 @@ def test_recognize_appsechub_url_with_trufflehog_types() -> None:
     assert decision.intent == "appsechub.issues"
 
 
+def test_recognize_appsechub_cyrillic_hub_mention_beats_cve_scan() -> None:
+    decision = recognize_intent(
+        "расскажи о типах уязвимостей приложения 89 апсекхаба", default_capabilities()
+    )
+    assert decision.intent == "appsechub.issues"
+    assert decision.can_do == "yes"
+
+
+def test_recognize_appsechub_app_number_beats_trufflehog_analyze() -> None:
+    decision = recognize_intent("посмотри типы trufflehog у проекта 89", default_capabilities())
+    assert decision.intent == "appsechub.issues"
+
+
+def test_recognize_trufflehog_analyze_with_local_path_stays_trufflehog() -> None:
+    decision = recognize_intent(
+        r"проанализируй trufflehog результаты в D:\scans\out", default_capabilities()
+    )
+    assert decision.intent == "evidence.trufflehog.analyze"
+
+
 def test_recognize_latest_logs() -> None:
     decision = recognize_intent("покажи последние логи", default_capabilities())
     assert decision.intent == "logs.latest"

@@ -85,6 +85,15 @@ def recognize_intent(user_text: str, capabilities: list[Capability]) -> IntentDe
             # local artifact scan.
             matched.append("phrase:appsechub app")
             score += 4
+        if (
+            capability.id == "appsechub.issues"
+            and re.search(r"(?:проект\w*|приложени\w*|\bapp)\s*[№#]?\s*\d+", lower)
+            and not _looks_like_artifact_path(text)
+        ):
+            # "типы trufflehog у проекта 89" names an application by number,
+            # not a local path -- that's a Hub query, not trufflehog analyze.
+            matched.append("pattern:app number")
+            score += 3
         scored.append((score, capability, matched))
 
     score, capability, matched_keywords = max(
