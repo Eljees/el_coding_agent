@@ -13,10 +13,16 @@ the reminders this module produces:
   JSON object per line, appended by :func:`record_lesson` whenever the repair
   loop recovered from a real failure in this workspace.  Future runs whose task
   text overlaps with a past failure get a tailored reminder.
+* ``<workspace>/AGENT_RULES.md`` -- the user's own hand-edited style guide.
+  Bullet lines become rules the model must always follow; parsed by
+  :func:`load_user_rules` and rendered by :func:`user_rules_block`.
 
-The public surface (:func:`relevant_lessons`, :func:`lessons_guardrail_block`)
-returns *short* strings on purpose: a long context actively hurts a small model,
-so reminders are capped hard.
+:func:`guardrails_block` combines the user rules (first) with the relevant
+lessons into the single ``pitfalls`` block the planner injects into prompts.
+
+The public surface (:func:`relevant_lessons`, :func:`lessons_guardrail_block`,
+:func:`guardrails_block`) returns *short* strings on purpose: a long context
+actively hurts a small model, so reminders are capped hard.
 
 Deliberately Tk-free and LLM-free -- pure file + string work, callable from any
 stage (and from tests) without dragging in a UI or an HTTP client.  Every read
@@ -35,6 +41,9 @@ from pathlib import Path
 # Tunables -----------------------------------------------------------------
 _STORE_DIRNAME = ".local-codex-lite"
 _STORE_FILENAME = "lessons.jsonl"
+RULES_FILENAME = "AGENT_RULES.md"
+_MAX_USER_RULES = 10
+_RULE_CHARS = 200
 _EXCERPT_CHARS = 200
 _SIGNATURE_CHARS = 160
 _DEDUP_WINDOW = 50  # skip a learned record if its signature repeats within last N
@@ -365,3 +374,54 @@ def lessons_guardrail_block(root: Path, task: str, *, max_items: int = 3) -> str
         return ""
     bullet_lines = "\n".join(f"- {item}" for item in items)
     return f"Known pitfalls to avoid:\n{bullet_lines}"
+
+
+def load_user_rules(root: Path) -> list[str]:
+    """Parse the user's hand-edited rules from ``<root>/AGENT_RULES.md``.
+
+    Only bullet lines (``- `` or ``* ``) count as rules; headings, comments,
+    prose, and blank lines are skipped.  Each rule is whitespace-collapsed and
+    clamped to ``_RULE_CHARS`` characters; at most ``_MAX_USER_RULES`` rules are
+    kept (the rest are ignored).  A missing, unreadable, or empty file yields
+    ``[]`` -- user rules are advisory and must never break a run.
+    """
+    path = Path(root) / RULES_FILENAME
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return []
+    rules: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(("- ", "* ")):
+            continue
+        rule = " ".join(stripped[2:].split())[:_RULE_CHARS]
+        if not rule:
+            continue
+        rules.append(rule)
+        if len(rules) >= _MAX_USER_RULES:
+            break
+    return rules
+
+
+def user_rules_block(root: Path) -> str:
+    """Render the user's rules as a prompt block, or "" when there are none."""
+    rules = load_user_rules(root)
+    if not rules:
+        return ""
+    bullet_lines = "\n".join(f"- {rule}" for rule in rules)
+    return f"Project rules from the user (must follow):\n{bullet_lines}"
+
+
+def guardrails_block(root: Path, task: str, *, max_lessons: int = 3) -> str:
+    """The combined guardrail block the planner feeds into prompts.
+
+    User rules come first (they are unconditional), then the lessons reminders
+    relevant to *task*; the two parts are separated by a blank line.  Returns
+    "" when both sources are empty.
+    """
+    parts = [
+        user_rules_block(root),
+        lessons_guardrail_block(root, task, max_items=max_lessons),
+    ]
+    return "\n\n".join(part for part in parts if part)

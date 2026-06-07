@@ -218,6 +218,14 @@ def build_parser() -> argparse.ArgumentParser:
     lessons_sub.add_parser("list", help="show learned lessons recorded in this workspace")
     lessons_sub.add_parser("clear", help="delete the learned lessons ledger")
 
+    p_rules = sub.add_parser(
+        "rules",
+        help="show or bootstrap AGENT_RULES.md, the user's hand-written prompt rules",
+    )
+    rules_sub = p_rules.add_subparsers(dest="rules_command", required=True)
+    rules_sub.add_parser("show", help="print the parsed rules from AGENT_RULES.md")
+    rules_sub.add_parser("init", help="create AGENT_RULES.md with a starter template")
+
     p_evidence = sub.add_parser("evidence")
     evidence_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
 

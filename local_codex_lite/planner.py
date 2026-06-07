@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from .config import AgentConfig
-from .lessons import lessons_guardrail_block
+from .lessons import guardrails_block
 from .llm_client import (
     OpenAICompatibleClient,
     SupportsChat,
@@ -98,9 +98,10 @@ def make_plan(
             response_text=response.text,
         )
         return result
-    # Remind the weak model of pitfalls relevant to this task (curated rakes +
-    # failures learned from this workspace's prior repair loops).
-    pitfalls = lessons_guardrail_block(workspace_root, task)
+    # Remind the weak model of the user's AGENT_RULES.md rules plus pitfalls
+    # relevant to this task (curated rakes + failures learned from this
+    # workspace's prior repair loops).
+    pitfalls = guardrails_block(workspace_root, task)
     return _retry_with_context_variants(
         client=client,
         task=task,
@@ -274,9 +275,10 @@ def _make_standard_patch(
 ) -> str:
     last_error: str | None = None
     last_issue: RetryIssue = "unknown"
-    # Curated pitfalls + failures learned from this workspace's prior repair
-    # loops, injected as a short reminder so the weak model avoids known rakes.
-    pitfalls = lessons_guardrail_block(workspace_root, task)
+    # User rules from AGENT_RULES.md + curated pitfalls + failures learned from
+    # this workspace's prior repair loops, injected as a short reminder so the
+    # weak model follows the house style and avoids known rakes.
+    pitfalls = guardrails_block(workspace_root, task)
     for attempt, context in enumerate(
         _context_variants(
             workspace_root, task, config, variant="patch", extra_context=extra_context

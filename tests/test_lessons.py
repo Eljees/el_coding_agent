@@ -197,3 +197,107 @@ def test_clear_learned_removes_records(tmp_path: Path) -> None:
 
 def test_clear_learned_missing_store_returns_zero(tmp_path: Path) -> None:
     assert lessons.clear_learned(tmp_path) == 0
+
+
+# ---------------------------------------------------------------------------
+# User rules (AGENT_RULES.md)
+# ---------------------------------------------------------------------------
+
+
+def _write_rules(tmp_path: Path, text: str) -> None:
+    (tmp_path / lessons.RULES_FILENAME).write_text(text, encoding="utf-8")
+
+
+def test_load_user_rules_missing_file(tmp_path: Path) -> None:
+    assert lessons.load_user_rules(tmp_path) == []
+
+
+def test_load_user_rules_empty_file(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "")
+    assert lessons.load_user_rules(tmp_path) == []
+
+
+def test_load_user_rules_parses_bullets_and_skips_noise(tmp_path: Path) -> None:
+    _write_rules(
+        tmp_path,
+        "# AGENT_RULES.md\n"
+        "\n"
+        "Some prose explaining the file.\n"
+        "<!-- a comment -->\n"
+        "- first rule\n"
+        "  *  \n"
+        "* second rule\n"
+        "-not a bullet (no space)\n"
+        "## Another heading\n",
+    )
+    assert lessons.load_user_rules(tmp_path) == ["first rule", "second rule"]
+
+
+def test_load_user_rules_clamps_rule_length(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "- " + "x" * 500 + "\n")
+    rules = lessons.load_user_rules(tmp_path)
+    assert len(rules) == 1
+    assert len(rules[0]) == lessons._RULE_CHARS
+
+
+def test_load_user_rules_caps_at_ten(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "".join(f"- rule {n}\n" for n in range(15)))
+    rules = lessons.load_user_rules(tmp_path)
+    assert len(rules) == lessons._MAX_USER_RULES
+    assert rules[0] == "rule 0"
+    assert rules[-1] == "rule 9"
+
+
+def test_load_user_rules_collapses_whitespace(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "-   keep   it\ttidy  \n")
+    assert lessons.load_user_rules(tmp_path) == ["keep it tidy"]
+
+
+def test_user_rules_block_empty_without_file(tmp_path: Path) -> None:
+    assert lessons.user_rules_block(tmp_path) == ""
+
+
+def test_user_rules_block_renders_header_and_bullets(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "- answer in Russian\n- no new dependencies\n")
+    block = lessons.user_rules_block(tmp_path)
+    assert block.startswith("Project rules from the user (must follow):")
+    assert "- answer in Russian" in block
+    assert "- no new dependencies" in block
+
+
+# ---------------------------------------------------------------------------
+# guardrails_block composition
+# ---------------------------------------------------------------------------
+
+
+def test_guardrails_block_empty_when_no_sources(tmp_path: Path) -> None:
+    assert lessons.guardrails_block(tmp_path, "xyzzy plugh") == ""
+
+
+def test_guardrails_block_rules_only(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "- answer in Russian\n")
+    block = lessons.guardrails_block(tmp_path, "xyzzy plugh")
+    assert block.startswith("Project rules from the user (must follow):")
+    assert "Known pitfalls" not in block
+
+
+def test_guardrails_block_lessons_only(tmp_path: Path) -> None:
+    block = lessons.guardrails_block(tmp_path, "make a tkinter button")
+    assert block.startswith("Known pitfalls to avoid:")
+    assert "Project rules" not in block
+
+
+def test_guardrails_block_puts_user_rules_first(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "- answer in Russian\n")
+    block = lessons.guardrails_block(tmp_path, "make a tkinter button")
+    rules_at = block.index("Project rules from the user (must follow):")
+    pitfalls_at = block.index("Known pitfalls to avoid:")
+    assert rules_at < pitfalls_at
+    assert "\n\n" in block  # the two parts are separated by a blank line
+
+
+def test_guardrails_block_respects_max_lessons(tmp_path: Path) -> None:
+    _write_rules(tmp_path, "- answer in Russian\n")
+    block = lessons.guardrails_block(tmp_path, "make a tkinter button", max_lessons=0)
+    assert block.startswith("Project rules from the user (must follow):")
+    assert "Known pitfalls" not in block

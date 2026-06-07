@@ -71,11 +71,17 @@ A weak local model repeats the same mistakes, so `lessons.py` feeds it short
   signature and capped. A learned lesson resurfaces when a future task shares a
   significant word with the failed task.
 
+A third, unconditional source is the user's own `AGENT_RULES.md` in the
+workspace root: bullet lines become rules the model must always follow
+(`load_user_rules` / `user_rules_block`; manage with `local-codex-lite rules
+init` / `rules show`, see [configuration](configuration.md#user-rules-agent_rulesmd)).
+
 `planner.make_plan` and `make_patch` (the standard, non-runtime-fix paths) build
-`lessons_guardrail_block(workspace_root, task)` and pass it to `plan_prompt` /
-`patch_prompt` as the optional `pitfalls` block. The block is intentionally
-short (max three bullets) — long context hurts small models. Inspect or reset
-the ledger with `local-codex-lite lessons list` / `lessons clear`.
+`guardrails_block(workspace_root, task)` — user rules first, then the relevant
+lessons — and pass it to `plan_prompt` / `patch_prompt` as the optional
+`pitfalls` block. The lessons part is intentionally short (max three bullets) —
+long context hurts small models. Inspect or reset the learned ledger with
+`local-codex-lite lessons list` / `lessons clear`.
 
 ## The LLM seam
 

@@ -52,6 +52,42 @@ def test_make_plan_uses_injected_client(tmp_path) -> None:
     assert fake.calls
 
 
+_VALID_DIFF = "\n".join(
+    [
+        "diff --git a/foo.py b/foo.py",
+        "--- a/foo.py",
+        "+++ b/foo.py",
+        "@@ -1 +1,2 @@",
+        "+# added",
+        " print('hi')",
+    ]
+)
+
+
+def _all_message_text(fake: _FakeClient) -> str:
+    messages = fake.calls[0][0]
+    return "\n".join(str(message["content"]) for message in messages)
+
+
+def test_make_plan_injects_user_rules_into_prompt(tmp_path) -> None:
+    (tmp_path / "AGENT_RULES.md").write_text("- always answer in Russian\n", encoding="utf-8")
+    fake = _FakeClient('{"steps": ["do x"], "files": ["a.py"]}')
+    planner.make_plan("do x", tmp_path, AgentConfig(), client=fake)
+    text = _all_message_text(fake)
+    assert "Project rules from the user (must follow):" in text
+    assert "always answer in Russian" in text
+
+
+def test_make_patch_injects_user_rules_into_prompt(tmp_path) -> None:
+    (tmp_path / "AGENT_RULES.md").write_text("- always answer in Russian\n", encoding="utf-8")
+    (tmp_path / "foo.py").write_text("print('hi')\n", encoding="utf-8")
+    fake = _FakeClient(_VALID_DIFF)
+    planner.make_patch("fix foo", {"summary": "fix"}, tmp_path, AgentConfig(), client=fake)
+    text = _all_message_text(fake)
+    assert "Project rules from the user (must follow):" in text
+    assert "always answer in Russian" in text
+
+
 def test_injection_skips_real_client_construction(tmp_path, monkeypatch) -> None:
     # If the seam works, the real client is never constructed even when the
     # network/endpoint is unavailable.

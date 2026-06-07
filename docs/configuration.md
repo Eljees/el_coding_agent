@@ -83,3 +83,15 @@ rag:
 
 The optional `[rag]` extra (`chromadb`, `sentence-transformers`) enables a
 vector provider. Without it, the keyword provider works out of the box.
+
+## User rules (AGENT_RULES.md)
+
+`AGENT_RULES.md` in the workspace root is your hand-edited style guide for the
+model: every bullet line (`- ` or `* `) is one rule, injected into every
+plan/patch prompt ahead of the learned "known pitfalls" block (see
+[architecture — Lessons memory](architecture.md#lessons-memory)). Headings,
+comments, and prose are ignored; each rule is clamped to 200 characters and
+only the first 10 bullets are used. A missing or empty file changes nothing.
+
+Bootstrap a template with `local-codex-lite rules init`, then edit the file by
+hand; check what the agent actually parses with `local-codex-lite rules show`.

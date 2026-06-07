@@ -34,6 +34,10 @@ from .cli_rag import cmd_rag_index, cmd_rag_query
 from .cli_review import (
     cmd_review,
 )
+from .cli_rules import (
+    cmd_rules_init,
+    cmd_rules_show,
+)
 from .cli_utils import (
     ensure_utf8_output as _ensure_utf8_output,
 )
@@ -155,6 +159,8 @@ __all__ = [
     "cmd_rag_query",
     "cmd_recognize",
     "cmd_review",
+    "cmd_rules_init",
+    "cmd_rules_show",
     "cmd_status",
     "default_config",
 ]
@@ -224,6 +230,11 @@ def main() -> int:
             return cmd_lessons_list(args)
         if args.lessons_command == "clear":
             return cmd_lessons_clear(args)
+    if args.command == "rules":
+        if args.rules_command == "show":
+            return cmd_rules_show(args)
+        if args.rules_command == "init":
+            return cmd_rules_init(args)
     if args.command == "evidence":
         if args.evidence_command == "json-compare":
             return cmd_evidence_json_compare(args)
