@@ -21,6 +21,7 @@ from .logging_utils import append_jsonl, sanitize_log_text
 from .patcher import RuntimeFixContext
 from .prompts import (
     assumption_prompt,
+    clarification_answers_prompt,
     command_prompt,
     evidence_context_block,
     patch_prompt,
@@ -592,6 +593,49 @@ def revise_plan_with_assumptions(
     )
     budget = _budget_for_messages(messages, config.llm.max_tokens)
     response = client.chat(messages, max_tokens=min(768, budget), status_label="Revising plan")
+    try:
+        return extract_json(response.text)
+    except ValueError:
+        return repair_json_response(client, messages, response.text, max_tokens=min(512, budget))
+
+
+def revise_plan_with_answers(
+    task: str,
+    plan: dict,
+    answers: list[tuple[str, str]],
+    workspace_root: Path,
+    config: AgentConfig,
+    *,
+    run_dir: Path | None = None,
+    extra_context: str = "",
+    client: SupportsChat | None = None,
+) -> dict:
+    """Revise *plan* using the user's answers to its clarifying questions.
+
+    Mirror of :func:`revise_plan_with_assumptions`, but instead of asking the
+    model to invent reasonable defaults the prompt carries the human answers
+    (``answers`` is a list of ``(question, answer)`` pairs) as ground truth.
+    """
+    context = _merge_context(
+        compact_context(
+            workspace_root,
+            task,
+            config.workspace,
+            allow_sensitive_read=config.safety.allow_sensitive_read,
+        ),
+        extra_context,
+    )
+    client = client if client is not None else OpenAICompatibleClient(config.llm)
+    messages = clarification_answers_prompt(
+        task,
+        json.dumps(plan, ensure_ascii=False, indent=2),
+        context,
+        [(str(question), str(answer)) for question, answer in answers],
+    )
+    budget = _budget_for_messages(messages, config.llm.max_tokens)
+    response = client.chat(
+        messages, max_tokens=min(768, budget), status_label="Revising plan with answers"
+    )
     try:
         return extract_json(response.text)
     except ValueError:

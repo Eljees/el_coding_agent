@@ -561,6 +561,53 @@ def test_appsechub_worker_timeout(monkeypatch) -> None:
     assert "timed out" in out
 
 
+def test_run_worker_assume_clarification_defaults_true(tmp_path: Path, monkeypatch) -> None:
+    """Without an explicit flag, run_worker keeps the old GUI behavior."""
+    import local_codex_lite.cli as cli_mod
+
+    captured: dict = {}
+
+    def fake_run_task(task, args):
+        captured["assume"] = args.assume_clarification
+        return 0
+
+    monkeypatch.setattr(cli_mod, "_run_task", fake_run_task)
+    run_worker("task", tmp_path, "", apply=False, exec_=False)
+    assert captured["assume"] is True
+
+
+def test_run_worker_forwards_assume_clarification_false(tmp_path: Path, monkeypatch) -> None:
+    """assume_clarification=False lands in the Namespace so the runner stops
+    at the clarification gate and prints the questions for the GUI dialog."""
+    import local_codex_lite.cli as cli_mod
+
+    captured: dict = {}
+
+    def fake_run_task(task, args):
+        captured["assume"] = args.assume_clarification
+        return 0
+
+    monkeypatch.setattr(cli_mod, "_run_task", fake_run_task)
+    run_worker("task", tmp_path, "", apply=True, exec_=False, assume_clarification=False)
+    assert captured["assume"] is False
+
+
+def test_preview_worker_forwards_assume_clarification(tmp_path: Path, monkeypatch) -> None:
+    import local_codex_lite.cli as cli_mod
+
+    captured: dict = {}
+
+    def fake_preview(args):
+        captured["assume"] = args.assume_clarification
+        return 0
+
+    monkeypatch.setattr(cli_mod, "cmd_preview", fake_preview)
+    preview_worker("task", tmp_path, "", assume_clarification=False)
+    assert captured["assume"] is False
+    preview_worker("task", tmp_path, "")
+    assert captured["assume"] is True
+
+
 def test_run_worker_passes_smoke_flag(tmp_path: Path, monkeypatch) -> None:
     """run_worker forwards smoke=True as args.smoke to _run_task."""
     import argparse

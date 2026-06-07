@@ -77,6 +77,7 @@ from .planner import (
     make_patch,
     make_plan,
     repair_patch_with_error,
+    revise_plan_with_answers,
     revise_plan_with_assumptions,
     suggest_commands,
 )
@@ -161,16 +162,45 @@ def _run_task_body(
     }
 
     if plan.get("needs_clarification"):
+        raw_questions = plan.get("clarifying_questions")
         questions = (
-            plan.get("clarifying_questions")
-            if isinstance(plan.get("clarifying_questions"), list)
-            else []
+            [str(question) for question in raw_questions] if isinstance(raw_questions, list) else []
         )
         if questions:
             console.print("[yellow]Plan needs clarification.[/yellow]")
             for question in questions:
                 console.print(f"- {question}")
-        if args.assume_clarification:
+        interactive = bool(getattr(args, "interactive", False))
+        if interactive and not sys.stdin.isatty():
+            console.print(
+                "[yellow]--interactive requires an interactive terminal (stdin is not a TTY); "
+                "falling back to non-interactive behavior.[/yellow]"
+            )
+            interactive = False
+        if interactive:
+            # Interactive clarification: the human's answers are the cleanest
+            # requirements signal a small local model can get, so they take
+            # priority over --assume-clarification defaults.
+            qa_pairs: list[tuple[str, str]] = []
+            for question in questions:
+                console.print(f"[bold]{question}[/bold]")
+                answer = input("> ").strip()
+                if not answer:
+                    answer = "use a reasonable default"
+                qa_pairs.append((question, answer))
+            dump_json(
+                run_dir / "clarifications.json",
+                [{"question": question, "answer": answer} for question, answer in qa_pairs],
+            )
+            console.print("[yellow]Revising plan with your answers...[/yellow]")
+            plan = revise_plan_with_answers(
+                task, plan, qa_pairs, root, cfg, run_dir=run_dir, extra_context=evidence_text
+            )
+            dump_json(run_dir / "plan.json", plan)
+            save_summary_json(evidence_bundle, "plan.json", plan)
+            console.print("[bold]Revised plan[/bold]")
+            console.print_json(json.dumps(plan, ensure_ascii=False, indent=2))
+        elif args.assume_clarification:
             console.print("[yellow]Assuming reasonable defaults and continuing...[/yellow]")
             plan = revise_plan_with_assumptions(
                 task, plan, root, cfg, run_dir=run_dir, extra_context=evidence_text

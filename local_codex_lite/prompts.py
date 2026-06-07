@@ -397,6 +397,42 @@ def runtime_fix_single_file_command_prompt(
     ]
 
 
+def clarification_answers_prompt(
+    task: str, plan_json: str, context: str, qa_pairs: list[tuple[str, str]]
+) -> list[dict[str, str]]:
+    answers_text = (
+        "\n".join(f"Q: {question}\nA: {answer}" for question, answer in qa_pairs)
+        if qa_pairs
+        else "No answers provided."
+    )
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are a precise coding agent. The user answered the plan's clarifying "
+                "questions; their answers are ground truth. "
+                "Return only valid JSON matching the schema."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Task:\n"
+                f"{task}\n\n"
+                "Existing plan:\n"
+                f"{plan_json}\n\n"
+                "Clarification answers from the user:\n"
+                f"{answers_text}\n\n"
+                "Workspace context:\n"
+                f"{context}\n\n"
+                "Revise the plan strictly following the user's answers, set needs_clarification "
+                "to false, and return JSON only with keys summary, files_to_inspect, "
+                "implementation_steps, risks, needs_clarification, clarifying_questions."
+            ),
+        },
+    ]
+
+
 def assumption_prompt(
     task: str, plan_json: str, context: str, questions: list[str]
 ) -> list[dict[str, str]]:

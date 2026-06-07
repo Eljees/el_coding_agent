@@ -49,6 +49,13 @@ def build_parser() -> argparse.ArgumentParser:
         "(executes generated code; opt-in, see docs/safety.md)",
     )
     p_run.add_argument("--assume-clarification", action="store_true")
+    p_run.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="answer the plan's clarifying questions interactively (requires a TTY); "
+        "takes precedence over --assume-clarification",
+    )
     p_run.add_argument("--evidence-file", action="append", default=[])
     p_run.add_argument("--evidence-stdin", action="store_true")
     p_run.add_argument(

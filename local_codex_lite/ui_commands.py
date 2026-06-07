@@ -212,6 +212,42 @@ def is_preview_ready(output: str) -> bool:
     return "patch preview ok" in lower or "patch applied" in lower or "run completed" in lower
 
 
+_CLARIFICATION_MARKER = "Plan needs clarification."
+
+
+def extract_clarifying_questions(output: str) -> list[str]:
+    """Parse the clarifying questions out of a captured run/preview *output*.
+
+    The runner prints ``Plan needs clarification.`` followed by one ``- ...``
+    line per question.  Returns the questions of the last such block, or an
+    empty list when the run did not stop for clarification.
+    """
+    questions: list[str] = []
+    in_block = False
+    for line in output.splitlines():
+        stripped = line.strip()
+        if _CLARIFICATION_MARKER in stripped:
+            in_block = True
+            questions = []
+            continue
+        if not in_block:
+            continue
+        if stripped.startswith("- "):
+            questions.append(stripped[2:].strip())
+        elif stripped:
+            in_block = False
+    return questions
+
+
+def clarification_evidence_block(qa_pairs: list[tuple[str, str]]) -> str:
+    """Render *qa_pairs* as an evidence block the planner treats as ground truth."""
+    lines = ["Clarification answers:"]
+    for question, answer in qa_pairs:
+        lines.append(f"Q: {question}")
+        lines.append(f"A: {answer}")
+    return "\n".join(lines)
+
+
 def heartbeat_message(elapsed_seconds: float) -> str:
     """The periodic ``still running`` line appended while a worker is busy."""
     return f"still running: {format_duration(elapsed_seconds)}"

@@ -100,12 +100,22 @@ def _fmt(output: str, code: int | None, verb: str) -> str:
     return f"{verb} finished with exit code {code}"
 
 
-def preview_worker(task: str, workspace_root: Path, evidence_text: str) -> str:
+def preview_worker(
+    task: str,
+    workspace_root: Path,
+    evidence_text: str,
+    *,
+    assume_clarification: bool = True,
+) -> str:
     """Run ``cli.cmd_preview`` in *workspace_root* and return captured output."""
     from . import cli as cli_module
 
     args = argparse.Namespace(
-        task=task, evidence_file=[], evidence_stdin=bool(evidence_text), rag=False
+        task=task,
+        evidence_file=[],
+        evidence_stdin=bool(evidence_text),
+        rag=False,
+        assume_clarification=assume_clarification,
     )
     output, code = _capture(cli_module.cmd_preview, args, workspace_root, evidence_text)
     return _fmt(output, code, "Preview")
@@ -173,6 +183,7 @@ def run_worker(
     apply: bool,
     exec_: bool,
     smoke: bool = False,
+    assume_clarification: bool = True,
 ) -> str:
     """Run the full agent pipeline (plan → patch → [apply] → [exec] → [smoke])."""
     from . import cli as cli_module
@@ -183,7 +194,7 @@ def run_worker(
         apply=apply,
         execute=exec_,  # runner.py reads args.execute (dest of --exec flag)
         smoke=smoke,
-        assume_clarification=True,
+        assume_clarification=assume_clarification,
         evidence_file=[],
         evidence_stdin=bool(evidence_text),
     )

@@ -25,10 +25,12 @@ from local_codex_lite.ui_commands import (
     analyze_completed_message,
     append_output,
     capability_detail_text,
+    clarification_evidence_block,
     combined_copy_text,
     decision_json,
     decision_status_labels,
     export_output_text,
+    extract_clarifying_questions,
     finalize_run_output,
     heartbeat_message,
     history_labels,
@@ -363,3 +365,74 @@ def test_history_labels_uses_first_line_capped() -> None:
     assert labels[1] == "first line"
     assert labels[2] == "x" * 120
     assert labels[3] == ""
+
+
+# ---------------------------------------------------------------------------
+# Clarifying questions (GUI dialog plumbing)
+# ---------------------------------------------------------------------------
+
+
+def test_extract_clarifying_questions_parses_block() -> None:
+    output = "\n".join(
+        [
+            "Planning done",
+            "Plan needs clarification.",
+            "- Which file should be edited?",
+            "- What is the target Python version?",
+            "Use --assume-clarification to continue with reasonable defaults.",
+        ]
+    )
+    assert extract_clarifying_questions(output) == [
+        "Which file should be edited?",
+        "What is the target Python version?",
+    ]
+
+
+def test_extract_clarifying_questions_without_marker_returns_empty() -> None:
+    assert extract_clarifying_questions("Patch applied\nrun completed") == []
+    assert extract_clarifying_questions("") == []
+
+
+def test_extract_clarifying_questions_ignores_dashes_before_marker() -> None:
+    output = "\n".join(
+        [
+            "- selected file foo.py",
+            "Plan needs clarification.",
+            "- Real question?",
+        ]
+    )
+    assert extract_clarifying_questions(output) == ["Real question?"]
+
+
+def test_extract_clarifying_questions_stops_at_non_question_line() -> None:
+    output = "\n".join(
+        [
+            "Plan needs clarification.",
+            "- Only question?",
+            "Use --assume-clarification to continue with reasonable defaults.",
+            "- not a question, block already ended",
+        ]
+    )
+    assert extract_clarifying_questions(output) == ["Only question?"]
+
+
+def test_extract_clarifying_questions_keeps_last_block() -> None:
+    output = "\n".join(
+        [
+            "Plan needs clarification.",
+            "- Old question?",
+            "Revised plan",
+            "Plan needs clarification.",
+            "- New question?",
+        ]
+    )
+    assert extract_clarifying_questions(output) == ["New question?"]
+
+
+def test_clarification_evidence_block_formats_pairs() -> None:
+    block = clarification_evidence_block([("Which file?", "foo.py"), ("Which style?", "PEP 8")])
+    assert block == ("Clarification answers:\nQ: Which file?\nA: foo.py\nQ: Which style?\nA: PEP 8")
+
+
+def test_clarification_evidence_block_empty_pairs() -> None:
+    assert clarification_evidence_block([]) == "Clarification answers:"

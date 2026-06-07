@@ -64,6 +64,12 @@ class CommandCenterUI:
         self._task_history: list[str] = []
         # Smoke-run after apply (opt-in)
         self.smoke_var = tk.BooleanVar(value=False)
+        # Ask clarifying questions instead of assuming defaults (opt-in)
+        self.clarify_var = tk.BooleanVar(value=False)
+        # Last background action (label, task, worker) for the clarification re-run
+        self._last_background: tuple[str, str, object] | None = None
+        # One-shot override: re-run with assume_clarification=True after answers
+        self._clarify_assume_once = False
         # workspace_var created before _build so status bar can reference it
         self.workspace_var = tk.StringVar(
             value=ui_commands.workspace_status(self._base_workspace_root)
@@ -236,6 +242,11 @@ class CommandCenterUI:
             text="Create dated project folder for new project tasks",
             variable=self.project_mode_var,
         ).pack(side="left")
+        ttk.Checkbutton(
+            workspace_row,
+            text="Ask clarifying questions",
+            variable=self.clarify_var,
+        ).pack(side="left", padx=(12, 0))
         ttk.Label(workspace_row, textvariable=self.workspace_var).pack(side="right")
         ttk.Button(
             workspace_row,
@@ -597,6 +608,7 @@ class CommandCenterUI:
             self._write_command_output("Enter a task first.")
             return
         self._preview_ready = False
+        self._clarify_assume_once = False
         decision = recognize_intent(task, self.capabilities)
         self._write_intent(decision)
         self._save_task_to_history(task)
@@ -611,6 +623,7 @@ class CommandCenterUI:
         if not task:
             self._write_command_output("Enter a task first.")
             return
+        self._clarify_assume_once = False
         decision = self._last_decision or recognize_intent(task, self.capabilities)
         self._write_intent(decision)
         self._save_task_to_history(task)
@@ -622,6 +635,7 @@ class CommandCenterUI:
         if not task:
             self._write_command_output("Enter a task first.")
             return
+        self._clarify_assume_once = False
         self._save_task_to_history(task)
         action = ui_commands.action_for_exec()
         self._run_background(action.label, task, self._worker_for_action(action))
@@ -645,6 +659,7 @@ class CommandCenterUI:
     # ------------------------------------------------------------------
 
     def _run_background(self, label: str, task: str, worker) -> None:
+        self._last_background = (label, task, worker)
         if label in {"preview", "apply", "apply + exec"}:
             decision = self._last_decision or recognize_intent(task, self.capabilities)
             self._prepare_workspace(task, decision, create=True)
@@ -688,6 +703,71 @@ class CommandCenterUI:
         self._write_command_output(output)
         self._preview_ready = ui_commands.is_preview_ready(output)
         self._update_action_buttons()
+        self._maybe_ask_clarifications(output)
+
+    def _maybe_ask_clarifications(self, output: str) -> None:
+        """If the finished run stopped for clarification, collect answers and re-run.
+
+        Runs in the Tk main thread (called from ``_finish_background``).  The
+        answers are appended to the Evidence panel as ground truth and the same
+        action is re-launched with ``assume_clarification=True`` so the run can
+        proceed past the clarification gate.
+        """
+        if not self.clarify_var.get() or self._clarify_assume_once:
+            return
+        if self._last_background is None:
+            return
+        label, task, worker = self._last_background
+        if label not in {"preview", "apply", "apply + exec"}:
+            return
+        questions = ui_commands.extract_clarifying_questions(output)
+        if not questions:
+            return
+        qa_pairs = self._ask_clarifications(questions)
+        if qa_pairs is None:
+            return
+        block = ui_commands.clarification_evidence_block(qa_pairs)
+        if self._evidence():
+            self.evidence_text.insert("end", "\n\n")
+        self.evidence_text.insert("end", block)
+        self.evidence_text.see("end")
+        self._clarify_assume_once = True
+        self._run_background(label, task, worker)
+
+    def _ask_clarifications(self, questions: list[str]) -> list[tuple[str, str]] | None:
+        """Modal dialog: one Entry per question; OK returns (question, answer) pairs."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Clarifying questions")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        ttk.Label(
+            dialog,
+            text="The plan needs clarification. Empty answers mean 'use a reasonable default'.",
+            wraplength=520,
+        ).pack(anchor="w", padx=10, pady=(10, 4))
+        entries: list[tuple[str, ttk.Entry]] = []
+        for question in questions:
+            ttk.Label(dialog, text=question, wraplength=520).pack(anchor="w", padx=10, pady=(8, 2))
+            entry = ttk.Entry(dialog, width=72)
+            entry.pack(fill="x", padx=10)
+            entries.append((question, entry))
+        result: list[list[tuple[str, str]] | None] = [None]
+
+        def on_ok() -> None:
+            result[0] = [
+                (question, entry.get().strip() or "use a reasonable default")
+                for question, entry in entries
+            ]
+            dialog.destroy()
+
+        buttons = ttk.Frame(dialog)
+        buttons.pack(fill="x", padx=10, pady=10)
+        ttk.Button(buttons, text="OK", command=on_ok).pack(side="right", padx=(6, 0))
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right")
+        if entries:
+            entries[0][1].focus_set()
+        self.root.wait_window(dialog)
+        return result[0]
 
     def _schedule_busy_heartbeat(self) -> None:
         if not self._busy:
@@ -705,8 +785,21 @@ class CommandCenterUI:
     # Workers
     # ------------------------------------------------------------------
 
+    def _assume_clarification(self) -> bool:
+        """Whether the next run should bypass the clarification gate.
+
+        True unless the "Ask clarifying questions" checkbox is on; the
+        one-shot override re-enables it for the post-answers re-run.
+        """
+        return (not self.clarify_var.get()) or self._clarify_assume_once
+
     def _preview_worker(self, task: str) -> str:
-        return ui_runners.preview_worker(task, self._active_workspace_root, self._evidence())
+        return ui_runners.preview_worker(
+            task,
+            self._active_workspace_root,
+            self._evidence(),
+            assume_clarification=self._assume_clarification(),
+        )
 
     def _logs_latest_worker(self, _task: str) -> str:
         return ui_runners.logs_latest_worker(self._active_workspace_root)
@@ -735,6 +828,7 @@ class CommandCenterUI:
             apply=apply,
             exec_=exec_,
             smoke=self.smoke_var.get(),
+            assume_clarification=self._assume_clarification(),
         )
 
     # ------------------------------------------------------------------

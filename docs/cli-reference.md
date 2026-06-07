@@ -124,6 +124,7 @@ Usage: `local-codex-lite run <task> [options]`
 | `--exec` | run suggested commands after a successful apply |
 | `--smoke` | after a successful apply, smoke-run touched entrypoint scripts (executes generated code; opt-in, see docs/safety.md) |
 | `--assume-clarification` |  |
+| `--interactive` | answer the plan's clarifying questions interactively (requires a TTY); takes precedence over --assume-clarification |
 | `--evidence-file EVIDENCE_FILE` | repeatable |
 | `--evidence-stdin` |  |
 | `--profile PROFILE` | select an llm_profiles entry from config.yaml for this invocation |

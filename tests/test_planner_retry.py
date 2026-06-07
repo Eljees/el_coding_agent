@@ -310,6 +310,86 @@ class TargetDriftRepairClient:
         )
 
 
+_REVISED_PLAN_JSON = json.dumps(
+    {
+        "summary": "revised with answers",
+        "files_to_inspect": ["foo.py"],
+        "implementation_steps": [],
+        "risks": [],
+        "needs_clarification": False,
+        "clarifying_questions": [],
+    }
+)
+
+
+class AnswersCaptureClient:
+    seen: ClassVar[list[tuple[list[dict[str, str]], str | None]]] = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def chat(self, messages, max_tokens=None, status_label=None):
+        self.__class__.seen.append((messages, status_label))
+        return LLMResponse(text=_REVISED_PLAN_JSON, raw={"model": "qwen25-coder-14b-awq"})
+
+
+def test_revise_plan_with_answers_sends_qa_pairs(tmp_path: Path, monkeypatch) -> None:
+    config = AgentConfig()
+    AnswersCaptureClient.seen = []
+    monkeypatch.setattr(planner, "OpenAICompatibleClient", AnswersCaptureClient)
+    plan = {
+        "summary": "old",
+        "needs_clarification": True,
+        "clarifying_questions": ["Which file?", "Which style?"],
+    }
+
+    revised = planner.revise_plan_with_answers(
+        "do the task",
+        plan,
+        [("Which file?", "foo.py"), ("Which style?", "PEP 8")],
+        tmp_path,
+        config,
+        extra_context="user evidence",
+    )
+
+    assert revised["needs_clarification"] is False
+    assert revised["summary"] == "revised with answers"
+    messages, status_label = AnswersCaptureClient.seen[0]
+    assert status_label == "Revising plan with answers"
+    user_text = messages[1]["content"]
+    assert "Q: Which file?" in user_text
+    assert "A: foo.py" in user_text
+    assert "Q: Which style?" in user_text
+    assert "A: PEP 8" in user_text
+    assert "strictly following the user's answers" in user_text
+
+
+class AnswersBadThenGoodClient:
+    def __init__(self, *args, **kwargs):
+        self.calls = 0
+
+    def chat(self, messages, max_tokens=None, status_label=None):
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(text="not json at all", raw={"model": "qwen25-coder-14b-awq"})
+        return LLMResponse(text=_REVISED_PLAN_JSON, raw={"model": "qwen25-coder-14b-awq"})
+
+
+def test_revise_plan_with_answers_repairs_invalid_json(tmp_path: Path, monkeypatch) -> None:
+    config = AgentConfig()
+    monkeypatch.setattr(planner, "OpenAICompatibleClient", AnswersBadThenGoodClient)
+
+    revised = planner.revise_plan_with_answers(
+        "do the task",
+        {"summary": "old"},
+        [("Which file?", "foo.py")],
+        tmp_path,
+        config,
+    )
+
+    assert revised["summary"] == "revised with answers"
+
+
 def test_repair_patch_with_error_retargets_to_intended_file(tmp_path: Path, monkeypatch) -> None:
     config = AgentConfig()
     TargetDriftRepairClient.seen_messages = []
