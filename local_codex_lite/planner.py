@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from .config import AgentConfig
+from .lessons import lessons_guardrail_block
 from .llm_client import (
     OpenAICompatibleClient,
     SupportsChat,
@@ -97,6 +98,9 @@ def make_plan(
             response_text=response.text,
         )
         return result
+    # Remind the weak model of pitfalls relevant to this task (curated rakes +
+    # failures learned from this workspace's prior repair loops).
+    pitfalls = lessons_guardrail_block(workspace_root, task)
     return _retry_with_context_variants(
         client=client,
         task=task,
@@ -113,7 +117,9 @@ def make_plan(
             response_text,
             max_tokens=min(512, budget),
         ),
-        prompt_builder=lambda context: plan_prompt(task, _merge_context(context, extra_context)),
+        prompt_builder=lambda context: plan_prompt(
+            task, _merge_context(context, extra_context), pitfalls=pitfalls
+        ),
     )
 
 
@@ -268,13 +274,18 @@ def _make_standard_patch(
 ) -> str:
     last_error: str | None = None
     last_issue: RetryIssue = "unknown"
+    # Curated pitfalls + failures learned from this workspace's prior repair
+    # loops, injected as a short reminder so the weak model avoids known rakes.
+    pitfalls = lessons_guardrail_block(workspace_root, task)
     for attempt, context in enumerate(
         _context_variants(
             workspace_root, task, config, variant="patch", extra_context=extra_context
         ),
         start=1,
     ):
-        messages = patch_prompt(task, json.dumps(plan, ensure_ascii=False, indent=2), context)
+        messages = patch_prompt(
+            task, json.dumps(plan, ensure_ascii=False, indent=2), context, pitfalls=pitfalls
+        )
         budget = _budget_for_messages(messages, config.llm.max_tokens)
         try:
             response = client.chat(

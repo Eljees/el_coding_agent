@@ -57,6 +57,7 @@ from .evidence_mode import (
     save_summary_text,
     write_status,
 )
+from .lessons import record_lesson
 from .logging_utils import dump_json, dump_text, session_dir
 from .patch_errors import (
     classify_patch_apply,
@@ -302,6 +303,11 @@ def _run_task_body(
     # compatible with older Namespaces that don't carry the field.
     override = getattr(args, "max_patch_attempts", None)
     max_patch_attempts = int(override) if override else cfg.safety.max_patch_attempts
+    # Track the most recent patch failure so that, if a later attempt finally
+    # succeeds, we persist exactly one lesson for the failure we recovered from
+    # (record only on error-then-success, never on a clean first apply).
+    last_patch_error_code: str | None = None
+    last_patch_error_detail: str = ""
     while True:
         patch_attempts += 1
         dump_text(run_dir / "patch.diff", patch)
@@ -338,6 +344,8 @@ def _run_task_body(
                 )
                 for error in validation.errors:
                     console.print(f"- {error}")
+                last_patch_error_code = classification.code
+                last_patch_error_detail = "\n".join(validation.errors)
                 patch = repair_patch_with_error(
                     task,
                     plan,
@@ -418,6 +426,8 @@ def _run_task_body(
                     console.print(
                         "[yellow]Repairing patch and retrying after syntax error...[/yellow]"
                     )
+                    last_patch_error_code = syntax_error.code
+                    last_patch_error_detail = detail
                     patch = repair_patch_with_error(
                         task,
                         plan,
@@ -477,6 +487,8 @@ def _run_task_body(
                         console.print(
                             "[yellow]Repairing patch and retrying after smoke failure...[/yellow]"
                         )
+                        last_patch_error_code = smoke_error.code
+                        last_patch_error_detail = detail
                         patch = repair_patch_with_error(
                             task,
                             plan,
@@ -524,6 +536,14 @@ def _run_task_body(
                 evidence_complete=True,
                 extra={"suggested_action": apply_error.suggested_action},
             )
+            # Recovered from a real failure this run: teach future runs about it.
+            if last_patch_error_code is not None:
+                record_lesson(
+                    root,
+                    error_code=last_patch_error_code,
+                    detail=last_patch_error_detail,
+                    task=task,
+                )
             break
         result["applied"] = False
         result["patch_error"] = apply_error
@@ -555,6 +575,8 @@ def _run_task_body(
             console.print("[yellow]Patch apply failed; repairing diff and retrying...[/yellow]")
             if apply_result.stderr:
                 console.print(apply_result.stderr)
+            last_patch_error_code = apply_error.code
+            last_patch_error_detail = apply_result.stderr or apply_result.stdout or "apply failed"
             patch = repair_patch_with_error(
                 task,
                 plan,

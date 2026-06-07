@@ -51,7 +51,18 @@ def evidence_context_block(evidence: str) -> str:
     )
 
 
-def plan_prompt(task: str, context: str) -> list[dict[str, str]]:
+def _pitfalls_block(pitfalls: str) -> str:
+    """Render an optional short 'known pitfalls' section for a user message.
+
+    Returns "" when *pitfalls* is empty so existing call sites that omit it are
+    byte-for-byte unchanged; otherwise a compact block ending in a blank line so
+    it slots cleanly in front of the trailing 'Return ...' instruction.
+    """
+    pitfalls = (pitfalls or "").strip()
+    return f"{pitfalls}\n\n" if pitfalls else ""
+
+
+def plan_prompt(task: str, context: str, pitfalls: str = "") -> list[dict[str, str]]:
     return [
         {
             "role": "system",
@@ -67,7 +78,8 @@ def plan_prompt(task: str, context: str) -> list[dict[str, str]]:
                 f"{task}\n\n"
                 "Workspace context:\n"
                 f"{context}\n\n"
-                "Return JSON only with keys summary, files_to_inspect, implementation_steps, risks, "
+                + _pitfalls_block(pitfalls)
+                + "Return JSON only with keys summary, files_to_inspect, implementation_steps, risks, "
                 "needs_clarification, clarifying_questions."
             ),
         },
@@ -134,7 +146,9 @@ def runtime_fix_single_file_plan_prompt(
     ]
 
 
-def patch_prompt(task: str, plan_json: str, context: str) -> list[dict[str, str]]:
+def patch_prompt(
+    task: str, plan_json: str, context: str, pitfalls: str = ""
+) -> list[dict[str, str]]:
     return [
         {
             "role": "system",
@@ -155,7 +169,8 @@ def patch_prompt(task: str, plan_json: str, context: str) -> list[dict[str, str]
             "content": (
                 "Task:\n"
                 f"{task}\n\nPlan JSON:\n{plan_json}\n\nWorkspace context:\n{context}\n\n"
-                "Return only unified diff. If the task is to create a runnable GUI demo, make sure the diff creates "
+                + _pitfalls_block(pitfalls)
+                + "Return only unified diff. If the task is to create a runnable GUI demo, make sure the diff creates "
                 "a launchable code file."
             ),
         },

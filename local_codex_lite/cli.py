@@ -18,6 +18,10 @@ from .cli_info import (
     cmd_recognize,
     cmd_status,
 )
+from .cli_lessons import (
+    cmd_lessons_clear,
+    cmd_lessons_list,
+)
 from .cli_logs import (
     cmd_logs_diff,
     cmd_logs_latest,
@@ -140,6 +144,8 @@ __all__ = [
     "cmd_ask",
     "cmd_config_show",
     "cmd_init",
+    "cmd_lessons_clear",
+    "cmd_lessons_list",
     "cmd_logs_diff",
     "cmd_logs_latest",
     "cmd_logs_show",
@@ -213,6 +219,11 @@ def main() -> int:
             return cmd_logs_show(args)
         if args.logs_command == "diff":
             return cmd_logs_diff(args)
+    if args.command == "lessons":
+        if args.lessons_command == "list":
+            return cmd_lessons_list(args)
+        if args.lessons_command == "clear":
+            return cmd_lessons_clear(args)
     if args.command == "evidence":
         if args.evidence_command == "json-compare":
             return cmd_evidence_json_compare(args)

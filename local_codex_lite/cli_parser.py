@@ -210,6 +210,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs_diff.add_argument("left", help="left run id, path, or 'latest'")
     p_logs_diff.add_argument("right", help="right run id, path, or 'latest'")
 
+    p_lessons = sub.add_parser(
+        "lessons",
+        help="inspect or clear the learned pitfalls fed back into prompts",
+    )
+    lessons_sub = p_lessons.add_subparsers(dest="lessons_command", required=True)
+    lessons_sub.add_parser("list", help="show learned lessons recorded in this workspace")
+    lessons_sub.add_parser("clear", help="delete the learned lessons ledger")
+
     p_evidence = sub.add_parser("evidence")
     evidence_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
 

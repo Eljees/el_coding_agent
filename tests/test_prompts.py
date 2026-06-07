@@ -51,6 +51,28 @@ def test_runtime_fix_command_prompt_prefers_verification_command():
     assert "primary verification command" in messages[1]["content"].lower()
 
 
+def test_plan_prompt_omits_pitfalls_by_default():
+    messages = plan_prompt("task", "context")
+    assert "Known pitfalls" not in messages[1]["content"]
+
+
+def test_plan_prompt_injects_pitfalls_before_return_instruction():
+    block = "Known pitfalls to avoid:\n- do not invent imports"
+    messages = plan_prompt("task", "context", pitfalls=block)
+    content = messages[1]["content"]
+    assert "do not invent imports" in content
+    # The block must sit in front of the trailing "Return JSON" instruction.
+    assert content.index("do not invent imports") < content.index("Return JSON")
+
+
+def test_patch_prompt_injects_pitfalls_before_return_instruction():
+    block = "Known pitfalls to avoid:\n- pass encoding to open()"
+    messages = patch_prompt("task", "{}", "context", pitfalls=block)
+    content = messages[1]["content"]
+    assert "pass encoding to open()" in content
+    assert content.index("pass encoding to open()") < content.index("Return only unified diff")
+
+
 def test_patch_repair_prompt_supports_target_drift():
     messages = patch_repair_prompt_for_issue(
         "target_drift",

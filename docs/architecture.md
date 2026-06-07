@@ -38,6 +38,7 @@ modules.
 | `rag.py` | Retrieval-augmented context (keyword provider by default). |
 | `evidence.py` / `evidence_mode.py` | Evidence bundles + status files. |
 | `logging_utils.py` | Per-run logging under `.local-codex-lite/runs/<ts>/`. |
+| `lessons.py` | Lessons memory: curated + learned pitfalls injected into prompts. |
 | `replay.py` / `undo.py` / `runs_admin.py` | Re-run a saved task, restore from backups, manage the runs lifecycle. |
 | `ui.py` | Optional Tkinter command center (GUI). |
 
@@ -53,6 +54,28 @@ modules.
    and applies it; a post-apply AST gate rejects syntactically broken Python.
 8. Suggested commands run only with `--exec`.
 9. Everything is logged + bundled as evidence under the run directory.
+
+## Lessons memory
+
+A weak local model repeats the same mistakes, so `lessons.py` feeds it short
+"known pitfalls" reminders. Two sources combine:
+
+- **Curated** (`CURATED_PITFALLS`): hand-written rakes keyed by trigger keywords
+  (tkinter options, invented imports, mutable default args, missing `encoding=`,
+  Unix-only shell tooling, indentation, f-string quote clashes). A pitfall fires
+  when any keyword appears in `task.lower()`.
+- **Learned** (`.local-codex-lite/lessons.jsonl`): one record per
+  error-then-recovery. `runner._run_task_body` calls `record_lesson(...)` **only**
+  when a patch attempt failed and a later attempt then succeeded, persisting the
+  last caught error's code + detail. Records are deduped by a normalized
+  signature and capped. A learned lesson resurfaces when a future task shares a
+  significant word with the failed task.
+
+`planner.make_plan` and `make_patch` (the standard, non-runtime-fix paths) build
+`lessons_guardrail_block(workspace_root, task)` and pass it to `plan_prompt` /
+`patch_prompt` as the optional `pitfalls` block. The block is intentionally
+short (max three bullets) — long context hurts small models. Inspect or reset
+the ledger with `local-codex-lite lessons list` / `lessons clear`.
 
 ## The LLM seam
 
