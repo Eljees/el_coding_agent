@@ -18,7 +18,7 @@ except Exception as exc:
 else:
     _TK_IMPORT_ERROR = None
 
-from . import ui_commands, ui_runners
+from . import ui_commands, ui_helpers, ui_runners
 from .capabilities import capability_brief_lines, discover_capabilities
 from .intent import (
     IntentDecision,
@@ -62,6 +62,8 @@ class CommandCenterUI:
         self._chat_messages: list[dict[str, str]] = []
         # Task history
         self._task_history: list[str] = []
+        # Smoke-run after apply (opt-in)
+        self.smoke_var = tk.BooleanVar(value=False)
         # workspace_var created before _build so status bar can reference it
         self.workspace_var = tk.StringVar(
             value=ui_commands.workspace_status(self._base_workspace_root)
@@ -212,6 +214,11 @@ class CommandCenterUI:
             buttons, text="Exec", command=self.exec_changes, state="disabled"
         )
         self.exec_button.pack(side="left")
+        ttk.Checkbutton(
+            buttons,
+            text="Smoke after apply",
+            variable=self.smoke_var,
+        ).pack(side="left", padx=(12, 0))
         # Stop + progressbar on right side
         self._stop_button = ttk.Button(
             buttons, text="Stop", command=self._stop_worker, state="disabled"
@@ -722,7 +729,12 @@ class CommandCenterUI:
 
     def _run_worker(self, task: str, *, apply: bool, exec_: bool) -> str:
         return ui_runners.run_worker(
-            task, self._active_workspace_root, self._evidence(), apply=apply, exec_=exec_
+            task,
+            self._active_workspace_root,
+            self._evidence(),
+            apply=apply,
+            exec_=exec_,
+            smoke=self.smoke_var.get(),
         )
 
     # ------------------------------------------------------------------
@@ -739,74 +751,24 @@ class CommandCenterUI:
         self.exec_button.configure(state=exec_state)
 
     # ------------------------------------------------------------------
-    # Text widget helpers
+    # Text widget helpers  (logic lives in ui_helpers; wired here)
     # ------------------------------------------------------------------
 
     def _make_readonly_copyable(self, widget: tk.Text, copy_callback) -> None:
-        widget.configure(state="disabled")
-        widget.bind(
-            "<Control-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback)
-        )
-        widget.bind("<Control-a>", lambda _event: self._select_all(widget))
-        widget.bind(
-            "<Command-c>", lambda _event: self._copy_selection_or_all(widget, copy_callback)
-        )
-        widget.bind("<Command-a>", lambda _event: self._select_all(widget))
-        widget.bind(
-            "<Button-3>", lambda event: self._show_text_context_menu(widget, copy_callback, event)
+        ui_helpers.make_readonly_copyable(
+            widget,
+            copy_callback,
+            copy_sel_fn=lambda: ui_helpers.copy_selection_or_all(
+                widget, copy_callback, self._copy_text
+            ),
+            select_all_fn=lambda: ui_helpers.select_all_text(widget),
         )
 
     def _make_editable_copyable(self, widget: tk.Text) -> None:
-        widget.bind("<Control-a>", lambda _event: self._select_all(widget))
-        widget.bind("<Command-a>", lambda _event: self._select_all(widget))
-        widget.bind(
-            "<Button-3>", lambda event: self._show_editable_text_context_menu(widget, event)
+        ui_helpers.make_editable_copyable(
+            widget,
+            select_all_fn=lambda: ui_helpers.select_all_text(widget),
         )
-
-    def _select_all(self, widget: tk.Text) -> str:
-        prior_state = str(widget.cget("state"))
-        if prior_state == "disabled":
-            widget.configure(state="normal")
-        widget.tag_add("sel", "1.0", "end-1c")
-        widget.mark_set("insert", "1.0")
-        widget.see("1.0")
-        if prior_state == "disabled":
-            widget.configure(state="disabled")
-        return "break"
-
-    def _copy_selection_or_all(self, widget: tk.Text, copy_callback) -> str:
-        try:
-            selected = widget.get("sel.first", "sel.last")
-        except tk.TclError:
-            copy_callback()
-            return "break"
-        self._copy_text(selected)
-        return "break"
-
-    def _show_text_context_menu(self, widget: tk.Text, copy_callback, event) -> str:
-        menu = tk.Menu(widget, tearoff=0)
-        menu.add_command(
-            label="Copy selection",
-            command=lambda: self._copy_selection_or_all(widget, copy_callback),
-        )
-        menu.add_command(label="Copy all", command=copy_callback)
-        menu.add_command(label="Select all", command=lambda: self._select_all(widget))
-        menu.tk_popup(event.x_root, event.y_root)
-        return "break"
-
-    def _show_editable_text_context_menu(self, widget: tk.Text, event) -> str:
-        menu = tk.Menu(widget, tearoff=0)
-        menu.add_command(
-            label="Copy selection",
-            command=lambda: self._copy_selection_or_all(
-                widget, lambda: self._copy_widget_contents(widget)
-            ),
-        )
-        menu.add_command(label="Paste", command=lambda: widget.event_generate("<<Paste>>"))
-        menu.add_command(label="Select all", command=lambda: self._select_all(widget))
-        menu.add_command(label="Clear", command=lambda: widget.delete("1.0", "end"))
-        menu.tk_popup(event.x_root, event.y_root)
-        return "break"
 
     def _copy_text(self, text: str) -> None:
         self.root.clipboard_clear()
@@ -820,16 +782,7 @@ class CommandCenterUI:
         self._copy_text(self._intent_output_cache)
 
     def _copy_capability_detail(self) -> None:
-        self._copy_widget_contents(self.capability_detail)
-
-    def _copy_widget_contents(self, widget: tk.Text) -> None:
-        prior_state = str(widget.cget("state"))
-        if prior_state == "disabled":
-            widget.configure(state="normal")
-        text = widget.get("1.0", "end-1c")
-        if prior_state == "disabled":
-            widget.configure(state="disabled")
-        self._copy_text(text)
+        self._copy_text(ui_helpers.get_widget_text(self.capability_detail))
 
     def _copy_all_output(self) -> None:
         self._copy_text(

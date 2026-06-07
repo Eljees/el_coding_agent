@@ -58,3 +58,28 @@ or exceptions.
 (zip/tar/gz/7z/rar/nupkg/jar/war/ear/whl/rpm). Inventory-only is the safe
 default; extraction happens next to the source or into an explicit destination,
 with evidence metadata stored under the run folder.
+
+## Post-apply smoke testing
+
+After a successful `--apply`, pass `--smoke` to let the agent execute every
+entrypoint script that the patch touched and verify it starts cleanly:
+
+```
+local-codex-lite run "task" --apply --smoke
+```
+
+The script is launched in a subprocess with a configurable timeout (default
+10 s, set `safety.smoke_timeout_seconds` in `config.yaml`).  If the process
+exits non-zero or its stderr contains a traceback, the output is captured as
+evidence and fed automatically back into the repair loop — the same way a
+hand-pasted traceback from the "Evidence / traceback" panel would be.
+
+```
+safety:
+  smoke_run_default: false        # enable smoke on every apply without the flag
+  smoke_timeout_seconds: 10
+```
+
+In the GUI, tick **Smoke after apply** before clicking *Apply* to enable for
+that run.  The smoke result is recorded in `runs/<ts>/smoke.json` and the run
+directory's `events.jsonl` for auditing.

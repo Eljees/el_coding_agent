@@ -172,15 +172,17 @@ def run_worker(
     *,
     apply: bool,
     exec_: bool,
+    smoke: bool = False,
 ) -> str:
-    """Run the full agent pipeline (plan → patch → [apply] → [exec])."""
+    """Run the full agent pipeline (plan → patch → [apply] → [exec] → [smoke])."""
     from . import cli as cli_module
 
     args = argparse.Namespace(
         task=task,
         dry_run=False,
         apply=apply,
-        exec=exec_,
+        execute=exec_,  # runner.py reads args.execute (dest of --exec flag)
+        smoke=smoke,
         assume_clarification=True,
         evidence_file=[],
         evidence_stdin=bool(evidence_text),
@@ -234,13 +236,49 @@ def appsechub_skill_path() -> Path:
     return Path(__file__).resolve().parents[1] / "skills" / "appsechub" / "appsechub_client.py"
 
 
-def appsechub_worker(task: str) -> str:
-    """Run a read-only AppSecHub breakdown for the application named in *task*.
+_TREND_RE = re.compile(
+    r"\b(trend|тренд|delta|дельт|динам|dynamic|сравн|compar)",
+    re.IGNORECASE,
+)
+# Scan IDs are typically 3+ digit numbers distinct from app IDs in the same task.
+_SCAN_IDS_RE = re.compile(r"\b(\d{3,})\b")
 
-    Delegates to the ``appsechub`` skill client in a subprocess (same command
-    the capability's ``cli_equivalent`` documents), so the GUI needs neither
-    ``requests`` imported in-process nor the skill on ``sys.path``.  Restricts
-    to the TruffleHog scanner when the task mentions secrets/trufflehog.
+
+def _appsechub_cmd(task: str, app: str) -> list[str]:
+    """Choose the appsechub_client subcommand based on task keywords.
+
+    * trend/compare keywords + ≥2 numeric IDs → ``trend --scans id1,id2,...``
+    * trend/compare keywords only              → ``scans`` (list what's available)
+    * secrets/trufflehog                       → ``breakdown --source trufflehog``
+    * default                                  → ``breakdown``
+    """
+    skill = str(appsechub_skill_path())
+    lowered = task.lower()
+    base = [sys.executable, skill]
+
+    if _TREND_RE.search(lowered):
+        # Extract all 3+-digit numbers; the first one is likely the app id,
+        # remaining ones are scan ids.
+        all_ids = _SCAN_IDS_RE.findall(task)
+        # Filter out the app id itself (exact string match)
+        scan_ids = [n for n in all_ids if n != str(app)]
+        if len(scan_ids) >= 2:
+            return [*base, "trend", app, "--scans", ",".join(scan_ids[:10])]
+        # Not enough scan IDs: list scans so the user can pick
+        return [*base, "scans", app]
+
+    cmd = [*base, "breakdown", app]
+    if "trufflehog" in lowered or "трюфел" in lowered or "секрет" in lowered:
+        cmd += ["--source", "trufflehog"]
+    return cmd
+
+
+def appsechub_worker(task: str) -> str:
+    """Run a read-only AppSecHub query for the application named in *task*.
+
+    Routes to breakdown, trend, or scans depending on task keywords.
+    Delegates to the ``appsechub`` skill client in a subprocess so the GUI
+    needs neither ``requests`` imported in-process nor the skill on ``sys.path``.
     """
     import subprocess
 
@@ -251,10 +289,7 @@ def appsechub_worker(task: str) -> str:
             "Paste the appprofile URL (https://.../#/appprofile/<id>/issues) "
             "or write e.g. 'проект 89'."
         )
-    cmd = [sys.executable, str(appsechub_skill_path()), "breakdown", app]
-    lowered = task.lower()
-    if "trufflehog" in lowered or "трюфел" in lowered or "секрет" in lowered:
-        cmd += ["--source", "trufflehog"]
+    cmd = _appsechub_cmd(task, app)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except FileNotFoundError:

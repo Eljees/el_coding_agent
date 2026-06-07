@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from local_codex_lite.ui_runners import (
+    _appsechub_cmd,
     _capture,
     _fmt,
     appsechub_skill_path,
@@ -477,3 +478,103 @@ def test_appsechub_worker_reports_failure_exit_code(monkeypatch) -> None:
     out = appsechub_worker("issues проекта 89")
     assert "failed (exit 2)" in out
     assert "HTTP 401" in out
+
+
+# _appsechub_cmd routing
+# ---------------------------------------------------------------------------
+
+
+def test_appsechub_cmd_default_breakdown() -> None:
+    """Default task → breakdown subcommand."""
+    cmd = _appsechub_cmd("посмотри issues проекта 89", "89")
+    assert cmd[2] == "breakdown"
+    assert cmd[3] == "89"
+
+
+def test_appsechub_cmd_trufflehog_adds_source() -> None:
+    """Task mentions trufflehog → breakdown --source trufflehog."""
+    cmd = _appsechub_cmd("trufflehog issues проекта 89", "89")
+    assert cmd[2] == "breakdown"
+    assert "--source" in cmd
+    assert cmd[cmd.index("--source") + 1] == "trufflehog"
+
+
+def test_appsechub_cmd_trend_with_scan_ids() -> None:
+    """Trend keyword + two scan IDs → trend --scans id1,id2."""
+    cmd = _appsechub_cmd("тренд проекта 89 по сканам 101 и 102", "89")
+    assert cmd[2] == "trend"
+    assert cmd[3] == "89"
+    assert "--scans" in cmd
+    scans = cmd[cmd.index("--scans") + 1]
+    assert "101" in scans
+    assert "102" in scans
+
+
+def test_appsechub_cmd_trend_without_scan_ids_lists_scans() -> None:
+    """Trend keyword but no scan IDs → scans subcommand (list available)."""
+    cmd = _appsechub_cmd("покажи тренд проекта 89", "89")
+    assert cmd[2] == "scans"
+    assert cmd[3] == "89"
+
+
+def test_appsechub_cmd_compare_keyword_routes_to_scans() -> None:
+    """'compare' keyword without IDs → scans subcommand."""
+    cmd = _appsechub_cmd("сравни сканы проекта 89", "89")
+    assert cmd[2] == "scans"
+
+
+def test_appsechub_cmd_trend_app_id_excluded_from_scan_ids() -> None:
+    """The app id itself must not be mistaken for a scan id."""
+    cmd = _appsechub_cmd("тренд проекта 89 сканы 201 и 202", "89")
+    scans = cmd[cmd.index("--scans") + 1]
+    assert "89" not in scans.split(",")
+    assert "201" in scans
+    assert "202" in scans
+
+
+def test_appsechub_worker_trend_routes_to_trend_subcommand(monkeypatch) -> None:
+    """appsechub_worker with trend task spawns 'trend' subcommand."""
+    import subprocess
+    from types import SimpleNamespace
+
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(cmd, capture_output=True, text=True, timeout=600):
+        captured["cmd"] = cmd
+        return SimpleNamespace(returncode=0, stdout='{"trend": []}', stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    out = appsechub_worker("тренд проекта 89 сканы 201 202")
+    assert out == '{"trend": []}'
+    assert captured["cmd"][2] == "trend"
+
+
+def test_appsechub_worker_timeout(monkeypatch) -> None:
+    """appsechub_worker returns a readable message on TimeoutExpired."""
+    import subprocess
+
+    def fake_run(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=600)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    out = appsechub_worker("issues проекта 89")
+    assert "timed out" in out
+
+
+def test_run_worker_passes_smoke_flag(tmp_path: Path, monkeypatch) -> None:
+    """run_worker forwards smoke=True as args.smoke to _run_task."""
+    import argparse
+
+    captured: dict = {}
+
+    def fake_run_task(task, args):
+        captured["smoke"] = getattr(args, "smoke", None)
+        captured["execute"] = getattr(args, "execute", None)
+        return 0
+
+    import local_codex_lite.cli as cli_mod
+
+    monkeypatch.setattr(cli_mod, "_run_task", fake_run_task)
+    run_worker("task", tmp_path, "", apply=False, exec_=True, smoke=True)
+    assert captured["smoke"] is True
+    assert captured["execute"] is True  # exec bug fix: must be 'execute', not 'exec'
