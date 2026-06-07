@@ -206,6 +206,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs_tail.add_argument("--run", default="latest")
     p_logs_show = logs_sub.add_parser("show")
     p_logs_show.add_argument("run_id")
+    p_logs_attempts = logs_sub.add_parser(
+        "attempts",
+        help="attempt timeline for one run: every stage attempt, errors, final status",
+    )
+    p_logs_attempts.add_argument(
+        "run_id",
+        nargs="?",
+        default="latest",
+        help="run id under .local-codex-lite/runs/, path, or 'latest'",
+    )
     p_logs_diff = logs_sub.add_parser("diff", help="compare two runs side-by-side")
     p_logs_diff.add_argument("left", help="left run id, path, or 'latest'")
     p_logs_diff.add_argument("right", help="right run id, path, or 'latest'")
@@ -216,6 +226,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lessons_sub = p_lessons.add_subparsers(dest="lessons_command", required=True)
     lessons_sub.add_parser("list", help="show learned lessons recorded in this workspace")
+    lessons_sub.add_parser(
+        "stats",
+        help="lesson effectiveness: error signature recurrence before/after each lesson",
+    )
     lessons_sub.add_parser("clear", help="delete the learned lessons ledger")
 
     p_rules = sub.add_parser(

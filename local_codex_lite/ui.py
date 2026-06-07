@@ -60,6 +60,8 @@ class CommandCenterUI:
         self._busy_lines: list[str] = []
         # Chat conversation history
         self._chat_messages: list[dict[str, str]] = []
+        # Runs tab: run ids parallel to the listbox lines
+        self._runs_ids: list[str] = []
         # Task history
         self._task_history: list[str] = []
         # Smoke-run after apply (opt-in)
@@ -128,8 +130,12 @@ class CommandCenterUI:
         chat_frame = ttk.Frame(self._notebook, padding=8)
         self._notebook.add(chat_frame, text="  Chat  ")
 
+        runs_frame = ttk.Frame(self._notebook, padding=8)
+        self._notebook.add(runs_frame, text="  Runs  ")
+
         self._build_agent_tab(agent_frame)
         self._build_chat_tab(chat_frame)
+        self._build_runs_tab(runs_frame)
 
         # --- Global hotkeys ---
         # Ctrl+Enter = Preview, Ctrl+Shift+Enter = Apply, F5 = Analyze
@@ -399,6 +405,71 @@ class CommandCenterUI:
         ttk.Label(chat_actions, textvariable=self._chat_status_var, foreground="gray").pack(
             side="left", padx=(12, 0)
         )
+
+    def _build_runs_tab(self, parent: ttk.Frame) -> None:
+        """Runs tab: recent runs of the active workspace + per-run attempt timeline.
+
+        All content comes from pure helpers (``ui_commands.runs_overview`` /
+        ``run_timeline_text`` on top of ``run_report``); this method only wires
+        widgets and bindings.
+        """
+        ttk.Label(
+            parent,
+            text="Recent runs of the active workspace. Select a run to see its attempt timeline.",
+        ).pack(anchor="w", pady=(0, 6))
+
+        body = ttk.Frame(parent)
+        body.pack(fill="both", expand=True)
+
+        left = ttk.Frame(body)
+        left.pack(side="left", fill="y")
+        runs_list_frame = ttk.Frame(left)
+        runs_list_frame.pack(fill="both", expand=True)
+        self.runs_list = tk.Listbox(runs_list_frame, width=58)
+        runs_scroll = ttk.Scrollbar(
+            runs_list_frame, orient="vertical", command=self.runs_list.yview
+        )
+        self.runs_list.configure(yscrollcommand=runs_scroll.set)
+        self.runs_list.pack(side="left", fill="both", expand=True)
+        runs_scroll.pack(side="right", fill="y")
+        self.runs_list.bind("<<ListboxSelect>>", self._show_run_timeline)
+        ttk.Button(left, text="Refresh", command=self._refresh_runs_list).pack(
+            anchor="w", pady=(6, 0)
+        )
+
+        right = ttk.Frame(body)
+        right.pack(side="right", fill="both", expand=True, padx=(12, 0))
+        self.runs_detail = tk.Text(right, wrap="word")
+        runs_detail_scroll = ttk.Scrollbar(right, orient="vertical", command=self.runs_detail.yview)
+        self.runs_detail.configure(yscrollcommand=runs_detail_scroll.set)
+        self.runs_detail.pack(side="left", fill="both", expand=True)
+        runs_detail_scroll.pack(side="right", fill="y")
+        self._make_readonly_copyable(self.runs_detail, self._copy_runs_detail)
+
+        self._refresh_runs_list()
+
+    def _refresh_runs_list(self) -> None:
+        overview = ui_commands.runs_overview(self._active_workspace_root)
+        self._runs_ids = list(overview.run_ids)
+        self.runs_list.delete(0, "end")
+        for line in overview.lines:
+            self.runs_list.insert("end", line)
+        placeholder = (
+            "Select a run to see its attempt timeline."
+            if overview.lines
+            else "No runs found in this workspace yet."
+        )
+        self._set_text(self.runs_detail, placeholder)
+
+    def _show_run_timeline(self, *_args) -> None:
+        index = self.runs_list.curselection()
+        if not index or index[0] >= len(self._runs_ids):
+            return
+        text = ui_commands.run_timeline_text(self._active_workspace_root, self._runs_ids[index[0]])
+        self._set_text(self.runs_detail, text)
+
+    def _copy_runs_detail(self) -> None:
+        self._copy_text(ui_helpers.get_widget_text(self.runs_detail))
 
     # ------------------------------------------------------------------
     # Persistence: geometry and task history

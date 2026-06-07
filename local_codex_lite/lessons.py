@@ -209,6 +209,16 @@ def _signature(detail: str) -> str:
     return " ".join(line.split())
 
 
+def signature_for_detail(detail: str) -> str:
+    """Public wrapper around the signature normalizer.
+
+    ``run_report.lessons_stats`` recomputes signatures from past runs' error
+    artifacts and matches them against ``lessons.jsonl`` records, so the exact
+    same fold must be reachable without importing a private name.
+    """
+    return _signature(detail or "")
+
+
 def _significant_words(text: str) -> set[str]:
     return {word.lower() for word in _WORD.findall(text or "") if word.lower() not in _STOPWORDS}
 

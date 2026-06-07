@@ -19,6 +19,17 @@ runs/<ts>/
 
 Manage them with `logs`, `runs archive|prune|export`, `replay` and `undo`.
 
+## Watching the model learn
+
+- `logs attempts [run_id|latest]` renders a per-run attempt timeline from
+  `events.jsonl`: every plan/patch attempt, what failed and why, and the final
+  outcome (e.g. `result: applied after 2 repairs`).
+- `lessons stats` cross-references `lessons.jsonl` with all past runs: per
+  lesson it counts how often its error signature occurred before vs after the
+  lesson was recorded (`✓ holding` when it never came back, `✗ recurring`).
+- The GUI **Runs** tab shows the same timelines for the latest 30 runs of the
+  active workspace (`run_report.py` + `ui_commands.runs_overview`).
+
 ## Evidence bundles
 
 `evidence_mode` / `evidence` write a self-contained bundle with raw inputs,

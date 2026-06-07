@@ -21,8 +21,10 @@ from .cli_info import (
 from .cli_lessons import (
     cmd_lessons_clear,
     cmd_lessons_list,
+    cmd_lessons_stats,
 )
 from .cli_logs import (
+    cmd_logs_attempts,
     cmd_logs_diff,
     cmd_logs_latest,
     cmd_logs_show,
@@ -150,6 +152,8 @@ __all__ = [
     "cmd_init",
     "cmd_lessons_clear",
     "cmd_lessons_list",
+    "cmd_lessons_stats",
+    "cmd_logs_attempts",
     "cmd_logs_diff",
     "cmd_logs_latest",
     "cmd_logs_show",
@@ -223,11 +227,15 @@ def main() -> int:
             return cmd_logs_tail(args)
         if args.logs_command == "show":
             return cmd_logs_show(args)
+        if args.logs_command == "attempts":
+            return cmd_logs_attempts(args)
         if args.logs_command == "diff":
             return cmd_logs_diff(args)
     if args.command == "lessons":
         if args.lessons_command == "list":
             return cmd_lessons_list(args)
+        if args.lessons_command == "stats":
+            return cmd_lessons_stats(args)
         if args.lessons_command == "clear":
             return cmd_lessons_clear(args)
     if args.command == "rules":

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 from .cli_utils import console, workspace_root
 from .lessons import clear_learned, load_learned
+from .run_report import lessons_stats, render_lessons_stats
 
 
 def cmd_lessons_list(args: argparse.Namespace) -> int:
@@ -30,6 +31,16 @@ def cmd_lessons_list(args: argparse.Namespace) -> int:
         console.print(f"- {lesson.error_code or 'unknown'} | {lesson.signature} ({when})")
         if lesson.task_excerpt:
             console.print(f"    task: {lesson.task_excerpt}")
+    return 0
+
+
+def cmd_lessons_stats(args: argparse.Namespace) -> int:
+    """Show per-lesson error recurrence before/after each recorded lesson."""
+    root = workspace_root()
+    stats = lessons_stats(root)
+    # Plain text: signatures may contain square brackets that rich would
+    # misinterpret as markup.
+    console.print(render_lessons_stats(stats), markup=False)
     return 0
 
 

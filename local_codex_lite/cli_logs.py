@@ -17,6 +17,7 @@ from .logging_utils import (
     run_summary,
     tail_events_text,
 )
+from .run_report import build_attempt_timeline, render_timeline
 
 
 def cmd_logs_latest(args: argparse.Namespace) -> int:
@@ -76,6 +77,20 @@ def cmd_logs_show(args: argparse.Namespace) -> int:
         console.print("Artifacts:")
         for artifact in artifacts:
             console.print(f"- {artifact}")
+    return 0
+
+
+def cmd_logs_attempts(args: argparse.Namespace) -> int:
+    """Print the attempt timeline of one run (default: the latest)."""
+    root = workspace_root()
+    run_dir = resolve_run_dir(root, getattr(args, "run_id", None))
+    if run_dir is None:
+        console.print("No matching run found.")
+        return 1
+    report = build_attempt_timeline(run_dir)
+    # Plain text by design: error details may contain square brackets that
+    # rich would misread as markup.
+    console.print(render_timeline(report), markup=False)
     return 0
 
 

@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .intent import IntentDecision, decision_as_dict
+from .logging_utils import resolve_run_dir
+from .run_report import build_attempt_timeline, list_run_dirs, render_timeline
 from .task_heuristics import format_duration
 
 if TYPE_CHECKING:  # imported lazily by the GUI; keep runtime deps minimal
@@ -281,6 +283,45 @@ def export_output_text(path: str, content: str) -> str | None:
     except Exception as exc:
         return f"\nExport failed: {exc}"
     return None
+
+
+# ---------------------------------------------------------------------------
+# Runs tab
+# ---------------------------------------------------------------------------
+
+_RUNS_OVERVIEW_LIMIT = 30
+
+
+@dataclass(frozen=True)
+class RunsOverview:
+    """Listbox payload for the Runs tab: parallel run ids and display lines."""
+
+    run_ids: tuple[str, ...]
+    lines: tuple[str, ...]
+
+
+def runs_overview(workspace_root: Path, limit: int = _RUNS_OVERVIEW_LIMIT) -> RunsOverview:
+    """Summarize the most recent runs of *workspace_root*, newest first."""
+    run_ids: list[str] = []
+    lines: list[str] = []
+    for run_dir in list_run_dirs(workspace_root, limit=limit):
+        report = build_attempt_timeline(run_dir)
+        run_ids.append(report.run_id)
+        lines.append(f"{report.run_id}  [{report.final_status}]  {report.task_excerpt}".rstrip())
+    return RunsOverview(run_ids=tuple(run_ids), lines=tuple(lines))
+
+
+def runs_overview_lines(workspace_root: Path, limit: int = _RUNS_OVERVIEW_LIMIT) -> list[str]:
+    """The Runs-tab listbox lines (id + final status + task excerpt)."""
+    return list(runs_overview(workspace_root, limit=limit).lines)
+
+
+def run_timeline_text(workspace_root: Path, run_id: str) -> str:
+    """The attempt-timeline text shown when a run is selected in the Runs tab."""
+    run_dir = resolve_run_dir(Path(workspace_root), run_id)
+    if run_dir is None:
+        return f"Run not found: {run_id}"
+    return render_timeline(build_attempt_timeline(run_dir))
 
 
 # ---------------------------------------------------------------------------

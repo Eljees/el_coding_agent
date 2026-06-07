@@ -35,6 +35,9 @@ from local_codex_lite.ui_commands import (
     heartbeat_message,
     history_labels,
     is_preview_ready,
+    run_timeline_text,
+    runs_overview,
+    runs_overview_lines,
     skill_detail_text,
     tool_detail_text,
     workspace_status,
@@ -436,3 +439,56 @@ def test_clarification_evidence_block_formats_pairs() -> None:
 
 def test_clarification_evidence_block_empty_pairs() -> None:
     assert clarification_evidence_block([]) == "Clarification answers:"
+
+
+# ---------------------------------------------------------------------------
+# Runs tab helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_run_dir(workspace: Path, name: str, *, task: str, result: str) -> Path:
+    run_dir = workspace / ".local-codex-lite" / "runs" / name
+    run_dir.mkdir(parents=True)
+    (run_dir / "task.txt").write_text(task, encoding="utf-8")
+    (run_dir / "result.json").write_text(result, encoding="utf-8")
+    (run_dir / "events.jsonl").write_text(
+        json.dumps({"stage": "plan", "attempt": 1, "status": "success"}) + "\n",
+        encoding="utf-8",
+    )
+    return run_dir
+
+
+def test_runs_overview_lines_empty_workspace(tmp_path: Path) -> None:
+    assert runs_overview_lines(tmp_path) == []
+
+
+def test_runs_overview_lines_newest_first_with_status_and_task(tmp_path: Path) -> None:
+    _make_run_dir(tmp_path, "20260101-000000", task="old task", result='{"applied": true}')
+    _make_run_dir(tmp_path, "20260102-000000", task="new task", result='{"dry_run": true}')
+    lines = runs_overview_lines(tmp_path)
+    assert len(lines) == 2
+    assert lines[0] == "20260102-000000  [preview]  new task"
+    assert lines[1] == "20260101-000000  [applied]  old task"
+
+
+def test_runs_overview_respects_limit_and_parallel_ids(tmp_path: Path) -> None:
+    for day in (1, 2, 3):
+        _make_run_dir(
+            tmp_path, f"2026010{day}-000000", task=f"task {day}", result='{"applied": true}'
+        )
+    overview = runs_overview(tmp_path, limit=2)
+    assert list(overview.run_ids) == ["20260103-000000", "20260102-000000"]
+    assert len(overview.lines) == 2
+    assert overview.lines[0].startswith("20260103-000000")
+
+
+def test_run_timeline_text_renders_selected_run(tmp_path: Path) -> None:
+    _make_run_dir(tmp_path, "20260101-000000", task="fix bug", result='{"applied": true}')
+    text = run_timeline_text(tmp_path, "20260101-000000")
+    assert "run: 20260101-000000" in text
+    assert "plan #1 ok" in text
+    assert "result: applied" in text
+
+
+def test_run_timeline_text_unknown_run(tmp_path: Path) -> None:
+    assert run_timeline_text(tmp_path, "nope") == "Run not found: nope"

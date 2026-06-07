@@ -289,13 +289,14 @@ Usage: `local-codex-lite plugins list [options]`
 
 ### `logs`
 
-Usage: `local-codex-lite logs <latest|tail|show|diff>`
+Usage: `local-codex-lite logs <latest|tail|show|attempts|diff>`
 
 | Subcommand | Description |
 |------------|-------------|
 | [`logs latest`](#logs-latest) |  |
 | [`logs tail`](#logs-tail) |  |
 | [`logs show`](#logs-show) |  |
+| [`logs attempts`](#logs-attempts) | attempt timeline for one run: every stage attempt, errors, final status |
 | [`logs diff`](#logs-diff) | compare two runs side-by-side |
 
 ### `logs latest`
@@ -319,6 +320,16 @@ Usage: `local-codex-lite logs show <run_id>`
 |----------|-------------|
 | `<run_id>` |  |
 
+### `logs attempts`
+
+Attempt timeline for one run: every stage attempt, errors, final status.
+
+Usage: `local-codex-lite logs attempts [run_id]`
+
+| Argument | Description |
+|----------|-------------|
+| `[run_id]` | run id under .local-codex-lite/runs/, path, or 'latest'; default: `latest` |
+
 ### `logs diff`
 
 Compare two runs side-by-side.
@@ -334,11 +345,12 @@ Usage: `local-codex-lite logs diff <left> <right>`
 
 Inspect or clear the learned pitfalls fed back into prompts.
 
-Usage: `local-codex-lite lessons <list|clear>`
+Usage: `local-codex-lite lessons <list|stats|clear>`
 
 | Subcommand | Description |
 |------------|-------------|
 | [`lessons list`](#lessons-list) | show learned lessons recorded in this workspace |
+| [`lessons stats`](#lessons-stats) | lesson effectiveness: error signature recurrence before/after each lesson |
 | [`lessons clear`](#lessons-clear) | delete the learned lessons ledger |
 
 ### `lessons list`
@@ -346,6 +358,12 @@ Usage: `local-codex-lite lessons <list|clear>`
 Show learned lessons recorded in this workspace.
 
 Usage: `local-codex-lite lessons list`
+
+### `lessons stats`
+
+Lesson effectiveness: error signature recurrence before/after each lesson.
+
+Usage: `local-codex-lite lessons stats`
 
 ### `lessons clear`
 
