@@ -311,7 +311,7 @@ def _load_plugin_capabilities_with_source() -> list[tuple[CapabilitySource, Capa
     try:
         eps = _metadata.entry_points(group=CAPABILITY_ENTRY_POINT_GROUP)
     except TypeError:  # pragma: no cover -- Python <3.10 selectable API
-        eps = _metadata.entry_points().get(CAPABILITY_ENTRY_POINT_GROUP, [])  # type: ignore
+        eps = _metadata.entry_points().get(CAPABILITY_ENTRY_POINT_GROUP, [])  # type: ignore[arg-type]
     for ep in eps:
         source = CapabilitySource(kind="plugin", name=ep.name)
         try:

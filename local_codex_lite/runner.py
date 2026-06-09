@@ -22,6 +22,7 @@ import json
 import sys
 import threading
 from pathlib import Path
+from typing import IO
 
 from .cli_utils import (
     console,
@@ -104,7 +105,7 @@ def _run_task_body(
     args: argparse.Namespace,
     *,
     json_mode: bool = False,
-    real_stdout=None,
+    real_stdout: IO[str] | None = None,
 ) -> int:
     base_root = workspace_root()
     root = resolve_task_workspace(base_root, task)

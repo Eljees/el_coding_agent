@@ -2,7 +2,7 @@
 #
 # The canonical remote is GitLab, but the GitHub Actions workflow does not run
 # on GitLab pushes.  This pipeline runs the same gates (ruff lint + format,
-# mypy, pytest with the 65% coverage floor) so pushing to GitLab is actually
+# mypy, pytest with the 80% coverage floor) so pushing to GitLab is actually
 # verified.  Keep the tool versions in lockstep with pyproject.toml [dev] and
 # .pre-commit-config.yaml.
 
@@ -37,5 +37,5 @@ lint-type-test:
     - ruff check local_codex_lite/ tests/
     - ruff format --check local_codex_lite/ tests/
     - mypy local_codex_lite/
-    - pytest -q --tb=short --cov=local_codex_lite --cov-report=term --cov-fail-under=65
+    - pytest -q --tb=short --cov=local_codex_lite --cov-report=term --cov-fail-under=80
   coverage: '/^TOTAL.+?(\d+\%)$/'

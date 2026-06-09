@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
         include:
           # local-codex-lite targets Windows / PowerShell, so we exercise the
           # whole pipeline on at least one Windows runner.  Keep it on the
