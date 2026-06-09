@@ -8,6 +8,44 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Added
+- **Lessons system** (`local_codex_lite/lessons.py`, `cli_lessons.py`): curated pitfall
+  memory for the small model.  `CURATED_PITFALLS` + `record_lesson()` persist gotchas from
+  failed and successful repairs to `.local-codex-lite/lessons.json`; the most relevant
+  pitfalls are injected into `make_plan` / `make_patch` prompts.  CLI: `lessons list`,
+  `lessons clear`.  Lessons stats effectiveness report in `run_report`.
+- **User-editable rules** (`local_codex_lite/cli_rules.py`): `AGENT_RULES.md` in
+  `.local-codex-lite/` is injected into every model prompt as a custom system instruction.
+  CLI: `rules show` (print current rules), `rules init` (create template file).
+  Default no-op if the file does not exist.
+- **Run attempt timeline & Runs tab** (`observability`): every LLM attempt is logged to
+  `events.jsonl` with timestamps; `run_report` builds an attempt timeline.  The GUI gains
+  a **Runs** tab listing all run directories with task, status, timestamps, and attempt
+  counts.  `lessons stats` reports lesson effectiveness as a hit-rate table.
+- **Interactive plan clarifications** (`run -i / --interactive`): before generating a plan
+  the agent asks up to N clarifying questions (CLI: interactive Q&A loop; GUI: "Ask
+  clarifying questions" dialog).  Answers are serialised as additional evidence and fed
+  back into `revise_plan_with_answers`.
+- **Post-apply smoke-run** (`runner.py`): opt-in flag `--smoke` (GUI checkbox) re-runs
+  each modified Python entrypoint after `git apply`; a non-zero exit or traceback is
+  classified as a runtime error and fed into the repair loop.  A hard deadline and a
+  skip-on-missing-entrypoint guard prevent hangs.
+- **AppSecHub enhancements**: scans listing + `scan_trend` (CLI + MCP + tests);
+  live-verified API adaptation (form-login fallback, flat `/issue/v2` params, numeric
+  severity map, filteredEntities paging); native AppSecHub queries from the GUI via
+  `appsechub_worker` subprocess; Cyrillic intent triggers (`выпуски`, `уязвим` etc.);
+  app-number routing for multi-app hubs.
+- `docs/cli-reference.md` auto-generated from argparse via `scripts/gen_cli_reference.py`
+  (`--check` mode used in CI to detect reference drift).
+- `ui_helpers.py` extracted from `ui.py`: `select_all_text`, `make_readonly`,
+  `editable_copyable`, `show_*_context_menu` Tk widget utilities.
+- `Makefile` coverage floor ratcheted 65 → 80% to match the GitHub CI gate.
+  `make check` now includes `make smoke` so the stdlib gate runs locally too.
+- Windows CMD destructive command patterns added to `safety._DANGEROUS_COMMAND_PATTERNS`:
+  `rd /s`, `rmdir /s` (recursive directory remove), `takeown /r` (recursive ownership
+  takeover), `icacls /t` (recursive ACL modification).  Non-recursive variants remain
+  allowed.
+
 ### Changed
 - Tidied the repository root: the PowerShell helpers (`setup`, `run`,
   `doctor`, `ask`, `trufflehog`) moved into `scripts/`.  Each now resolves
@@ -41,7 +79,7 @@ straight into `## [Unreleased]`.
 
 ### Added
 - `.gitlab-ci.yml` mirroring the GitHub Actions gates (stdlib smoke, then
-  ruff lint + format-check + mypy + pytest with the 65% coverage floor) so
+  ruff lint + format-check + mypy + pytest with the 80% coverage floor) so
   pushes to the GitLab remote are actually verified.
 - `tests/test_rich_compat.py` covering the stdlib `SimpleConsole`/`SimpleTable`
   fallback (rich_compat.py 43%->~95%).
