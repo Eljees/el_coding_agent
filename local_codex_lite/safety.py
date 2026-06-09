@@ -32,6 +32,12 @@ _DANGEROUS_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:curl|wget|iwr|invoke-webrequest)\b[^\n]*\|\s*iex\b", re.IGNORECASE),
     # Direct invoke-expression call.
     re.compile(r"\binvoke-expression\b", re.IGNORECASE),
+    # Windows CMD recursive directory remove: rd /s, rmdir /s (with optional /q).
+    re.compile(r"\br(?:d|mdir)\s+(?:/[sq]\b\s*)+", re.IGNORECASE),
+    # takeown /r — recursive ownership takeover (privilege escalation vector).
+    re.compile(r"\btakeown\s+(?:[^|]*\s)?/r\b", re.IGNORECASE),
+    # icacls /reset /t — recursive ACL reset (can strip all access controls).
+    re.compile(r"\bicacls\b[^\n]*/t\b", re.IGNORECASE),
 )
 
 
@@ -44,6 +50,10 @@ DISALLOWED_PATTERNS: tuple[str, ...] = (
     "shutdown",
     "curl | iex",
     "invoke-expression",
+    "rd /s",
+    "rmdir /s",
+    "takeown /r",
+    "icacls /t",
 )
 
 SENSITIVE_GLOBS = [

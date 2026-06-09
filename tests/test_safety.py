@@ -49,3 +49,27 @@ def test_is_dangerous_command_empty_string() -> None:
 def test_run_command_executes_safe_command(tmp_path: Path) -> None:
     result = run_command("echo hello", tmp_path)
     assert result.returncode == 0
+
+
+def test_windows_cmd_rd_is_dangerous() -> None:
+    assert is_dangerous_command("rd /s /q C:\\temp")
+    assert is_dangerous_command("rd /s target")
+    assert is_dangerous_command("rmdir /s /q olddir")
+    assert is_dangerous_command("RMDIR /S build")
+
+
+def test_windows_takeown_recursive_is_dangerous() -> None:
+    assert is_dangerous_command("takeown /f . /r /d y")
+    assert is_dangerous_command("takeown /r /f C:\\Windows")
+
+
+def test_windows_icacls_recursive_is_dangerous() -> None:
+    assert is_dangerous_command("icacls . /reset /t")
+    assert is_dangerous_command("icacls C:\\dir /grant Everyone:F /t")
+
+
+def test_windows_safe_variants_not_flagged() -> None:
+    assert not is_dangerous_command("rd emptyfolder")
+    assert not is_dangerous_command("rmdir emptyfolder")
+    assert not is_dangerous_command("takeown /f file.txt")
+    assert not is_dangerous_command("icacls file.txt /grant user:R")
