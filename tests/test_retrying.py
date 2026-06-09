@@ -38,3 +38,19 @@ def test_classify_apply_error_file_already_exists() -> None:
     result = classify_patch_apply("error: file already exists in working directory")
     assert result.code == "file_already_exists"
     assert strategy_for_issue("file_already_exists") == "accept_existing_file"
+
+
+def test_classify_httpx_exception_server_error() -> None:
+    request = httpx.Request("POST", "http://localhost:8015/v1/chat/completions")
+    response = httpx.Response(503, request=request)
+    exc = httpx.HTTPStatusError("service unavailable", request=request, response=response)
+
+    assert classify_httpx_exception(exc) == "endpoint_unavailable"
+
+
+def test_classify_httpx_exception_unknown_client_error() -> None:
+    request = httpx.Request("POST", "http://localhost:8015/v1/chat/completions")
+    response = httpx.Response(400, request=request, text='{"error": "bad request"}')
+    exc = httpx.HTTPStatusError("bad request", request=request, response=response)
+
+    assert classify_httpx_exception(exc) == "unknown"

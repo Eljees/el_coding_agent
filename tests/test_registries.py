@@ -47,3 +47,62 @@ def test_discover_skills_prefers_frontmatter_name_and_description(tmp_path: Path
     assert len(skills) == 1
     assert skills[0].name == "demo-frontmatter"
     assert skills[0].summary == "Use for frontmatter-aware tasks."
+
+
+def test_discover_skills_skips_blocked_dirs(tmp_path: Path) -> None:
+    blocked = tmp_path / ".git" / "hooks"
+    blocked.mkdir(parents=True)
+    (blocked / "SKILL.md").write_text("# Should be skipped", encoding="utf-8")
+
+    assert discover_skills(tmp_path) == []
+
+
+def test_skill_brief_lines_empty() -> None:
+    assert skill_brief_lines([]) == ["No local SKILL.md files found"]
+
+
+def test_discover_skills_frontmatter_without_closing_fence(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "broken"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: broken\n# Heading\n\nBody text.", encoding="utf-8"
+    )
+
+    skills = discover_skills(tmp_path)
+
+    assert len(skills) == 1
+    assert skills[0].name == "Heading"
+
+
+def test_discover_skills_frontmatter_line_without_colon(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "partial"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: partial\nthis line has no colon\n---\n\nBody.", encoding="utf-8"
+    )
+
+    skills = discover_skills(tmp_path)
+
+    assert len(skills) == 1
+    assert skills[0].name == "partial"
+
+
+def test_first_heading_fallback_to_dir_name(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "myskill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("No heading here, just plain text.", encoding="utf-8")
+
+    skills = discover_skills(tmp_path)
+
+    assert len(skills) == 1
+    assert skills[0].name == "myskill"
+
+
+def test_first_body_line_skips_headings(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skills" / "onlyheadings"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Only headings\n## Another heading", encoding="utf-8")
+
+    skills = discover_skills(tmp_path)
+
+    assert skills[0].summary == "Local skill instructions"
