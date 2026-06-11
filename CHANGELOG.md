@@ -9,6 +9,11 @@ straight into `## [Unreleased]`.
 ## [Unreleased]
 
 ### Added
+- **Cleanup commands** (`runs_admin.py`): `runs cleanup --keep N` keeps the N most
+  recent run directories under `.local-codex-lite/runs/` and deletes the rest;
+  `projects cleanup --keep N` does the same for `generated_projects/`.  Both are
+  dry-run by default and require `--apply` to delete (no archiving — combine with
+  `runs archive` when history matters).
 - **Lessons system** (`local_codex_lite/lessons.py`, `cli_lessons.py`): curated pitfall
   memory for the small model.  `CURATED_PITFALLS` + `record_lesson()` persist gotchas from
   failed and successful repairs to `.local-codex-lite/lessons.json`; the most relevant

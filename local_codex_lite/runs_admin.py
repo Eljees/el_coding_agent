@@ -12,8 +12,14 @@ provides two related admin commands:
   original is left in place unless ``--remove`` is passed.
 - ``runs prune``: shorthand for ``runs archive --remove`` -- archive
   and then delete the original directory.
+- ``runs cleanup``: keep the N most recent runs and delete the rest
+  (no archiving -- use ``runs archive`` first if history matters).
 
-Both default to dry-run; pass ``--apply`` to actually touch anything.
+The same machinery powers ``projects cleanup`` for
+``<workspace>/generated_projects/``.
+
+All commands default to dry-run; pass ``--apply`` to actually touch
+anything.
 """
 
 from __future__ import annotations
@@ -40,15 +46,20 @@ def _runs_root(workspace: Path) -> Path:
     return workspace / ".local-codex-lite" / "runs"
 
 
-def list_run_entries(workspace: Path) -> list[RunEntry]:
-    """Return every direct subdir of <workspace>/.local-codex-lite/runs/ as
-    a RunEntry tagged with its mtime and age in days (UTC, fractional)."""
-    runs_root = _runs_root(workspace)
-    if not runs_root.is_dir():
+def _projects_root(workspace: Path) -> Path:
+    from .project_workspace import PROJECT_WORKSPACE_DIR
+
+    return workspace / PROJECT_WORKSPACE_DIR
+
+
+def list_dir_entries(root: Path) -> list[RunEntry]:
+    """Return every direct subdir of ``root`` as a RunEntry tagged with
+    its mtime and age in days (UTC, fractional)."""
+    if not root.is_dir():
         return []
     now = datetime.now(UTC)
     entries: list[RunEntry] = []
-    for path in sorted(runs_root.iterdir()):
+    for path in sorted(root.iterdir()):
         if not path.is_dir():
             continue
         try:
@@ -60,8 +71,23 @@ def list_run_entries(workspace: Path) -> list[RunEntry]:
     return entries
 
 
+def list_run_entries(workspace: Path) -> list[RunEntry]:
+    """Return every direct subdir of <workspace>/.local-codex-lite/runs/ as
+    a RunEntry tagged with its mtime and age in days (UTC, fractional)."""
+    return list_dir_entries(_runs_root(workspace))
+
+
 def select_for_archival(entries: list[RunEntry], older_than_days: float) -> list[RunEntry]:
     return [entry for entry in entries if entry.age_days >= older_than_days]
+
+
+def select_beyond_keep(entries: list[RunEntry], keep: int) -> list[RunEntry]:
+    """Return the entries that fall outside the ``keep`` most recent ones
+    (by mtime).  ``keep <= 0`` selects everything."""
+    if keep <= 0:
+        return list(entries)
+    ranked = sorted(entries, key=lambda e: e.mtime, reverse=True)
+    return ranked[keep:]
 
 
 def archive_run(run_dir: Path) -> Path:
@@ -171,3 +197,61 @@ def cmd_runs_export(args: argparse.Namespace) -> int:
                 zf.write(path, arcname=path.relative_to(run_dir.parent))
     console.print(f"[green]exported[/green] {run_dir.name} -> {out_path}")
     return 0
+
+
+def _cleanup_directory(root: Path, label: str, keep: int, apply_flag: bool) -> int:
+    """Shared engine for ``runs cleanup`` / ``projects cleanup``: keep the
+    ``keep`` most recent subdirs of ``root``, delete the rest.  Dry-run
+    unless ``apply_flag``."""
+    entries = list_dir_entries(root)
+    if not entries:
+        console.print(f"No {label} directories under {root}.")
+        return 1
+    selected = select_beyond_keep(entries, keep)
+    if not selected:
+        console.print(f"{len(entries)} {label}(s) found, all within --keep {keep}.")
+        return 0
+
+    console.print(
+        f"[bold]{len(selected)}[/bold] of {len(entries)} {label}(s) fall outside "
+        f"the {keep} most recent.",
+    )
+    removed = 0
+    for entry in sorted(selected, key=lambda e: e.mtime):
+        if not apply_flag:
+            console.print(
+                f"  would remove {entry.path.name} "
+                f"(mtime={entry.mtime.isoformat()}, age={entry.age_days:.1f}d)",
+            )
+            continue
+        shutil.rmtree(entry.path)
+        removed += 1
+        console.print(f"[yellow]removed[/yellow] {entry.path.name}")
+
+    console.print("")
+    if apply_flag:
+        console.print(f"Removed {removed} {label}(s); kept {len(entries) - removed}.")
+    else:
+        console.print(
+            f"Dry run: {len(selected)} {label}(s) would be removed.  "
+            "Pass --apply to actually delete."
+        )
+    return 0
+
+
+def cmd_runs_cleanup(args: argparse.Namespace) -> int:
+    """``runs cleanup --keep N``: keep the N most recent runs, delete the
+    rest.  No archiving -- combine with ``runs archive`` if history matters."""
+    workspace = workspace_root()
+    keep = int(getattr(args, "keep", 10))
+    apply_flag = bool(getattr(args, "apply", False))
+    return _cleanup_directory(_runs_root(workspace), "run", keep, apply_flag)
+
+
+def cmd_projects_cleanup(args: argparse.Namespace) -> int:
+    """``projects cleanup --keep N``: same as ``runs cleanup`` but for
+    ``<workspace>/generated_projects/``."""
+    workspace = workspace_root()
+    keep = int(getattr(args, "keep", 5))
+    apply_flag = bool(getattr(args, "apply", False))
+    return _cleanup_directory(_projects_root(workspace), "project", keep, apply_flag)

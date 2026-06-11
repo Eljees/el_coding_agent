@@ -104,7 +104,13 @@ from .doctor import (
 )
 from .plugins_cmd import cmd_plugins_list
 from .replay import cmd_replay
-from .runs_admin import cmd_runs_archive, cmd_runs_export, cmd_runs_prune
+from .runs_admin import (
+    cmd_projects_cleanup,
+    cmd_runs_archive,
+    cmd_runs_cleanup,
+    cmd_runs_export,
+    cmd_runs_prune,
+)
 from .ui import run_command_center_ui
 from .undo import cmd_undo
 
@@ -208,6 +214,11 @@ def main() -> int:
             return cmd_runs_prune(args)
         if args.runs_command == "export":
             return cmd_runs_export(args)
+        if args.runs_command == "cleanup":
+            return cmd_runs_cleanup(args)
+    if args.command == "projects":
+        if args.projects_command == "cleanup":
+            return cmd_projects_cleanup(args)
     if args.command == "replay":
         return cmd_replay(args)
     if args.command == "undo":

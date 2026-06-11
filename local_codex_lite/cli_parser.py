@@ -153,6 +153,35 @@ def build_parser() -> argparse.ArgumentParser:
     p_runs_export.add_argument(
         "--out", default=None, help="output zip path or directory (default: next to the run)"
     )
+    p_runs_cleanup = runs_sub.add_parser(
+        "cleanup",
+        help="keep the N most recent runs and delete the rest (no archiving)",
+    )
+    p_runs_cleanup.add_argument(
+        "--keep",
+        type=int,
+        default=10,
+        help="number of most recent runs to keep (default: 10)",
+    )
+    p_runs_cleanup.add_argument(
+        "--apply", action="store_true", help="actually delete; default is dry-run"
+    )
+
+    p_projects = sub.add_parser("projects", help="manage generated_projects/ lifecycle")
+    projects_sub = p_projects.add_subparsers(dest="projects_command", required=True)
+    p_projects_cleanup = projects_sub.add_parser(
+        "cleanup",
+        help="keep the N most recent generated projects and delete the rest",
+    )
+    p_projects_cleanup.add_argument(
+        "--keep",
+        type=int,
+        default=5,
+        help="number of most recent projects to keep (default: 5)",
+    )
+    p_projects_cleanup.add_argument(
+        "--apply", action="store_true", help="actually delete; default is dry-run"
+    )
 
     p_replay = sub.add_parser("replay", help="re-run a saved task without calling the LLM")
     p_replay.add_argument("run_id", help="run id, path, or 'latest'")

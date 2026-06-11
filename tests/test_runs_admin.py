@@ -246,3 +246,146 @@ def test_build_parser_runs_export_explicit() -> None:
     ns = parser.parse_args(["runs", "export", "--run", "20260516-111", "--out", "/tmp/x.zip"])
     assert ns.run == "20260516-111"
     assert ns.out == "/tmp/x.zip"
+
+
+# ---------------------------------------------------------------------------
+# select_beyond_keep / cmd_runs_cleanup
+# ---------------------------------------------------------------------------
+
+
+def _make_project(tmp_path: Path, name: str, *, age_days: float = 0.0) -> Path:
+    project_dir = tmp_path / "generated_projects" / name
+    project_dir.mkdir(parents=True)
+    (project_dir / "main.py").write_text("print('hi')\n", encoding="utf-8")
+    if age_days > 0:
+        target_ts = time.time() - age_days * 86400
+        for path in [project_dir, *project_dir.rglob("*")]:
+            os.utime(path, (target_ts, target_ts))
+    return project_dir
+
+
+def test_select_beyond_keep_returns_oldest(tmp_path: Path) -> None:
+    _make_run(tmp_path, "oldest", age_days=30)
+    _make_run(tmp_path, "middle", age_days=10)
+    _make_run(tmp_path, "newest", age_days=1)
+    entries = list_run_entries(tmp_path)
+    selected = runs_admin.select_beyond_keep(entries, keep=2)
+    assert [e.path.name for e in selected] == ["oldest"]
+
+
+def test_select_beyond_keep_zero_selects_all(tmp_path: Path) -> None:
+    _make_run(tmp_path, "a", age_days=5)
+    _make_run(tmp_path, "b", age_days=1)
+    entries = list_run_entries(tmp_path)
+    assert len(runs_admin.select_beyond_keep(entries, keep=0)) == 2
+
+
+def test_select_beyond_keep_within_limit_selects_none(tmp_path: Path) -> None:
+    _make_run(tmp_path, "a", age_days=5)
+    entries = list_run_entries(tmp_path)
+    assert runs_admin.select_beyond_keep(entries, keep=10) == []
+
+
+def test_cmd_runs_cleanup_returns_1_when_no_runs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_cleanup(argparse.Namespace(keep=10, apply=False))
+    assert rc == 1
+
+
+def test_cmd_runs_cleanup_dry_run_keeps_everything(tmp_path: Path, monkeypatch) -> None:
+    old = _make_run(tmp_path, "old", age_days=30)
+    fresh = _make_run(tmp_path, "fresh", age_days=1)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_cleanup(argparse.Namespace(keep=1, apply=False))
+    assert rc == 0
+    assert old.exists() and fresh.exists()
+
+
+def test_cmd_runs_cleanup_apply_removes_oldest(tmp_path: Path, monkeypatch) -> None:
+    old = _make_run(tmp_path, "old", age_days=30)
+    middle = _make_run(tmp_path, "middle", age_days=10)
+    fresh = _make_run(tmp_path, "fresh", age_days=1)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_cleanup(argparse.Namespace(keep=1, apply=True))
+    assert rc == 0
+    assert not old.exists()
+    assert not middle.exists()
+    assert fresh.exists()
+
+
+def test_cmd_runs_cleanup_all_within_keep(tmp_path: Path, monkeypatch) -> None:
+    run_dir = _make_run(tmp_path, "only", age_days=5)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_runs_cleanup(argparse.Namespace(keep=10, apply=True))
+    assert rc == 0
+    assert run_dir.exists()
+
+
+# ---------------------------------------------------------------------------
+# cmd_projects_cleanup
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_projects_cleanup_returns_1_when_empty(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_projects_cleanup(argparse.Namespace(keep=5, apply=False))
+    assert rc == 1
+
+
+def test_cmd_projects_cleanup_apply_removes_oldest(tmp_path: Path, monkeypatch) -> None:
+    old = _make_project(tmp_path, "20260101-000000_old", age_days=60)
+    fresh = _make_project(tmp_path, "20260610-000000_fresh", age_days=1)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_projects_cleanup(argparse.Namespace(keep=1, apply=True))
+    assert rc == 0
+    assert not old.exists()
+    assert fresh.exists()
+
+
+def test_cmd_projects_cleanup_dry_run_default(tmp_path: Path, monkeypatch) -> None:
+    old = _make_project(tmp_path, "20260101-000000_old", age_days=60)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    rc = runs_admin.cmd_projects_cleanup(argparse.Namespace(keep=0, apply=False))
+    assert rc == 0
+    assert old.exists()
+
+
+# ---------------------------------------------------------------------------
+# argparse wiring + dispatch for cleanup commands
+# ---------------------------------------------------------------------------
+
+
+def test_build_parser_runs_cleanup_defaults() -> None:
+    parser = cli.build_parser()
+    ns = parser.parse_args(["runs", "cleanup"])
+    assert ns.command == "runs"
+    assert ns.runs_command == "cleanup"
+    assert ns.keep == 10
+    assert ns.apply is False
+
+
+def test_build_parser_projects_cleanup_explicit() -> None:
+    parser = cli.build_parser()
+    ns = parser.parse_args(["projects", "cleanup", "--keep", "3", "--apply"])
+    assert ns.command == "projects"
+    assert ns.projects_command == "cleanup"
+    assert ns.keep == 3
+    assert ns.apply is True
+
+
+def test_main_dispatches_runs_cleanup(tmp_path: Path, monkeypatch) -> None:
+    import sys
+
+    _make_run(tmp_path, "only", age_days=1)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["local-codex-lite", "runs", "cleanup", "--keep", "5"])
+    assert cli.main() == 0
+
+
+def test_main_dispatches_projects_cleanup(tmp_path: Path, monkeypatch) -> None:
+    import sys
+
+    _make_project(tmp_path, "20260610-000000_x", age_days=1)
+    monkeypatch.setattr(runs_admin, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["local-codex-lite", "projects", "cleanup"])
+    assert cli.main() == 0
