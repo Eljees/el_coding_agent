@@ -84,7 +84,13 @@ def make_plan(
             ),
         )
         budget = _budget_for_messages(messages, config.llm.max_tokens)
-        response = client.chat(messages, max_tokens=budget, status_label="Planning")
+        response = _chat_with_timeout(
+            client,
+            messages,
+            max_tokens=budget,
+            status_label="Planning",
+            timeout=min(60.0, float(config.llm.timeout)),
+        )
         result = extract_json(response.text)
         _log_llm_attempt(
             run_dir,
@@ -485,7 +491,13 @@ def suggest_commands(
             runtime_fix.target_path.relative_to(workspace_root).as_posix(),
         )
         budget = _budget_for_messages(messages, config.llm.max_tokens)
-        response = client.chat(messages, max_tokens=budget, status_label="Suggesting commands")
+        response = _chat_with_timeout(
+            client,
+            messages,
+            max_tokens=budget,
+            status_label="Suggesting commands",
+            timeout=min(60.0, float(config.llm.timeout)),
+        )
         result = extract_json(response.text)
         _log_llm_attempt(
             run_dir,
@@ -545,7 +557,13 @@ def make_review(
     )
     messages = review_prompt(diff_text, review_context)
     budget = _budget_for_messages(messages, config.llm.max_tokens)
-    response = client.chat(messages, max_tokens=budget, status_label="Reviewing code changes")
+    response = _chat_with_timeout(
+        client,
+        messages,
+        max_tokens=budget,
+        status_label="Reviewing code changes",
+        timeout=min(60.0, float(config.llm.timeout)),
+    )
     try:
         result = extract_json(response.text)
         _log_llm_attempt(
@@ -605,7 +623,13 @@ def revise_plan_with_assumptions(
         task, json.dumps(plan, ensure_ascii=False, indent=2), context, [str(q) for q in questions]
     )
     budget = _budget_for_messages(messages, config.llm.max_tokens)
-    response = client.chat(messages, max_tokens=min(768, budget), status_label="Revising plan")
+    response = _chat_with_timeout(
+        client,
+        messages,
+        max_tokens=min(768, budget),
+        status_label="Revising plan",
+        timeout=min(60.0, float(config.llm.timeout)),
+    )
     try:
         return extract_json(response.text)
     except ValueError:
@@ -646,8 +670,12 @@ def revise_plan_with_answers(
         [(str(question), str(answer)) for question, answer in answers],
     )
     budget = _budget_for_messages(messages, config.llm.max_tokens)
-    response = client.chat(
-        messages, max_tokens=min(768, budget), status_label="Revising plan with answers"
+    response = _chat_with_timeout(
+        client,
+        messages,
+        max_tokens=min(768, budget),
+        status_label="Revising plan with answers",
+        timeout=min(60.0, float(config.llm.timeout)),
     )
     try:
         return extract_json(response.text)
