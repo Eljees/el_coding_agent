@@ -47,23 +47,27 @@ from local_codex_lite.patcher import RuntimeFixContext
 _PLAN = {"summary": "fix foo", "files_to_inspect": ["foo.py"], "implementation_steps": []}
 _PLAN_JSON = json.dumps(_PLAN)
 
-_VALID_DIFF = "\n".join([
-    "diff --git a/foo.py b/foo.py",
-    "--- a/foo.py",
-    "+++ b/foo.py",
-    "@@ -1 +1,2 @@",
-    "+# new",
-    " print('hi')",
-])
+_VALID_DIFF = "\n".join(
+    [
+        "diff --git a/foo.py b/foo.py",
+        "--- a/foo.py",
+        "+++ b/foo.py",
+        "@@ -1 +1,2 @@",
+        "+# new",
+        " print('hi')",
+    ]
+)
 
-_PLAN_JSON_FULL = json.dumps({
-    "summary": "fix foo",
-    "files_to_inspect": ["foo.py"],
-    "implementation_steps": [],
-    "risks": [],
-    "needs_clarification": False,
-    "clarifying_questions": ["What is the bug?"],
-})
+_PLAN_JSON_FULL = json.dumps(
+    {
+        "summary": "fix foo",
+        "files_to_inspect": ["foo.py"],
+        "implementation_steps": [],
+        "risks": [],
+        "needs_clarification": False,
+        "clarifying_questions": ["What is the bug?"],
+    }
+)
 
 
 def _make_ws(tmp_path: Path, content: str = "print('hi')\n") -> Path:
@@ -190,13 +194,19 @@ def test_repair_patch_fallback_succeeds(tmp_path: Path, monkeypatch) -> None:
             state["calls"] += 1
             if state["calls"] == 1:
                 return LLMResponse(text=_VALID_DIFF, raw={})  # same → continue
-            return LLMResponse(text=different_diff, raw={})   # fallback → different
+            return LLMResponse(text=different_diff, raw={})  # fallback → different
 
     monkeypatch.setattr(planner, "_repair_context_variants", lambda *a, **kw: ["ctx1"])
     monkeypatch.setattr(planner, "_build_repair_diagnosis", _no_diagnosis)
     result = planner.repair_patch_with_error(
-        "fix foo", _PLAN, _VALID_DIFF, "path mismatch", "path_mismatch",
-        ws, AgentConfig(), client=_Stub(),
+        "fix foo",
+        _PLAN,
+        _VALID_DIFF,
+        "path mismatch",
+        "path_mismatch",
+        ws,
+        AgentConfig(),
+        client=_Stub(),
     )
     assert result is not None
 
@@ -219,8 +229,14 @@ def test_repair_patch_fallback_exception_raises(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(planner, "_build_repair_diagnosis", _no_diagnosis)
     with pytest.raises(RuntimeError):
         planner.repair_patch_with_error(
-            "fix foo", _PLAN, _VALID_DIFF, "path mismatch", "path_mismatch",
-            ws, AgentConfig(), client=_Stub(),
+            "fix foo",
+            _PLAN,
+            _VALID_DIFF,
+            "path mismatch",
+            "path_mismatch",
+            ws,
+            AgentConfig(),
+            client=_Stub(),
         )
 
 
@@ -236,8 +252,14 @@ def test_repair_patch_fallback_same_patch_raises(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(planner, "_build_repair_diagnosis", _no_diagnosis)
     with pytest.raises(RuntimeError):
         planner.repair_patch_with_error(
-            "fix foo", _PLAN, _VALID_DIFF, "path mismatch", "path_mismatch",
-            ws, AgentConfig(), client=_AlwaysSame(),
+            "fix foo",
+            _PLAN,
+            _VALID_DIFF,
+            "path mismatch",
+            "path_mismatch",
+            ws,
+            AgentConfig(),
+            client=_AlwaysSame(),
         )
 
 
@@ -309,7 +331,9 @@ def test_revise_plan_with_assumptions_no_clarifying_questions(tmp_path: Path) ->
             return LLMResponse(text=_PLAN_JSON_FULL, raw={})
 
     plan_no_q = {"summary": "fix", "files_to_inspect": []}
-    result = planner.revise_plan_with_assumptions("fix it", plan_no_q, ws, AgentConfig(), client=_Stub())
+    result = planner.revise_plan_with_assumptions(
+        "fix it", plan_no_q, ws, AgentConfig(), client=_Stub()
+    )
     assert isinstance(result, dict)
 
 
@@ -373,7 +397,9 @@ def test_build_failed_file_context_oserror_skips_file(tmp_path: Path, monkeypatc
     def _bad_read(encoding, errors):
         raise OSError("permission denied")
 
-    monkeypatch.setattr(Path, "read_text", lambda self, **kw: (_ for _ in ()).throw(OSError("denied")))
+    monkeypatch.setattr(
+        Path, "read_text", lambda self, **kw: (_ for _ in ()).throw(OSError("denied"))
+    )
     result = planner._build_failed_file_context(
         ws,
         previous_patch=_VALID_DIFF,
@@ -462,9 +488,16 @@ def test_repair_via_full_file_rewrite_with_runtime_fix(tmp_path: Path) -> None:
             return LLMResponse(text="print('hi')\n# rewritten\n", raw={})
 
     result = planner._repair_via_full_file_rewrite(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch="", error="oops", issue_type="malformed_diff",
-        repair_attempt=1, runtime_fix=rfx,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch="",
+        error="oops",
+        issue_type="malformed_diff",
+        repair_attempt=1,
+        runtime_fix=rfx,
     )
     assert result is not None
     assert "foo.py" in result
@@ -473,27 +506,36 @@ def test_repair_via_full_file_rewrite_with_runtime_fix(tmp_path: Path) -> None:
 def test_repair_via_full_file_rewrite_multiple_paths_returns_none(tmp_path: Path) -> None:
     """When diff references multiple files → return None (line 889)."""
     ws = _make_ws(tmp_path)
-    multi_diff = "\n".join([
-        "diff --git a/foo.py b/foo.py",
-        "--- a/foo.py",
-        "+++ b/foo.py",
-        "@@ -1 +1 @@",
-        "+x",
-        "diff --git a/bar.py b/bar.py",
-        "--- a/bar.py",
-        "+++ b/bar.py",
-        "@@ -1 +1 @@",
-        "+y",
-    ])
+    multi_diff = "\n".join(
+        [
+            "diff --git a/foo.py b/foo.py",
+            "--- a/foo.py",
+            "+++ b/foo.py",
+            "@@ -1 +1 @@",
+            "+x",
+            "diff --git a/bar.py b/bar.py",
+            "--- a/bar.py",
+            "+++ b/bar.py",
+            "@@ -1 +1 @@",
+            "+y",
+        ]
+    )
 
     class _Stub:
         def chat(self, messages, max_tokens=None, status_label=None):
             return LLMResponse(text="content", raw={})
 
     result = planner._repair_via_full_file_rewrite(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=multi_diff, error="oops", issue_type="context_mismatch",
-        repair_attempt=1, runtime_fix=None,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=multi_diff,
+        error="oops",
+        issue_type="context_mismatch",
+        repair_attempt=1,
+        runtime_fix=None,
     )
     assert result is None
 
@@ -507,9 +549,16 @@ def test_repair_via_full_file_rewrite_missing_file_returns_none(tmp_path: Path) 
             return LLMResponse(text="content", raw={})
 
     result = planner._repair_via_full_file_rewrite(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=_VALID_DIFF, error="oops", issue_type="context_mismatch",
-        repair_attempt=1, runtime_fix=None,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=_VALID_DIFF,
+        error="oops",
+        issue_type="context_mismatch",
+        repair_attempt=1,
+        runtime_fix=None,
     )
     assert result is None
 
@@ -524,9 +573,16 @@ def test_repair_via_full_file_rewrite_same_content_returns_none(tmp_path: Path) 
             return LLMResponse(text=content, raw={})
 
     result = planner._repair_via_full_file_rewrite(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=_VALID_DIFF, error="oops", issue_type="context_mismatch",
-        repair_attempt=1, runtime_fix=None,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=_VALID_DIFF,
+        error="oops",
+        issue_type="context_mismatch",
+        repair_attempt=1,
+        runtime_fix=None,
     )
     assert result is None
 
@@ -540,6 +596,7 @@ def test_repair_via_intended_target_no_target_returns_none(tmp_path: Path) -> No
     """diagnosis.intended_target is None → return None immediately (line 952)."""
     ws = _make_ws(tmp_path)
     from local_codex_lite.targeting import TaskTarget
+
     diagnosis = planner.RepairDiagnosis(intended_target=None, touched_paths=(), drifted=False)
 
     class _Stub:
@@ -547,9 +604,16 @@ def test_repair_via_intended_target_no_target_returns_none(tmp_path: Path) -> No
             return LLMResponse(text=_VALID_DIFF, raw={})
 
     result = planner._repair_via_intended_target(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=_VALID_DIFF, error="oops", issue_type="path_mismatch",
-        repair_attempt=1, diagnosis=diagnosis,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=_VALID_DIFF,
+        error="oops",
+        issue_type="path_mismatch",
+        repair_attempt=1,
+        diagnosis=diagnosis,
     )
     assert result is None
 
@@ -559,25 +623,37 @@ def test_repair_via_intended_target_patch_paths_dont_match(tmp_path: Path) -> No
     ws = _make_ws(tmp_path)
     (tmp_path / "other.py").write_text("pass\n", encoding="utf-8")
     from local_codex_lite.targeting import TaskTarget
-    target = TaskTarget(path="foo.py", mode="patch", exists=True)
-    diagnosis = planner.RepairDiagnosis(intended_target=target, touched_paths=("foo.py",), drifted=False)
 
-    wrong_diff = "\n".join([
-        "diff --git a/other.py b/other.py",
-        "--- a/other.py",
-        "+++ b/other.py",
-        "@@ -1 +1 @@",
-        "+# changed",
-    ])
+    target = TaskTarget(path="foo.py", mode="patch", exists=True)
+    diagnosis = planner.RepairDiagnosis(
+        intended_target=target, touched_paths=("foo.py",), drifted=False
+    )
+
+    wrong_diff = "\n".join(
+        [
+            "diff --git a/other.py b/other.py",
+            "--- a/other.py",
+            "+++ b/other.py",
+            "@@ -1 +1 @@",
+            "+# changed",
+        ]
+    )
 
     class _Stub:
         def chat(self, messages, max_tokens=None, status_label=None):
             return LLMResponse(text=wrong_diff, raw={})
 
     result = planner._repair_via_intended_target(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=_VALID_DIFF, error="oops", issue_type="path_mismatch",
-        repair_attempt=1, diagnosis=diagnosis,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=_VALID_DIFF,
+        error="oops",
+        issue_type="path_mismatch",
+        repair_attempt=1,
+        diagnosis=diagnosis,
     )
     assert result is None
 
@@ -586,17 +662,27 @@ def test_repair_via_intended_target_exists_false_but_path_exists(tmp_path: Path)
     """target.exists=False but file already on disk → return None (line 976)."""
     ws = _make_ws(tmp_path)
     from local_codex_lite.targeting import TaskTarget
+
     target = TaskTarget(path="foo.py", mode="patch", exists=False)
-    diagnosis = planner.RepairDiagnosis(intended_target=target, touched_paths=("foo.py",), drifted=False)
+    diagnosis = planner.RepairDiagnosis(
+        intended_target=target, touched_paths=("foo.py",), drifted=False
+    )
 
     class _Stub:
         def chat(self, messages, max_tokens=None, status_label=None):
             return LLMResponse(text=_VALID_DIFF, raw={})
 
     result = planner._repair_via_intended_target(
-        _Stub(), "fix", _PLAN, ws, AgentConfig(),
-        previous_patch=_VALID_DIFF, error="oops", issue_type="path_mismatch",
-        repair_attempt=1, diagnosis=diagnosis,
+        _Stub(),
+        "fix",
+        _PLAN,
+        ws,
+        AgentConfig(),
+        previous_patch=_VALID_DIFF,
+        error="oops",
+        issue_type="path_mismatch",
+        repair_attempt=1,
+        diagnosis=diagnosis,
     )
     assert result is None
 
@@ -691,6 +777,7 @@ def test_response_text_from_exception_no_response() -> None:
 
 def test_response_text_from_exception_text_not_str() -> None:
     """Exception.response.text is not a str → return None (line 1165)."""
+
     class _FakeResp:
         text = 42
 
