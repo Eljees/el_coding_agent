@@ -16,6 +16,7 @@ from local_codex_lite.runs_admin import (
     archive_run,
     cmd_runs_archive,
     cmd_runs_prune,
+    list_dir_entries,
     list_run_entries,
     select_for_archival,
 )
@@ -284,6 +285,45 @@ def test_select_beyond_keep_within_limit_selects_none(tmp_path: Path) -> None:
     _make_run(tmp_path, "a", age_days=5)
     entries = list_run_entries(tmp_path)
     assert runs_admin.select_beyond_keep(entries, keep=10) == []
+
+
+def test_list_dir_entries_skips_non_directory_entries(tmp_path: Path) -> None:
+    run_dir = tmp_path / "20260101-120000"
+    run_dir.mkdir()
+    (run_dir / "task.txt").write_text("x", encoding="utf-8")
+    stray_file = tmp_path / "stray_file.txt"
+    stray_file.write_text("not a run", encoding="utf-8")
+    entries = list_dir_entries(tmp_path)
+    names = [e.path.name for e in entries]
+    assert "20260101-120000" in names
+    assert "stray_file.txt" not in names
+
+
+def test_list_dir_entries_skips_oserror_on_stat(tmp_path: Path, monkeypatch) -> None:
+    ok_dir = tmp_path / "good_run"
+    ok_dir.mkdir()
+    bad_dir = tmp_path / "bad_run"
+    bad_dir.mkdir()
+
+    original_stat = Path.stat
+    original_is_dir = Path.is_dir
+
+    def selective_stat(self: Path, *args: object, **kwargs: object):  # type: ignore[return]
+        if self.name == "bad_run":
+            raise OSError("stat failed")
+        return original_stat(self, *args, **kwargs)
+
+    def selective_is_dir(self: Path, *args: object, **kwargs: object) -> bool:
+        if self.name == "bad_run":
+            return True  # bypass the stat-based is_dir so the OSError try/except is reached
+        return original_is_dir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", selective_stat)
+    monkeypatch.setattr(Path, "is_dir", selective_is_dir)
+    entries = list_dir_entries(tmp_path)
+    names = [e.path.name for e in entries]
+    assert "good_run" in names
+    assert "bad_run" not in names
 
 
 def test_cmd_runs_cleanup_returns_1_when_no_runs(tmp_path: Path, monkeypatch) -> None:
