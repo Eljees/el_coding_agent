@@ -35,6 +35,53 @@ def test_classifies_db_snapshot_drift() -> None:
     assert issue.retryable is False
 
 
+def test_classifies_scan_no_inventory_from_text() -> None:
+    issue = classify_container_error(stderr="no inventory found")
+    assert issue.code == "scan_no_inventory"
+    assert issue.retryable is False
+
+
+def test_classifies_scan_no_inventory_from_missing_artifacts() -> None:
+    issue = classify_container_error(missing_artifacts=["inventory", "status.json"])
+    assert issue.code == "scan_no_inventory"
+    assert issue.retryable is False
+
+
+def test_classifies_docker_image_missing() -> None:
+    issue = classify_container_error(stderr="pull access denied for myimage")
+    assert issue.code == "docker_image_missing"
+    assert issue.retryable is True
+
+
+def test_classifies_container_timeout_from_text() -> None:
+    issue = classify_container_error(stderr="scan timed out after 120 s")
+    assert issue.code == "container_timeout"
+    assert issue.retryable is True
+
+
+def test_classifies_container_timeout_from_returncode() -> None:
+    issue = classify_container_error(returncode=124)
+    assert issue.code == "container_timeout"
+
+
+def test_classifies_mount_path_error() -> None:
+    issue = classify_container_error(stderr="bind source path does not exist: /tmp/missing")
+    assert issue.code == "mount_path_error"
+    assert issue.retryable is False
+
+
+def test_classifies_cache_permission_error() -> None:
+    issue = classify_container_error(stderr="permission denied: /cache/db")
+    assert issue.code == "cache_permission_error"
+    assert issue.retryable is True
+
+
+def test_classifies_tool_execution_failed() -> None:
+    issue = classify_container_error(stderr="docker run returned error code 1")
+    assert issue.code == "tool_execution_failed"
+    assert issue.retryable is True
+
+
 def test_unknown_fallback() -> None:
     issue = classify_container_error(stderr="some odd failure")
     assert issue.code == "unknown"
