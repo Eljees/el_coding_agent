@@ -19,6 +19,24 @@ small and readable.
 | [Troubleshooting](troubleshooting.md) | Common problems (git locks, venv relocation, endpoints) |
 | [Audit notes](audit/) | Point-in-time project audits and improvement plans (latest first; older ones live in `audit/archive/`) |
 
+## Root-level documents
+
+| Doc | What it covers |
+|-----|----------------|
+| [README (root)](../README.md) | 30-second tour, install, first run |
+| [AGENTS.md](../AGENTS.md) | AI-agent context: project rules, architecture, metrics, hard-won lessons |
+| [CHANGELOG.md](../CHANGELOG.md) | Version history and change log |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution guidelines |
+| [SECURITY.md](../SECURITY.md) | Security policy and responsible disclosure |
+
+## Skills
+
+| Skill | Document |
+|-------|----------|
+| AppSecHub | [skills/appsechub/SKILL.md](../skills/appsechub/SKILL.md) |
+| Artifact unpacking | [skills/artifact-unpack/SKILL.md](../skills/artifact-unpack/SKILL.md) |
+| CVE scanning | [skills/cve-bin-tool/SKILL.md](../skills/cve-bin-tool/SKILL.md) |
+
 ## Where to start
 
 New to the project? Read in this order:
