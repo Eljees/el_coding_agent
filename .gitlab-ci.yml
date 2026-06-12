@@ -8,6 +8,12 @@
 
 default:
   image: python:3.12
+  # gitlab01 has no untagged runners: jobs without tags sit in "pending"
+  # until the stuck-timeout kills them (root cause of 5 days of red
+  # pipelines).  Both instance runners are docker (dind) executors;
+  # dind-shared-2 is the general-purpose one.
+  tags:
+    - dind-shared-2
 
 stages:
   - smoke
