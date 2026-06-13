@@ -386,3 +386,54 @@ def test_cmd_replay_syntax_error_restores_backup(tmp_path: Path, monkeypatch) ->
         )
     )
     assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# cmd_replay: "file already exists" recovery path (replay.py:197)
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_replay_file_already_exists_continues_as_applied(tmp_path: Path, monkeypatch) -> None:
+    """When apply fails with file_already_exists AND all touched paths are
+    present, cmd_replay should continue (not abort) and print the yellow
+    recovery message — covering replay.py:197."""
+    from local_codex_lite.patcher import ApplyResult
+
+    # Create workspace with foo.py already present.
+    _init_git_repo(tmp_path, {"foo.py": "x = 1\n"})
+
+    # A "new file" patch — foo.py is the touched path; it already exists.
+    diff = (
+        "diff --git a/foo.py b/foo.py\n"
+        "new file mode 100644\n"
+        "index 0000000..aaaaaaa\n"
+        "--- /dev/null\n"
+        "+++ b/foo.py\n"
+        "@@ -0,0 +1 @@\n"
+        "+x = 1\n"
+    )
+    _make_source_run(tmp_path, "20260516-abc", task="t", plan={"summary": "p"}, patch=diff)
+
+    monkeypatch.setattr(replay, "workspace_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        replay,
+        "apply_patch",
+        lambda *a, **kw: ApplyResult(
+            returncode=128,
+            stdout="",
+            stderr="error: foo.py: already exists in working directory",
+            strategy="git_root_relative",
+        ),
+    )
+    # No syntax issues so the run completes successfully.
+    monkeypatch.setattr(replay, "validate_python_syntax", lambda paths: [])
+
+    rc = replay.cmd_replay(
+        argparse.Namespace(
+            run_id="20260516-abc",
+            dry_run=False,
+            apply=True,
+            profile=None,
+        )
+    )
+    assert rc == 0

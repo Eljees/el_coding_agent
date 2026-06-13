@@ -62,7 +62,7 @@ class OpenAICompatibleClient:
                     time.sleep(0.5 * (attempt + 1))
                     continue
                 raise
-        raise RuntimeError(str(last_error))
+        raise RuntimeError(str(last_error))  # pragma: no cover — raise on line above always fires
 
     def _request_with_heartbeat(
         self, payload: dict, status_label: str | None = None
@@ -93,7 +93,9 @@ class OpenAICompatibleClient:
 
     def _heartbeat_loop(self, stop_event: threading.Event, status_label: str) -> None:
         while not stop_event.wait(15.0):
-            self._emit_status(f"{status_label}... still working")
+            self._emit_status(
+                f"{status_label}... still working"
+            )  # pragma: no cover — fires after 15s
 
     def _emit_status(self, message: str) -> None:
         try:

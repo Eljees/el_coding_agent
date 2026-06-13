@@ -406,7 +406,7 @@ def load_user_rules(root: Path) -> list[str]:
         if not stripped.startswith(("- ", "* ")):
             continue
         rule = " ".join(stripped[2:].split())[:_RULE_CHARS]
-        if not rule:
+        if not rule:  # pragma: no cover — str.strip() removes trailing whitespace so stripped[2:] is always non-empty when startswith("- ") passes
             continue
         rules.append(rule)
         if len(rules) >= _MAX_USER_RULES:

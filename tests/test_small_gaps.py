@@ -162,3 +162,40 @@ def test_load_plugin_capabilities_returns_list() -> None:
 
     result = _load_plugin_capabilities()
     assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# lessons.py:373 — break in learned-lessons loop when max_items reached mid-loop
+# ---------------------------------------------------------------------------
+
+
+def test_relevant_lessons_breaks_early_when_max_items_reached_in_learned_loop(
+    tmp_path: Path,
+) -> None:
+    """Cover the break on lessons.py:373.
+
+    With max_items=1 and two matching learned lessons, the first lesson fills
+    the quota; the second iteration of the for-loop hits the guard and breaks.
+    """
+    from local_codex_lite.lessons import record_lesson, relevant_lessons
+
+    # Use a task whose keyword won't match any curated pitfall, so selected
+    # starts empty when we reach the learned-lessons loop.
+    task = "zq9_unique_nonmatching_task_xyzzy"
+
+    record_lesson(
+        tmp_path,
+        error_code="patch_rejected",
+        detail="apply failed for zq9_unique_nonmatching_task_xyzzy run",
+        task=task,
+    )
+    # Record a second distinct lesson so there are 2 candidates to iterate.
+    record_lesson(
+        tmp_path,
+        error_code="timeout",
+        detail="timeout during zq9_unique_nonmatching_task_xyzzy execution",
+        task=task,
+    )
+
+    result = relevant_lessons(tmp_path, task, max_items=1)
+    assert len(result) == 1  # only the first match; break fired on the second iteration
