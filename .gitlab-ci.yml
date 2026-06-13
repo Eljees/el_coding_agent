@@ -7,7 +7,7 @@
 # .pre-commit-config.yaml.
 # Note: headless GUI tests (test_ui_headless.py) are skipped on this runner
 # (no DISPLAY); the floor 90% reflects what the Linux runner can achieve
-# without a display.  The Windows GitHub runner achieves 99%.
+# without a display.  The Windows GitHub runner achieves 100%.
 
 default:
   image: python:3.12
@@ -26,7 +26,7 @@ variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 cache:
-  key: "$CI_JOB_NAME"
+  key: "$CI_JOB_NAME-$PYTHON"
   paths:
     - .cache/pip
 
@@ -37,9 +37,16 @@ stdlib-smoke:
     - python tools/stdlib_smoke.py
 
 # Full gate: lint + format-check + types + tests with the coverage floor.
+# Matrix across Python 3.11 / 3.12 / 3.13 to match the GitHub Actions matrix.
 lint-type-test:
   stage: check
   needs: ["stdlib-smoke"]
+  parallel:
+    matrix:
+      - PYTHON: "3.11"
+      - PYTHON: "3.12"
+      - PYTHON: "3.13"
+  image: python:${PYTHON}
   script:
     - python -m pip install --upgrade pip
     - pip install -e ".[dev]"

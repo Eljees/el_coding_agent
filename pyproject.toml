@@ -36,6 +36,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Code Generators",
   "Topic :: Software Development :: Libraries",
   "Topic :: Security",
@@ -63,7 +64,7 @@ dev = [
   "mutmut>=2.5",
   # Pin ruff/mypy to exact versions so local pre-commit and CI agree.
   # These MUST stay in lockstep with .pre-commit-config.yaml.
-  "ruff==0.15.15",
+  "ruff==0.15.16",
   "mypy==1.14.1",
   "pre-commit>=3.7",
   "types-PyYAML>=6.0",

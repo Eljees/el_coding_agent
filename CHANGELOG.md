@@ -33,6 +33,17 @@ straight into `## [Unreleased]`.
   tests, CHANGELOG update, and secrets gate.
 
 ### Changed
+- **Return type hints completed** (`rich_compat.py`, `task_heuristics.py`, `ui_runners.py`):
+  four public functions lacked return annotations — `make_console`/`make_table` annotated
+  `-> Any` (rich optional), `temporary_cwd`/`redirect_optional_stdin` annotated
+  `-> Iterator[None]`.  All public functions now carry complete annotations.
+- **GitLab CI Python matrix expanded** (`.gitlab-ci.yml`): `lint-type-test` now runs
+  in parallel on Python 3.11, 3.12, and 3.13 via `parallel: matrix`, matching the
+  GitHub Actions ubuntu matrix.
+- **Ruff pin bumped 0.15.15 → 0.15.16** (`pyproject.toml`, `.pre-commit-config.yaml`):
+  sync pinned version with the installed binary to keep local pre-commit and CI identical.
+- **Python 3.14 classifier added** (`pyproject.toml`): reflects local interpreter version
+  (3.14.2).
 - **Coverage floor raised 88% → 90%** (`.github/workflows/ci.yml`, `.gitlab-ci.yml`,
   `Makefile`): safe on all runners (Linux headless achieves ~91%; Windows ~99%).
   Previously raised 80% → 88% as part of the D14 audit.
