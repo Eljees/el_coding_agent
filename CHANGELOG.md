@@ -15,8 +15,9 @@ straight into `## [Unreleased]`.
   `ui.py` coverage 15% → 71%; total project coverage 91% → **97%** (6146 stmts, 182 miss).
   Pragmas added to the import-error except block and `run_command_center_ui` success
   path (both genuinely untestable without a dedicated process-per-test Tk lifecycle).
-  Extended to 52 tests covering additional synchronous methods; total coverage
-  97% → **99%** (6134 stmts, 91 miss); `ui.py` 15% → **85%**.
+  Extended to 62 tests covering capability/tool selection, heartbeat loop,
+  preview() path, filedialog cancellation, and all 5 worker wrappers (mocked);
+  total coverage 97% → **99%** (6134 stmts, 69 miss); `ui.py` 15% → **89%**.
 - **`--version` flag** (`cli_parser.py`): `local-codex-lite --version` now prints the
   package version (`0.1.0`) without entering any subcommand.
 - **CLI reference staleness gate** (`.github/workflows/ci.yml`): a new
