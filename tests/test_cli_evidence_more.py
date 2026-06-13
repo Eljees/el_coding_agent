@@ -124,7 +124,13 @@ def test_cmd_evidence_trufflehog_scan_failures_returns_1(tmp_path: Path) -> None
     fake_result.total = {"failures": 2}
     fake_result.baseline_dir = tmp_path / "baseline"
     fake_result.baseline_dir.mkdir()
-    fake_result.status = {"status": "error", "error_code": "auth_missing", "detail": "auth", "message": "auth", "suggested_action": "fix auth"}
+    fake_result.status = {
+        "status": "error",
+        "error_code": "auth_missing",
+        "detail": "auth",
+        "message": "auth",
+        "suggested_action": "fix auth",
+    }
     fake_result.evidence_dir = tmp_path / "evidence"
 
     with patch("local_codex_lite.cli_evidence.scan_repo_urls", return_value=fake_result):
@@ -221,7 +227,9 @@ def test_cmd_evidence_cve_scan_raises_when_scan_has_no_input(tmp_path: Path) -> 
         min_severity=None,
         format=None,
     )
-    with patch("local_codex_lite.cli_evidence.resolve_cve_skill_script", return_value=tmp_path / "fake.py"):
+    with patch(
+        "local_codex_lite.cli_evidence.resolve_cve_skill_script", return_value=tmp_path / "fake.py"
+    ):
         with pytest.raises(SystemExit, match="Provide an artifact path"):
             cmd_evidence_cve_scan(args)
 

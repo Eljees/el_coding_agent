@@ -168,7 +168,9 @@ def test_build_chunks_skips_file_outside_workspace(tmp_path: Path) -> None:
     cfg = default_config()
     (tmp_path / "README.md").write_text("content\n", encoding="utf-8")
 
-    real_is_inside = __import__("local_codex_lite.safety", fromlist=["is_inside_workspace"]).is_inside_workspace
+    real_is_inside = __import__(
+        "local_codex_lite.safety", fromlist=["is_inside_workspace"]
+    ).is_inside_workspace
 
     def fake_is_inside(path: Path, root: Path) -> bool:
         if path.name == "README.md":

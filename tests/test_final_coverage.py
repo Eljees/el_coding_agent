@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # cli_evidence.py:142 — empty URL list raises SystemExit
 # ---------------------------------------------------------------------------
@@ -93,9 +92,7 @@ def test_list_7z_members_appends_trailing_block(tmp_path: Path) -> None:
 
     # 7z -slt output: two entries, second has no trailing blank line
     stdout = (
-        "Path = file.txt\nSize = 100\nAttributes = A\n"
-        "\n"
-        "Path = other.txt\nSize = 50\nAttributes = A"
+        "Path = file.txt\nSize = 100\nAttributes = A\n\nPath = other.txt\nSize = 50\nAttributes = A"
     )
     mock_result = MagicMock()
     mock_result.returncode = 0

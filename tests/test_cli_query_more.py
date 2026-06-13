@@ -43,15 +43,32 @@ def test_cmd_preview_prints_workspace_when_root_differs(tmp_path: Path, capsys) 
     with patch("local_codex_lite.cli_query.workspace_root", return_value=tmp_path):
         with patch("local_codex_lite.cli_query.resolve_task_workspace", return_value=sub):
             with patch("local_codex_lite.cli_query.load_config") as mock_cfg:
-                with patch("local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value):
+                with patch(
+                    "local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value
+                ):
                     with patch("local_codex_lite.cli_query._load_evidence_block", return_value=""):
-                        with patch("local_codex_lite.cli_query.detect_runtime_fix_context", return_value=None):
-                            with patch("local_codex_lite.cli_query._selected_files", return_value=[]):
+                        with patch(
+                            "local_codex_lite.cli_query.detect_runtime_fix_context",
+                            return_value=None,
+                        ):
+                            with patch(
+                                "local_codex_lite.cli_query._selected_files", return_value=[]
+                            ):
                                 with patch("local_codex_lite.cli_query._print_selected_files"):
-                                    with patch("local_codex_lite.cli_query.make_plan", return_value={}):
-                                        with patch("local_codex_lite.cli_query._print_plan_summary"):
-                                            with patch("local_codex_lite.cli_query.make_patch", return_value=""):
-                                                with patch("local_codex_lite.cli_query.preview_patch", return_value=0):
+                                    with patch(
+                                        "local_codex_lite.cli_query.make_plan", return_value={}
+                                    ):
+                                        with patch(
+                                            "local_codex_lite.cli_query._print_plan_summary"
+                                        ):
+                                            with patch(
+                                                "local_codex_lite.cli_query.make_patch",
+                                                return_value="",
+                                            ):
+                                                with patch(
+                                                    "local_codex_lite.cli_query.preview_patch",
+                                                    return_value=0,
+                                                ):
                                                     rc = cmd_preview(args)
 
     assert rc == 0
@@ -88,10 +105,17 @@ def test_cmd_preview_returns_1_on_rag_provider_error(tmp_path: Path) -> None:
     with patch("local_codex_lite.cli_query.workspace_root", return_value=tmp_path):
         with patch("local_codex_lite.cli_query.resolve_task_workspace", return_value=tmp_path):
             with patch("local_codex_lite.cli_query.load_config") as mock_cfg:
-                with patch("local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value):
+                with patch(
+                    "local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value
+                ):
                     with patch("local_codex_lite.cli_query._load_evidence_block", return_value=""):
-                        with patch("local_codex_lite.cli_query.detect_runtime_fix_context", return_value=None):
-                            with patch("local_codex_lite.cli_query._selected_files", return_value=[]):
+                        with patch(
+                            "local_codex_lite.cli_query.detect_runtime_fix_context",
+                            return_value=None,
+                        ):
+                            with patch(
+                                "local_codex_lite.cli_query._selected_files", return_value=[]
+                            ):
                                 with patch("local_codex_lite.cli_query._print_selected_files"):
                                     with patch(
                                         "local_codex_lite.cli_query.make_plan",
@@ -113,13 +137,24 @@ def test_cmd_preview_returns_1_on_generic_exception(tmp_path: Path) -> None:
     with patch("local_codex_lite.cli_query.workspace_root", return_value=tmp_path):
         with patch("local_codex_lite.cli_query.resolve_task_workspace", return_value=tmp_path):
             with patch("local_codex_lite.cli_query.load_config") as mock_cfg:
-                with patch("local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value):
+                with patch(
+                    "local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value
+                ):
                     with patch("local_codex_lite.cli_query._load_evidence_block", return_value=""):
-                        with patch("local_codex_lite.cli_query.detect_runtime_fix_context", return_value=None):
-                            with patch("local_codex_lite.cli_query._selected_files", return_value=[]):
+                        with patch(
+                            "local_codex_lite.cli_query.detect_runtime_fix_context",
+                            return_value=None,
+                        ):
+                            with patch(
+                                "local_codex_lite.cli_query._selected_files", return_value=[]
+                            ):
                                 with patch("local_codex_lite.cli_query._print_selected_files"):
-                                    with patch("local_codex_lite.cli_query.make_plan", return_value={}):
-                                        with patch("local_codex_lite.cli_query._print_plan_summary"):
+                                    with patch(
+                                        "local_codex_lite.cli_query.make_plan", return_value={}
+                                    ):
+                                        with patch(
+                                            "local_codex_lite.cli_query._print_plan_summary"
+                                        ):
                                             with patch(
                                                 "local_codex_lite.cli_query.make_patch",
                                                 side_effect=ValueError("unexpected"),
@@ -158,9 +193,14 @@ def test_cmd_ask_returns_1_on_rag_provider_error(tmp_path: Path) -> None:
 
     with patch("local_codex_lite.cli_query.workspace_root", return_value=tmp_path):
         with patch("local_codex_lite.cli_query.load_config") as mock_cfg:
-            with patch("local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value):
+            with patch(
+                "local_codex_lite.cli_query.apply_profile", return_value=mock_cfg.return_value
+            ):
                 with patch("local_codex_lite.cli_query._load_evidence_block", return_value=""):
-                    with patch("local_codex_lite.cli_query.config_path", return_value=tmp_path / "config.toml"):
+                    with patch(
+                        "local_codex_lite.cli_query.config_path",
+                        return_value=tmp_path / "config.toml",
+                    ):
                         with patch(
                             "local_codex_lite.cli_query._load_rag_context",
                             side_effect=RagProviderError("rag failed"),

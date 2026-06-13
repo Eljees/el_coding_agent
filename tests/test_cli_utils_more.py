@@ -134,7 +134,9 @@ def test_load_rag_context_returns_empty_on_rag_provider_error(tmp_path: Path) ->
     from local_codex_lite.rag import RagProviderError
 
     cfg = load_config(tmp_path)
-    with patch("local_codex_lite.cli_utils.retrieve_rag_context", side_effect=RagProviderError("err")):
+    with patch(
+        "local_codex_lite.cli_utils.retrieve_rag_context", side_effect=RagProviderError("err")
+    ):
         result = load_rag_context(tmp_path, cfg, "query")
     assert result == ""
 
@@ -154,7 +156,9 @@ def test_load_rag_context_returns_formatted_context(tmp_path: Path) -> None:
     cfg = load_config(tmp_path)
     fake_chunks = [object()]
     with patch("local_codex_lite.cli_utils.retrieve_rag_context", return_value=fake_chunks):
-        with patch("local_codex_lite.cli_utils.format_retrieved_context", return_value="ctx") as mock_fmt:
+        with patch(
+            "local_codex_lite.cli_utils.format_retrieved_context", return_value="ctx"
+        ) as mock_fmt:
             result = load_rag_context(tmp_path, cfg, "query")
     assert result == "ctx"
     mock_fmt.assert_called_once_with(fake_chunks, cfg.rag.max_context_chars)

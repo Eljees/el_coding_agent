@@ -76,6 +76,8 @@ def test_classify_patch_apply_long_error_is_truncated() -> None:
 
 
 def test_classify_post_apply_runtime_returns_classification() -> None:
-    result = classify_post_apply_runtime("Traceback (most recent call last):\n  ...\nValueError: bad")
+    result = classify_post_apply_runtime(
+        "Traceback (most recent call last):\n  ...\nValueError: bad"
+    )
     assert result.code is not None
     assert result.title

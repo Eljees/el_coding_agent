@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 
-def _make_run_dir(tmp_path: Path, events: list[dict], *, issue_files: dict[str, object] | None = None) -> Path:
+def _make_run_dir(
+    tmp_path: Path, events: list[dict], *, issue_files: dict[str, object] | None = None
+) -> Path:
     run_dir = tmp_path / ".local-codex-lite" / "runs" / "20260601-120000"
     run_dir.mkdir(parents=True)
     events_path = run_dir / "events.jsonl"
@@ -28,7 +30,15 @@ def _make_run_dir(tmp_path: Path, events: list[dict], *, issue_files: dict[str, 
 def test_build_attempt_timeline_else_branch_for_request_error(tmp_path: Path) -> None:
     from local_codex_lite.run_report import build_attempt_timeline
 
-    events = [{"stage": "plan", "attempt": 1, "status": "request_error", "issue_type": "api_timeout", "error": "connection timed out"}]
+    events = [
+        {
+            "stage": "plan",
+            "attempt": 1,
+            "status": "request_error",
+            "issue_type": "api_timeout",
+            "error": "connection timed out",
+        }
+    ]
     run_dir = _make_run_dir(tmp_path, events)
     report = build_attempt_timeline(run_dir)
     assert report.rows

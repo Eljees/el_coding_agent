@@ -57,8 +57,18 @@ def test_load_learned_skips_records_without_signature(tmp_path: Path) -> None:
     store = tmp_path / ".local-codex-lite" / "lessons.jsonl"
     store.parent.mkdir(parents=True)
     store.write_text(
-        json.dumps({"ts": 1.0, "error_code": "ctx"}) + "\n"
-        + json.dumps({"ts": 2.0, "signature": "valid sig", "error_code": "ctx", "detail_excerpt": "x", "task_excerpt": "t"}) + "\n",
+        json.dumps({"ts": 1.0, "error_code": "ctx"})
+        + "\n"
+        + json.dumps(
+            {
+                "ts": 2.0,
+                "signature": "valid sig",
+                "error_code": "ctx",
+                "detail_excerpt": "x",
+                "task_excerpt": "t",
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     lessons = load_learned(tmp_path)
@@ -79,8 +89,13 @@ def test_relevant_lessons_stops_at_max_items_in_learned_loop(tmp_path: Path) -> 
     store = tmp_path / ".local-codex-lite" / "lessons.jsonl"
     store.parent.mkdir(parents=True)
     records = [
-        {"ts": float(i), "signature": f"sig_{i}", "error_code": "ctx",
-         "detail_excerpt": "fix", "task_excerpt": "test task"}
+        {
+            "ts": float(i),
+            "signature": f"sig_{i}",
+            "error_code": "ctx",
+            "detail_excerpt": "fix",
+            "task_excerpt": "test task",
+        }
         for i in range(5)
     ]
     store.write_text("\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8")

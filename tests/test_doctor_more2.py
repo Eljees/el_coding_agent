@@ -122,7 +122,9 @@ def test_run_dependency_doctor_missing_optional_package(monkeypatch, tmp_path: P
 def test_run_rag_doctor_unsupported_provider_returns_1(tmp_path: Path) -> None:
     from local_codex_lite.rag import RagProviderError
 
-    with patch("local_codex_lite.doctor.ensure_rag_provider_supported", side_effect=RagProviderError("bad")):
+    with patch(
+        "local_codex_lite.doctor.ensure_rag_provider_supported", side_effect=RagProviderError("bad")
+    ):
         rc = doctor.run_rag_doctor(tmp_path)
     assert rc == 1
 
@@ -136,7 +138,9 @@ def test_run_rag_doctor_store_dir_outside_workspace_returns_1(tmp_path: Path) ->
     from local_codex_lite.rag import RagProviderError
 
     with patch("local_codex_lite.doctor.ensure_rag_provider_supported", return_value="keyword"):
-        with patch("local_codex_lite.doctor.resolve_store_dir", side_effect=RagProviderError("outside")):
+        with patch(
+            "local_codex_lite.doctor.resolve_store_dir", side_effect=RagProviderError("outside")
+        ):
             rc = doctor.run_rag_doctor(tmp_path)
     assert rc == 1
 
@@ -148,7 +152,9 @@ def test_run_rag_doctor_store_dir_outside_workspace_returns_1(tmp_path: Path) ->
 
 def test_run_rag_doctor_fixture_exception_returns_1(tmp_path: Path) -> None:
     with patch("local_codex_lite.doctor.ensure_rag_provider_supported", return_value="keyword"):
-        with patch("local_codex_lite.doctor.resolve_store_dir", return_value=tmp_path / "rag-store"):
+        with patch(
+            "local_codex_lite.doctor.resolve_store_dir", return_value=tmp_path / "rag-store"
+        ):
             with patch("local_codex_lite.doctor.index_workspace", side_effect=RuntimeError("boom")):
                 rc = doctor.run_rag_doctor(tmp_path)
     assert rc == 1

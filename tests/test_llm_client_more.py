@@ -79,14 +79,7 @@ def test_normalize_unified_diff_raises_on_invalid_hunk_header() -> None:
 
 
 def test_normalize_unified_diff_handles_consecutive_hunk_starts() -> None:
-    diff = (
-        "--- a/foo.py\n"
-        "+++ b/foo.py\n"
-        "@@ -1,1 +1,1 @@\n"
-        "-old\n"
-        "@@ -5,1 +5,1 @@\n"
-        "+new\n"
-    )
+    diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1,1 +1,1 @@\n-old\n@@ -5,1 +5,1 @@\n+new\n"
     result = normalize_unified_diff(diff)
     # Two separate @@ hunks should appear in the normalized output
     assert result.count("@@ ") == 2
@@ -116,14 +109,7 @@ def test_normalize_unified_diff_preserves_no_newline_marker() -> None:
 
 
 def test_normalize_unified_diff_empty_body_line_becomes_context() -> None:
-    diff = (
-        "--- a/foo.py\n"
-        "+++ b/foo.py\n"
-        "@@ -1,3 +1,3 @@\n"
-        " first\n"
-        "\n"
-        " third\n"
-    )
+    diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1,3 +1,3 @@\n first\n\n third\n"
     result = normalize_unified_diff(diff)
     lines = result.splitlines()
     body_lines = [ln for ln in lines if ln.startswith(" ") or ln == " "]
@@ -150,13 +136,6 @@ def test_emit_status_writes_to_stderr() -> None:
 
 
 def test_normalize_unified_diff_stops_at_closing_fence() -> None:
-    diff = (
-        "--- a/foo.py\n"
-        "+++ b/foo.py\n"
-        "@@ -1,1 +1,1 @@\n"
-        "+new line\n"
-        "```\n"
-        "some trailing text\n"
-    )
+    diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1,1 +1,1 @@\n+new line\n```\nsome trailing text\n"
     result = normalize_unified_diff(diff)
     assert "trailing text" not in result

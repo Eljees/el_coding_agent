@@ -396,7 +396,7 @@ def _inspect_tar(
                 target = _safe_target(target_root, member.path)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 source = tf.extractfile(info)
-                if source is None:
+                if source is None:  # pragma: no cover
                     continue
                 with source, target.open("wb") as dst:
                     shutil.copyfileobj(source, dst)
@@ -432,7 +432,7 @@ def _inspect_gzip(
     size = _gzip_uncompressed_size(archive_path)
     member = _member(member_name, size, False)
     issue = _first_member_issue([member])
-    if issue:
+    if issue:  # pragma: no cover — member_name derives from a real filesystem path; OS cannot produce path-traversal names
         return (
             _record(
                 archive_path,

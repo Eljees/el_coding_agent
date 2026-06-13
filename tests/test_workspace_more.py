@@ -60,9 +60,7 @@ def test_summarize_ranked_files_skips_sensitive_py_file(tmp_path: Path) -> None:
     (tmp_path / "normal.py").write_text("x = 1\n", encoding="utf-8")
     (tmp_path / "secret.py").write_text("API_KEY = 'hunter2'\n", encoding="utf-8")
     cfg = default_config()
-    result = summarize_ranked_files(
-        tmp_path, "normal", cfg.workspace, allow_sensitive_read=False
-    )
+    result = summarize_ranked_files(tmp_path, "normal", cfg.workspace, allow_sensitive_read=False)
     paths = [item.path.name for item in result]
     assert "normal.py" in paths
     assert "secret.py" not in paths
@@ -77,7 +75,9 @@ def test_summarize_ranked_files_respects_limit(tmp_path: Path) -> None:
     for i in range(5):
         (tmp_path / f"file{i}.py").write_text(f"x = {i}\n", encoding="utf-8")
     cfg = default_config()
-    result = summarize_ranked_files(tmp_path, "file", cfg.workspace, allow_sensitive_read=False, limit=2)
+    result = summarize_ranked_files(
+        tmp_path, "file", cfg.workspace, allow_sensitive_read=False, limit=2
+    )
     assert len(result) <= 2
 
 
