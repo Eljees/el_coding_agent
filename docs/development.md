@@ -22,11 +22,12 @@ All four are enforced; `make check` (Linux/macOS) runs the exact CI set.
 | Lint | `python -m ruff check local_codex_lite\ tests\` |
 | Format | `python -m ruff format --check local_codex_lite\ tests\` |
 | Types | `python -m mypy local_codex_lite\` |
-| Tests + coverage | `python -m pytest -q --cov=local_codex_lite --cov-fail-under=65` |
+| Tests + coverage | `python -m pytest -q --cov=local_codex_lite --cov-fail-under=90` |
 
 `ruff` and `mypy` are pinned to exact versions in **both** `pyproject.toml`
 `[dev]` and `.pre-commit-config.yaml` — keep them in lockstep. Coverage floor is
-65% (the suite sits near 70%).
+90% (the suite achieves 100% on Windows; headless Linux runners achieve ~91%
+because the Tk display tests are skipped).
 
 ## Pre-commit
 
@@ -38,14 +39,14 @@ pre-commit run --all-files
 ## CI
 
 `.github/workflows/ci.yml` runs a stdlib-only smoke gate, then a lint+type+test
-matrix (Ubuntu 3.11/3.12 + a Windows 3.12 job), a no-LLM CLI smoke job, and a
-non-blocking `ruff-canary` job on the latest ruff. `mutmut.yml` runs scoped
-mutation testing weekly.
+matrix (Ubuntu 3.11/3.12/3.13 + Windows 3.12), a no-LLM CLI smoke job, a CLI
+reference staleness check, and a non-blocking `ruff-canary` job on the latest ruff.
+`mutmut.yml` runs scoped mutation testing weekly.
 
-> The canonical remote is GitLab; `.gitlab-ci.yml` mirrors the GitHub Actions
-> gates (lint + format + mypy + pytest with the 65% floor) so a GitLab push
-> is actually verified. Keep tool versions in lockstep across `pyproject.toml`,
-> `.pre-commit-config.yaml`, both CI files.
+> `.gitlab-ci.yml` mirrors the GitHub Actions gates (lint + format + mypy +
+> pytest with the 90% floor) on Python 3.11/3.12/3.13 via parallel matrix.
+> Keep tool versions in lockstep across `pyproject.toml`, `.pre-commit-config.yaml`,
+> and both CI files.
 
 ## Testing notes
 
