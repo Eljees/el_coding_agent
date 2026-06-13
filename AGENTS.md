@@ -20,16 +20,16 @@ This is not an enterprise platform, not a web product, and not a multi-agent fra
 
 ---
 
-## Current state (updated 2026-06-12)
+## Current state (updated 2026-06-13)
 
 > Canonical change history lives in `CHANGELOG.md`.  The dated
 > "session log" blocks in this file are point-in-time snapshots kept for
 > reference, not the source of truth.
 
 - Branch: `test/artifact-unpack`
-- Last known clean test run: `1048 passed` (2026-06-13; `testpaths = ["tests"]`; overall
-  coverage 91%; 45 modules at 100%; artifact_unpack.py 99%, trufflehog.py 95%;
-  ui.py ~15% — remaining Tk widget/binding code)
+- Last known clean test run: `1091 passed` (2026-06-13; `testpaths = ["tests"]`; overall
+  coverage **97%** (6146 stmts, 182 miss); 51 modules at 100%; ui.py 71% — remaining
+  event-handler and background-worker paths require a running Tk mainloop)
 - Skills tests (`skills/appsechub/test_appsechub_client.py`, 11 tests) are **intentionally**
   outside the default `testpaths` (they exercise the skill, not the package); run explicitly
   with `python -m pytest tests/ skills/`. Requires `requests` (now in `[dev]` extras).

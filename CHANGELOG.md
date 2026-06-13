@@ -9,6 +9,12 @@ straight into `## [Unreleased]`.
 ## [Unreleased]
 
 ### Added
+- **Headless UI tests** (`tests/test_ui_headless.py`): 29 withdrawn-window Tkinter
+  tests cover `CommandCenterUI.__init__`, `_build*`, clipboard helpers, chat, and
+  action-button logic.  Tests are skipped on headless Linux CI; all pass on Windows.
+  `ui.py` coverage 15% → 71%; total project coverage 91% → **97%** (6146 stmts, 182 miss).
+  Pragmas added to the import-error except block and `run_command_center_ui` success
+  path (both genuinely untestable without a dedicated process-per-test Tk lifecycle).
 - **`--version` flag** (`cli_parser.py`): `local-codex-lite --version` now prints the
   package version (`0.1.0`) without entering any subcommand.
 - **CLI reference staleness gate** (`.github/workflows/ci.yml`): a new
