@@ -17,7 +17,12 @@ straight into `## [Unreleased]`.
   path (both genuinely untestable without a dedicated process-per-test Tk lifecycle).
   Extended to 62 tests covering capability/tool selection, heartbeat loop,
   preview() path, filedialog cancellation, and all 5 worker wrappers (mocked);
-  total coverage 97% → **99%** (6134 stmts, 69 miss); `ui.py` 15% → **89%**.
+  total coverage 97% → 99% (6134 stmts, 69 miss); `ui.py` 15% → 89%.
+  Extended to 79 tests covering modal dialog (`_ask_clarifications` OK/cancel),
+  background-thread exception handler (`runner()` except via sync-thread mock),
+  project-workspace creation path, chat dispatch, runs-list selection, apply/exec
+  with tasks, `_save_geometry`, `_chat_worker` delegation, `_show_skill_detail`;
+  total coverage 99% → **100%** (6134 stmts, 0 miss); `ui.py` 89% → **100%**.
 - **`--version` flag** (`cli_parser.py`): `local-codex-lite --version` now prints the
   package version (`0.1.0`) without entering any subcommand.
 - **CLI reference staleness gate** (`.github/workflows/ci.yml`): a new

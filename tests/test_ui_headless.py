@@ -828,3 +828,411 @@ def test_run_worker_delegates(ui_app):
         result = app._run_worker("do something", apply=True, exec_=False)
     m.assert_called_once()
     assert result == "run ok"
+
+
+# ---------------------------------------------------------------------------
+# _refresh_runs_list with non-empty runs (covers the insert loop body)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_refresh_runs_list_with_runs(ui_app):
+    """_refresh_runs_list with actual runs must insert each line into the listbox."""
+    from unittest.mock import MagicMock, patch
+
+    _, app = ui_app
+    mock_ov = MagicMock()
+    mock_ov.run_ids = ["run-a", "run-b"]
+    mock_ov.lines = ["Run A — success", "Run B — fail"]
+    with patch("local_codex_lite.ui_commands.runs_overview", return_value=mock_ov):
+        app._refresh_runs_list()
+    assert app.runs_list.size() == 2
+    app.runs_list.delete(0, "end")
+    app._runs_ids = []
+
+
+# ---------------------------------------------------------------------------
+# _show_run_timeline with a valid listbox selection
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_show_run_timeline_with_selection(ui_app):
+    """_show_run_timeline with a selected row must call run_timeline_text."""
+    from unittest.mock import patch
+
+    _, app = ui_app
+    app.runs_list.insert("end", "Run 1")
+    app._runs_ids = ["run-id-1"]
+    app.runs_list.selection_set(0)
+    with patch("local_codex_lite.ui_commands.run_timeline_text", return_value="timeline") as m:
+        app._show_run_timeline()
+    m.assert_called_once()
+    app.runs_list.delete(0, "end")
+    app._runs_ids = []
+
+
+# ---------------------------------------------------------------------------
+# _save_geometry (just must not raise)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_save_geometry(ui_app):
+    """_save_geometry must persist the window geometry without raising."""
+    _, app = ui_app
+    app._save_geometry()
+
+
+# ---------------------------------------------------------------------------
+# _save_task_to_history with empty string (early-return path)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_save_task_to_history_empty_no_op(ui_app):
+    """_save_task_to_history('') must return early without modifying history."""
+    _, app = ui_app
+    before = list(app._task_history)
+    app._save_task_to_history("")
+    assert list(app._task_history) == before
+
+
+# ---------------------------------------------------------------------------
+# _export_output: filedialog unavailable path
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_export_output_filedialog_unavailable(ui_app):
+    """_export_output with filedialog=None must return early without raising."""
+    import local_codex_lite.ui as _ui
+
+    _, app = ui_app
+    app._command_output_cache = "some content"
+    orig = _ui.filedialog
+    _ui.filedialog = None
+    try:
+        app._export_output()
+    finally:
+        _ui.filedialog = orig
+
+
+# ---------------------------------------------------------------------------
+# _export_output: path returned but write fails (error appended to output)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_export_output_with_write_error(ui_app, monkeypatch):
+    """_export_output must append the write error when export_output_text returns one."""
+    from unittest.mock import patch
+
+    import local_codex_lite.ui as _ui
+
+    _, app = ui_app
+    app._command_output_cache = "important output"
+    fake_fd = type("FD", (), {"asksaveasfilename": staticmethod(lambda **_: "/tmp/out.txt")})()
+    monkeypatch.setattr(_ui, "filedialog", fake_fd)
+    with patch(
+        "local_codex_lite.ui_commands.export_output_text",
+        return_value="Write failed: permission denied",
+    ):
+        app._export_output()
+    assert "Write failed" in app._command_output_cache
+
+
+# ---------------------------------------------------------------------------
+# _chat_send with content (dispatches thread; thread.start is mocked)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_chat_send_with_content_dispatches_worker(ui_app):
+    """_chat_send with non-empty input must clear input, append message, start thread."""
+    from unittest.mock import MagicMock, patch
+
+    _, app = ui_app
+    app.chat_input.delete("1.0", "end")
+    app.chat_input.insert("1.0", "hello model")
+    app._chat_messages.clear()
+    mock_thread = MagicMock()
+    with patch("threading.Thread", return_value=mock_thread):
+        app._chat_send()
+    mock_thread.start.assert_called_once()
+    assert any(m.get("content") == "hello model" for m in app._chat_messages)
+    assert app.chat_input.get("1.0", "end").strip() == ""
+    # restore button state modified by _chat_send
+    app._chat_messages.clear()
+    app._chat_send_button.configure(state="normal")
+    app._chat_status_var.set("")
+
+
+# ---------------------------------------------------------------------------
+# _chat_worker (calls ui_runners.chat_worker, registers root.after callback)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_chat_worker_calls_ui_runners(ui_app):
+    """_chat_worker must delegate to ui_runners.chat_worker and schedule response."""
+    from unittest.mock import patch
+
+    root, app = ui_app
+    with (
+        patch("local_codex_lite.ui_runners.chat_worker", return_value="model answer") as m,
+        patch.object(root, "after"),
+    ):
+        app._chat_worker([{"role": "user", "content": "hi"}])
+    m.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# _show_skill_detail with a valid selection
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_show_skill_detail_with_selection(ui_app):
+    """_show_skill_detail with a selected skill must call skill_detail_text."""
+    from unittest.mock import MagicMock, patch
+
+    _, app = ui_app
+    mock_skill = MagicMock()
+    app.skills = [mock_skill]
+    app.skill_list.insert("end", "test_skill")
+    app.skill_list.selection_set(0)
+    with patch("local_codex_lite.ui_commands.skill_detail_text", return_value="skill detail") as m:
+        app._show_skill_detail()
+    m.assert_called_once_with(mock_skill)
+    app.skill_list.delete(0, "end")
+
+
+# ---------------------------------------------------------------------------
+# apply_changes / exec_changes with task (mocking _run_background)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_apply_changes_with_task(ui_app):
+    """apply_changes with a non-empty task must call _run_background."""
+    from unittest.mock import patch
+
+    _, app = ui_app
+    app.task_text.delete("1.0", "end")
+    app.task_text.insert("1.0", "fix the bug")
+    with (
+        patch.object(app, "_run_background") as m_run,
+        patch.object(app, "_write_intent"),
+        patch.object(app, "_save_task_to_history"),
+    ):
+        app.apply_changes()
+    m_run.assert_called_once()
+    app.task_text.delete("1.0", "end")
+
+
+@needs_display
+def test_exec_changes_with_task(ui_app):
+    """exec_changes with a non-empty task must call _run_background."""
+    from unittest.mock import patch
+
+    _, app = ui_app
+    app.task_text.delete("1.0", "end")
+    app.task_text.insert("1.0", "run the script")
+    with patch.object(app, "_run_background") as m_run, patch.object(app, "_save_task_to_history"):
+        app.exec_changes()
+    m_run.assert_called_once()
+    app.task_text.delete("1.0", "end")
+
+
+# ---------------------------------------------------------------------------
+# _run_background: worker exception is caught and becomes the output
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_run_background_worker_exception_shows_in_output(ui_app):
+    """runner() except clause must format the exception as output text."""
+    from unittest.mock import patch
+
+    root, app = ui_app
+
+    def raising_worker(task):
+        raise ValueError("deliberate error for test")
+
+    class _SyncThread:
+        """Runs the thread target synchronously so we can assert the result inline."""
+
+        def __init__(self, target=None, args=(), daemon=None, **_):
+            self._target = target
+            self._args = args
+
+        def start(self):
+            self._target(*self._args)
+
+    def sync_after(delay, fn=None, *args):
+        if delay == 0 and fn is not None:
+            fn()
+
+    with (
+        patch("threading.Thread", _SyncThread),
+        patch.object(root, "after", side_effect=sync_after),
+    ):
+        app._run_background("logs latest", "some task", raising_worker)
+
+    assert "ValueError" in app._command_output_cache
+    assert "deliberate error for test" in app._command_output_cache
+
+
+# ---------------------------------------------------------------------------
+# _maybe_ask_clarifications: dialog cancelled (qa_pairs is None → early return)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_maybe_ask_clarifications_dialog_cancelled(ui_app):
+    """When _ask_clarifications returns None (cancel), re-run must not happen."""
+    from unittest.mock import patch
+
+    _, app = ui_app
+    app.clarify_var.set(True)
+    app._clarify_assume_once = False
+    app._last_background = ("preview", "fix bug", lambda t: "result")
+    with (
+        patch("local_codex_lite.ui_commands.extract_clarifying_questions", return_value=["Q1?"]),
+        patch.object(app, "_ask_clarifications", return_value=None),
+        patch.object(app, "_run_background") as m_run,
+    ):
+        app._maybe_ask_clarifications("CLARIFICATION REQUIRED")
+    m_run.assert_not_called()
+    app.clarify_var.set(False)
+    app._last_background = None
+
+
+# ---------------------------------------------------------------------------
+# _maybe_ask_clarifications: answers provided → evidence inserted, re-run
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_maybe_ask_clarifications_with_answers_reruns(ui_app):
+    """When _ask_clarifications returns pairs, evidence is appended and re-run starts."""
+    from unittest.mock import patch
+
+    _, app = ui_app
+    app.clarify_var.set(True)
+    app._clarify_assume_once = False
+    app._last_background = ("preview", "fix bug", lambda t: "result")
+    app.evidence_text.delete("1.0", "end")
+    app.evidence_text.insert("1.0", "pre-existing evidence")
+
+    with (
+        patch("local_codex_lite.ui_commands.extract_clarifying_questions", return_value=["Q1?"]),
+        patch.object(app, "_ask_clarifications", return_value=[("Q1?", "A1")]),
+        patch("local_codex_lite.ui_commands.clarification_evidence_block", return_value="[Q1?] A1"),
+        patch.object(app, "_run_background") as m_run,
+    ):
+        app._maybe_ask_clarifications("CLARIFICATION REQUIRED\nQ1?")
+
+    m_run.assert_called_once()
+    assert app._clarify_assume_once is True
+    app.clarify_var.set(False)
+    app._last_background = None
+    app._clarify_assume_once = False
+    app.evidence_text.delete("1.0", "end")
+
+
+# ---------------------------------------------------------------------------
+# _ask_clarifications: modal dialog — cancel path (dialog destroyed → None)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_ask_clarifications_cancel(ui_app):
+    """Destroying the dialog without clicking OK must return None."""
+    import tkinter as tk
+
+    root, app = ui_app
+
+    def close_dialog():
+        for child in root.winfo_children():
+            if isinstance(child, tk.Toplevel):
+                child.destroy()
+                break
+
+    root.after(100, close_dialog)
+    result = app._ask_clarifications(["What is the deadline?"])
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _ask_clarifications: modal dialog — OK path (entries → (question, answer) pairs)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_ask_clarifications_ok(ui_app):
+    """Clicking OK must return (question, answer) pairs with 'use a reasonable default' fallback."""
+    import tkinter as tk
+
+    root, app = ui_app
+
+    def click_ok():
+        for child in root.winfo_children():
+            if not isinstance(child, tk.Toplevel):
+                continue
+
+            def _find_and_invoke_ok(widget):
+                for c in widget.winfo_children():
+                    try:
+                        if c.cget("text") == "OK":
+                            c.invoke()
+                            return True
+                    except Exception:
+                        pass
+                    if _find_and_invoke_ok(c):
+                        return True
+                return False
+
+            _find_and_invoke_ok(child)
+            break
+
+    root.after(100, click_ok)
+    result = app._ask_clarifications(["What color?"])
+    assert result is not None
+    assert result[0][0] == "What color?"
+    assert result[0][1] == "use a reasonable default"
+
+
+# ---------------------------------------------------------------------------
+# _prepare_workspace: project mode, create=True (workspace created)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_prepare_workspace_project_mode_create(ui_app):
+    """_prepare_workspace in project mode with create=True must call create_project_workspace."""
+    from unittest.mock import patch
+
+    from local_codex_lite.task_heuristics import WorkspacePlan
+
+    _, app = ui_app
+    app._active_workspace_root = app._base_workspace_root
+    app._active_workspace_task = ""
+
+    with (
+        patch(
+            "local_codex_lite.ui.plan_workspace",
+            return_value=WorkspacePlan(use_project=True, needs_new=True),
+        ),
+        patch("local_codex_lite.ui.create_project_workspace", return_value="/new/ws") as m_create,
+        patch("local_codex_lite.ui_commands.workspace_status", return_value="ws: /new"),
+    ):
+        app._prepare_workspace("fix the bug", None, create=True)
+
+    m_create.assert_called_once()
+    assert app._active_workspace_root == "/new/ws"
+    assert app._active_workspace_task == "fix the bug"
+    # cleanup
+    app._active_workspace_root = app._base_workspace_root
+    app._active_workspace_task = ""
