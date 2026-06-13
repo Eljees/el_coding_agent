@@ -18,14 +18,14 @@ _DANGEROUS_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = (
         r"|--recursive\b[^|]*--force\b|--force\b[^|]*--recursive\b)",
         re.IGNORECASE,
     ),
-    # Windows del with /s (recursive delete) and optional /q, /f flags.
-    # Matches: ``del /s target``, ``del /s /q``, ``del /f /s``, ``del /f`` (bare).
-    # Intentionally conservative: ``del /f file.txt`` (force-delete a single
-    # read-only file) is also blocked because it is indistinguishable from a
-    # pattern that could be chained into destructive automation. Legitimate
-    # non-recursive force-deletes should use a different form or be approved
-    # manually. \b after each flag prevents matching /sfoo (flag concatenated).
-    re.compile(r"\bdel\s+(?:/[sqf]\b\s*)+", re.IGNORECASE),
+    # Windows del with /s (recursive delete), in any flag order/combination:
+    # ``del /s target``, ``del /s /q``, ``del /f /s``, ``del /q /s temp``.
+    # The /s flag is what makes del *recursive* and therefore dangerous; a
+    # single-file force-delete such as ``del /f file.txt`` or ``del /q x`` is
+    # NOT recursive and is allowed (audit N4, 2026-06-12). The lookahead
+    # requires /s to appear somewhere in del's argument list before any
+    # command separator. \b prevents matching /strange as the /s flag.
+    re.compile(r"\bdel\s+[^|&;\n]*?/s\b", re.IGNORECASE),
     # PowerShell recursive remove.
     re.compile(r"\bremove-item\s+(?:[^|]*\s)?-recurse\b", re.IGNORECASE),
     # ``format c:`` style disk wipes -- narrowly target ``format <drive>:``.

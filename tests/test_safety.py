@@ -73,3 +73,23 @@ def test_windows_safe_variants_not_flagged() -> None:
     assert not is_dangerous_command("rmdir emptyfolder")
     assert not is_dangerous_command("takeown /f file.txt")
     assert not is_dangerous_command("icacls file.txt /grant user:R")
+
+
+def test_windows_del_recursive_is_dangerous() -> None:
+    # /s makes del recursive regardless of flag order.
+    assert is_dangerous_command("del /s temp")
+    assert is_dangerous_command("del /s /q C:\\build")
+    assert is_dangerous_command("del /f /s target")
+    assert is_dangerous_command("del /q /s /f olddir")
+    assert is_dangerous_command("cmd /c del /s temp")
+    assert is_dangerous_command("DEL /S build")
+
+
+def test_windows_del_single_file_not_flagged() -> None:
+    # Non-recursive force/quiet single-file deletes are allowed (audit N4).
+    assert not is_dangerous_command("del /f file.txt")
+    assert not is_dangerous_command("del /q cache.tmp")
+    assert not is_dangerous_command("del /f /q backup.bak")
+    assert not is_dangerous_command("del report.json")
+    # /strange must not be mistaken for the /s flag.
+    assert not is_dangerous_command("del /strange-name.txt")

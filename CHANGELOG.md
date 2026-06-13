@@ -8,6 +8,13 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Changed
+- **Safety: `del` rule narrowed to recursive only** (`safety.py`, audit N4): the Windows
+  `del` guard now blocks only commands carrying the recursive `/s` flag (in any order, e.g.
+  `del /f /s target`).  Non-recursive single-file force/quiet deletes (`del /f file.txt`,
+  `del /q cache.tmp`) are no longer rejected, so the agent can run legitimate cleanups.
+  Recursive `rd /s` / `rmdir /s` remain blocked.
+
 ### Added
 - **Cleanup commands** (`runs_admin.py`): `runs cleanup --keep N` keeps the N most
   recent run directories under `.local-codex-lite/runs/` and deletes the rest;
