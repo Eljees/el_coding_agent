@@ -17,6 +17,7 @@ import contextlib
 import io
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 from .intent import extract_artifact_input_path, extract_artifact_output_path
@@ -31,7 +32,7 @@ CHAT_SYSTEM_PROMPT = (
 
 
 @contextlib.contextmanager
-def redirect_optional_stdin(evidence_text: str):
+def redirect_optional_stdin(evidence_text: str) -> Iterator[None]:
     """Temporarily replace ``sys.stdin`` with an in-memory string.
 
     When *evidence_text* is non-empty the context manager patches ``sys.stdin``

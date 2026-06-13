@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -100,7 +101,7 @@ def format_duration(seconds: float) -> str:
 
 
 @contextlib.contextmanager
-def temporary_cwd(path: Path):
+def temporary_cwd(path: Path) -> Iterator[None]:
     """Temporarily ``chdir`` into ``path``, restoring the previous cwd on exit.
 
     Note: this mutates process-global cwd and is therefore not safe to nest

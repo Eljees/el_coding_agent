@@ -69,7 +69,7 @@ class SimpleTable:
         return "\n".join(lines)
 
 
-def make_console(*, legacy_windows: bool | None = None):
+def make_console(*, legacy_windows: bool | None = None) -> Any:
     if RichConsole is not None:
         if legacy_windows is None:
             return RichConsole()
@@ -77,7 +77,7 @@ def make_console(*, legacy_windows: bool | None = None):
     return SimpleConsole()
 
 
-def make_table(title: str | None = None):
+def make_table(title: str | None = None) -> Any:
     if RichTable is not None:
         return RichTable(title=title)
     return SimpleTable(title=title)
