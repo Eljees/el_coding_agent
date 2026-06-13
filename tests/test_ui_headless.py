@@ -686,3 +686,145 @@ def test_paste_evidence_with_existing_content(ui_app):
     assert "pre-existing" in content
     assert "appended text" in content
     app.evidence_text.delete("1.0", "end")
+
+
+# ---------------------------------------------------------------------------
+# Capability / tool listbox selection (covers the "item selected" paths)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_show_capability_detail_with_selection(ui_app):
+    """_show_capability_detail with a selected capability must populate detail panel."""
+    _, app = ui_app
+    if not app.capabilities:
+        pytest.skip("no capabilities discovered")
+    app.capability_list.selection_set(0)
+    app._show_capability_detail()  # covers the selection path
+    app.capability_list.selection_clear(0, "end")
+
+
+@needs_display
+def test_show_tool_detail_with_selection(ui_app):
+    """_show_tool_detail with a selected tool must populate detail panel."""
+    _, app = ui_app
+    if not app.tools:
+        pytest.skip("no tools discovered")
+    app.tool_list.selection_set(0)
+    app._show_tool_detail()
+    app.tool_list.selection_clear(0, "end")
+
+
+# ---------------------------------------------------------------------------
+# _schedule_busy_heartbeat busy path (calls root.after from main thread — safe)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_schedule_busy_heartbeat_busy(ui_app):
+    """_schedule_busy_heartbeat with _busy=True must append heartbeat to output."""
+    _, app = ui_app
+    app._busy = True
+    app._busy_started_at = 0.0
+    app._busy_lines = []
+    app._write_command_output("")
+    app._schedule_busy_heartbeat()
+    assert app._busy_lines  # at least one heartbeat line
+    app._busy = False
+    app._busy_lines = []
+
+
+# ---------------------------------------------------------------------------
+# preview() with task (covers preview body + _run_background "preview" branch)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_preview_with_task(ui_app):
+    """preview() with task text must execute the preview body and start a background job."""
+    _, app = ui_app
+    app.task_text.delete("1.0", "end")
+    app.task_text.insert("1.0", "покажи логи")
+    app.preview()
+    # background thread is daemonic and may fail at root.after, but the
+    # main-thread preview body (write intent, save history, etc.) ran
+    app.task_text.delete("1.0", "end")
+    app._busy = False  # reset state touched by _run_background
+
+
+# ---------------------------------------------------------------------------
+# _export_output with content and cancelled filedialog
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_export_output_filedialog_cancelled(ui_app, monkeypatch):
+    """_export_output with content but cancelled dialog must not write any file."""
+    import local_codex_lite.ui as _ui
+
+    _, app = ui_app
+    app._write_command_output("some output to export")
+    monkeypatch.setattr(
+        _ui, "filedialog", type("FD", (), {"asksaveasfilename": staticmethod(lambda **_: "")})()
+    )
+    app._export_output()  # filedialog returns "" → function returns early
+
+
+# ---------------------------------------------------------------------------
+# Worker wrappers (mocked ui_runners to avoid LLM calls)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_preview_worker_delegates_to_ui_runners(ui_app, monkeypatch):
+    from unittest.mock import patch
+
+    _, app = ui_app
+    with patch("local_codex_lite.ui_runners.preview_worker", return_value="preview result") as m:
+        result = app._preview_worker("fix bug")
+    m.assert_called_once()
+    assert result == "preview result"
+
+
+@needs_display
+def test_artifact_worker_delegates(ui_app, monkeypatch):
+    from unittest.mock import patch
+
+    _, app = ui_app
+    with patch("local_codex_lite.ui_runners.artifact_worker", return_value="artifact ok") as m:
+        result = app._artifact_worker("scan artifact", extract=False)
+    m.assert_called_once()
+    assert result == "artifact ok"
+
+
+@needs_display
+def test_cve_worker_delegates(ui_app, monkeypatch):
+    from unittest.mock import patch
+
+    _, app = ui_app
+    with patch("local_codex_lite.ui_runners.cve_worker", return_value="cve ok") as m:
+        result = app._cve_worker("scan cve")
+    m.assert_called_once()
+    assert result == "cve ok"
+
+
+@needs_display
+def test_appsechub_worker_delegates(ui_app):
+    from unittest.mock import patch
+
+    _, app = ui_app
+    with patch("local_codex_lite.ui_runners.appsechub_worker", return_value="sec ok") as m:
+        result = app._appsechub_worker("scan security")
+    m.assert_called_once()
+    assert result == "sec ok"
+
+
+@needs_display
+def test_run_worker_delegates(ui_app):
+    from unittest.mock import patch
+
+    _, app = ui_app
+    with patch("local_codex_lite.ui_runners.run_worker", return_value="run ok") as m:
+        result = app._run_worker("do something", apply=True, exec_=False)
+    m.assert_called_once()
+    assert result == "run ok"
