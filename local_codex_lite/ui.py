@@ -98,7 +98,7 @@ class CommandCenterUI:
         style = ttk.Style(self.root)
         try:
             style.theme_use("clam")
-        except Exception:
+        except Exception:  # pragma: no cover — "clam" theme absent only on exotic Tk builds
             pass
 
         # --- Status bar (packed before main so it stays at the bottom) ---
@@ -492,7 +492,7 @@ class CommandCenterUI:
         self._refresh_history_combo()
 
     def _refresh_history_combo(self) -> None:
-        if not hasattr(self, "_history_combo"):
+        if not hasattr(self, "_history_combo"):  # pragma: no cover — defensive guard pre-_build
             return
         self._history_combo["values"] = ui_commands.history_labels(self._task_history)
 
@@ -505,7 +505,9 @@ class CommandCenterUI:
         self.task_text.insert("1.0", task)
         self._history_combo.set("")
 
-    def _on_close(self) -> None:
+    def _on_close(
+        self,
+    ) -> None:  # pragma: no cover — destroys the root; tested implicitly at app exit
         self._save_geometry()
         self.root.destroy()
 
@@ -544,7 +546,9 @@ class CommandCenterUI:
     # Status bar probe (background thread)
     # ------------------------------------------------------------------
 
-    def _probe_status(self) -> None:
+    def _probe_status(
+        self,
+    ) -> None:  # pragma: no cover — background thread; root.after requires mainloop
         cve_status = ui_runners.probe_cve_status()
         self.root.after(0, lambda s=cve_status: self._status_cve_var.set(s))  # type: ignore[misc]
         llm_status = ui_runners.probe_llm_status(self._base_workspace_root)

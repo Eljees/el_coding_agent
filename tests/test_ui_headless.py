@@ -389,3 +389,300 @@ def test_logs_latest_queues_background(ui_app):
     """logs_latest() must not raise (starts a background worker thread)."""
     _, app = ui_app
     app.logs_latest()
+
+
+# ---------------------------------------------------------------------------
+# Runs-tab helpers
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_show_run_timeline_empty_selection(ui_app):
+    """_show_run_timeline with no listbox selection must return early."""
+    _, app = ui_app
+    app.runs_list.selection_clear(0, "end")
+    app._show_run_timeline()
+
+
+@needs_display
+def test_copy_runs_detail(ui_app):
+    root, app = ui_app
+    app._copy_runs_detail()
+    root.clipboard_get()  # verify clipboard was touched without raising
+
+
+# ---------------------------------------------------------------------------
+# History combo
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_on_history_select_out_of_range(ui_app):
+    """_on_history_select with combobox.current() == -1 must return early."""
+    _, app = ui_app
+    app._on_history_select()  # current() returns -1 (nothing selected) → return
+
+
+@needs_display
+def test_on_history_select_valid_index(ui_app):
+    """_on_history_select with valid idx inserts task into task_text."""
+    _, app = ui_app
+    app._task_history = ["task alpha", "task beta"]
+    app._refresh_history_combo()
+    app._history_combo.current(0)
+    app._on_history_select()
+    assert "task alpha" in app._task()
+    app.task_text.delete("1.0", "end")
+
+
+# ---------------------------------------------------------------------------
+# Export output
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_export_output_empty_content(ui_app):
+    """_export_output returns early when command output cache is empty."""
+    _, app = ui_app
+    app._write_command_output("")
+    app._export_output()  # must not raise or open filedialog
+
+
+# ---------------------------------------------------------------------------
+# Chat: response + append helpers
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_chat_on_response(ui_app):
+    """_chat_on_response must append to chat_messages and restore send button."""
+    _, app = ui_app
+    app._chat_messages.clear()
+    app._chat_send_button.configure(state="disabled")
+    app._chat_on_response("model answer")
+    assert app._chat_messages == [{"role": "assistant", "content": "model answer"}]
+    app._chat_messages.clear()
+
+
+@needs_display
+def test_chat_append(ui_app):
+    """_chat_append must write role header + text to chat_history widget."""
+    from local_codex_lite import ui_helpers
+
+    _, app = ui_app
+    app._chat_append("User", "greetings")
+    content = ui_helpers.get_widget_text(app.chat_history)
+    assert "[User]" in content
+    assert "greetings" in content
+
+
+# ---------------------------------------------------------------------------
+# Intent panel
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_write_intent_populates_vars(ui_app):
+    """_write_intent must set _last_decision and update status vars."""
+    from local_codex_lite.intent import recognize_intent
+
+    _, app = ui_app
+    decision = recognize_intent("покажи логи", app.capabilities)
+    app._write_intent(decision)
+    assert app._last_decision is decision
+
+
+# ---------------------------------------------------------------------------
+# Capability / tool / skill detail selectors
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_show_capability_detail_empty_selection(ui_app):
+    _, app = ui_app
+    app.capability_list.selection_clear(0, "end")
+    app._show_capability_detail()  # returns early
+
+
+@needs_display
+def test_show_tool_detail_empty_selection(ui_app):
+    _, app = ui_app
+    app.tool_list.selection_clear(0, "end")
+    app._show_tool_detail()
+
+
+@needs_display
+def test_show_skill_detail_no_skills(ui_app):
+    _, app = ui_app
+    app.skill_list.selection_clear(0, "end")
+    app._show_skill_detail()
+
+
+@needs_display
+def test_copy_capability_detail(ui_app):
+    root, app = ui_app
+    app._copy_capability_detail()
+    root.clipboard_get()
+
+
+# ---------------------------------------------------------------------------
+# analyze() — synchronous, exercises intent + workspace + history
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_analyze_with_task(ui_app):
+    """analyze() with task text must write command output without raising."""
+    _, app = ui_app
+    app.task_text.delete("1.0", "end")
+    app.task_text.insert("1.0", "покажи логи")
+    app.analyze()
+    assert app._command_output_cache  # something was written
+    app.task_text.delete("1.0", "end")
+
+
+# ---------------------------------------------------------------------------
+# _finish_background (direct call — no mainloop needed)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_finish_background_normal_output(ui_app):
+    """_finish_background without stop_triggered must write output to cache."""
+    _, app = ui_app
+    app._busy = True
+    app._stop_triggered = False
+    app._busy_started_at = 0.0
+    app._finish_background("worker result")
+    assert app._busy is False
+    assert "worker result" in app._command_output_cache
+
+
+@needs_display
+def test_finish_background_stopped(ui_app):
+    """_finish_background with stop_triggered must write 'Stopped by user.'."""
+    _, app = ui_app
+    app._busy = True
+    app._stop_triggered = True
+    app._finish_background("ignored")
+    assert app._busy is False
+    assert "Stopped by user." in app._command_output_cache
+
+
+# ---------------------------------------------------------------------------
+# _maybe_ask_clarifications early-exit paths
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_maybe_ask_clarifications_clarify_off(ui_app):
+    """clarify_var=False → _maybe_ask_clarifications returns immediately."""
+    _, app = ui_app
+    app.clarify_var.set(False)
+    app._maybe_ask_clarifications("output with clarifications?")
+
+
+@needs_display
+def test_maybe_ask_clarifications_no_background(ui_app):
+    """_last_background is None → returns before inspecting output."""
+    _, app = ui_app
+    app.clarify_var.set(True)
+    app._clarify_assume_once = False
+    app._last_background = None
+    app._maybe_ask_clarifications("output")
+    app.clarify_var.set(False)
+
+
+@needs_display
+def test_maybe_ask_clarifications_wrong_label(ui_app):
+    """label not in preview/apply set → returns early without opening dialog."""
+    _, app = ui_app
+    app.clarify_var.set(True)
+    app._clarify_assume_once = False
+    app._last_background = ("logs latest", "", None)
+    app._maybe_ask_clarifications("output")
+    app.clarify_var.set(False)
+    app._last_background = None
+
+
+@needs_display
+def test_maybe_ask_clarifications_no_questions(ui_app):
+    """output with no clarifying questions → returns without opening dialog."""
+    _, app = ui_app
+    app.clarify_var.set(True)
+    app._clarify_assume_once = False
+    app._last_background = ("preview", "some task", lambda t: "done")
+    app._maybe_ask_clarifications("plain output without any questions")
+    app.clarify_var.set(False)
+    app._last_background = None
+
+
+# ---------------------------------------------------------------------------
+# _schedule_busy_heartbeat not-busy path
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_schedule_busy_heartbeat_not_busy(ui_app):
+    """_schedule_busy_heartbeat with _busy=False must return immediately."""
+    _, app = ui_app
+    app._busy = False
+    app._schedule_busy_heartbeat()  # returns early at if not self._busy:
+
+
+# ---------------------------------------------------------------------------
+# _open_workspace_folder error path
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_open_workspace_folder_startfile_error(ui_app, monkeypatch):
+    """_open_workspace_folder handles OSError from os.startfile gracefully."""
+    import os
+
+    _, app = ui_app
+
+    def _fail(path):
+        raise OSError("no startfile")
+
+    monkeypatch.setattr(os, "startfile", _fail)
+    app._open_workspace_folder()
+    assert "Could not open workspace folder" in app._command_output_cache
+
+
+# ---------------------------------------------------------------------------
+# _prepare_workspace (no project mode)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_prepare_workspace_base_mode(ui_app):
+    """_prepare_workspace with project_mode=False resets active workspace to base."""
+    from local_codex_lite.intent import recognize_intent
+
+    _, app = ui_app
+    app.project_mode_var.set(False)
+    decision = recognize_intent("покажи логи", app.capabilities)
+    base = app._base_workspace_root
+    app._prepare_workspace("покажи логи", decision, create=False)
+    assert app._active_workspace_root == base
+
+
+# ---------------------------------------------------------------------------
+# _paste_evidence with existing evidence (separator path)
+# ---------------------------------------------------------------------------
+
+
+@needs_display
+def test_paste_evidence_with_existing_content(ui_app):
+    """_paste_evidence with existing evidence inserts '\\n\\n' separator first."""
+    root, app = ui_app
+    root.clipboard_clear()
+    root.clipboard_append("appended text")
+    app.evidence_text.delete("1.0", "end")
+    app.evidence_text.insert("1.0", "pre-existing")
+    app._paste_evidence()
+    content = app._evidence()
+    assert "pre-existing" in content
+    assert "appended text" in content
+    app.evidence_text.delete("1.0", "end")
