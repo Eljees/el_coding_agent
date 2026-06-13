@@ -31,13 +31,19 @@ typecheck:
 	mypy $(PKG)/
 
 test:
-	pytest -q --tb=short --cov=$(PKG) --cov-report=term --cov-fail-under=80
+	pytest -q --tb=short --cov=$(PKG) --cov-report=term --cov-fail-under=88
 
 smoke:
 	$(PY) tools/stdlib_smoke.py
 
+gen-cli-ref:
+	$(PY) scripts/gen_cli_reference.py
+
+cli-ref-check:
+	$(PY) scripts/gen_cli_reference.py --check
+
 # Full local gate, identical to the CI lint+test job.
-check: lint format-check typecheck test smoke
+check: lint format-check typecheck test smoke cli-ref-check
 
 doctor:
 	$(PY) -m $(PKG) doctor

@@ -8,7 +8,26 @@ straight into `## [Unreleased]`.
 
 ## [Unreleased]
 
+### Added
+- **`--version` flag** (`cli_parser.py`): `local-codex-lite --version` now prints the
+  package version (`0.1.0`) without entering any subcommand.
+- **CLI reference staleness gate** (`.github/workflows/ci.yml`): a new
+  `cli-reference-check` CI job runs `python scripts/gen_cli_reference.py --check` so
+  `docs/cli-reference.md` can never silently drift from the real argparse surface.
+  `make check` also now includes `cli-ref-check`.
+- **GitHub PR template** (`.github/pull_request_template.md`): checklists for type,
+  tests, CHANGELOG update, and secrets gate.
+
 ### Changed
+- **Coverage floor raised 80% → 88%** (`.github/workflows/ci.yml`, `.gitlab-ci.yml`,
+  `Makefile`): aligns the enforced floor with the project's actual coverage (91.2%).
+  Raises confidence that coverage regressions are caught immediately.
+- **Project URLs updated** (`pyproject.toml`): now point to the GitHub mirror at
+  `https://github.com/Eljees/el_coding_agent` instead of the internal GitLab host.
+- **Python 3.13 added to classifiers** (`pyproject.toml`): reflects that CI already tests
+  on 3.13 (GitHub Actions matrix).
+
+### Changed (prior)
 - **Safety: `del` rule narrowed to recursive only** (`safety.py`, audit N4): the Windows
   `del` guard now blocks only commands carrying the recursive `/s` flag (in any order, e.g.
   `del /f /s target`).  Non-recursive single-file force/quiet deletes (`del /f file.txt`,
