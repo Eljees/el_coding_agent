@@ -31,7 +31,7 @@ typecheck:
 	mypy $(PKG)/
 
 test:
-	pytest -q --tb=short --cov=$(PKG) --cov-report=term --cov-fail-under=88
+	pytest -q --tb=short --cov=$(PKG) --cov-report=term --cov-fail-under=90
 
 smoke:
 	$(PY) tools/stdlib_smoke.py

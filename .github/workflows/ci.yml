@@ -70,7 +70,7 @@ jobs:
         run: mypy local_codex_lite/
 
       - name: Pytest with coverage
-        run: pytest -q --tb=short --cov=local_codex_lite --cov-report=xml --cov-report=term --cov-fail-under=88
+        run: pytest -q --tb=short --cov=local_codex_lite --cov-report=xml --cov-report=term --cov-fail-under=90
 
       - name: Upload coverage report
         if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'

@@ -27,9 +27,9 @@ straight into `## [Unreleased]`.
   tests, CHANGELOG update, and secrets gate.
 
 ### Changed
-- **Coverage floor raised 80% → 88%** (`.github/workflows/ci.yml`, `.gitlab-ci.yml`,
-  `Makefile`): aligns the enforced floor with the project's actual coverage (91.2%).
-  Raises confidence that coverage regressions are caught immediately.
+- **Coverage floor raised 88% → 90%** (`.github/workflows/ci.yml`, `.gitlab-ci.yml`,
+  `Makefile`): safe on all runners (Linux headless achieves ~91%; Windows ~99%).
+  Previously raised 80% → 88% as part of the D14 audit.
 - **Project URLs updated** (`pyproject.toml`): now point to the GitHub mirror at
   `https://github.com/Eljees/el_coding_agent` instead of the internal GitLab host.
 - **Python 3.13 added to classifiers** (`pyproject.toml`): reflects that CI already tests
