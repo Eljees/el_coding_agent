@@ -9,7 +9,7 @@ from pathlib import Path
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
-except Exception as exc:
+except Exception as exc:  # pragma: no cover — only reachable when tkinter is absent
     tk = None  # type: ignore[assignment]
     ttk = None  # type: ignore[assignment]
     messagebox = None  # type: ignore[assignment]
@@ -996,10 +996,12 @@ def run_command_center_ui(autoclose_ms: int | None = None) -> int:
     if tk is None:
         print(f"Tkinter is not available: {_TK_IMPORT_ERROR}", file=sys.stderr)
         return 1
-    root = tk.Tk()
-    _app = CommandCenterUI(root)
-    root.update_idletasks()
-    if autoclose_ms is not None:
-        root.after(autoclose_ms, root.destroy)
-    root.mainloop()
-    return 0
+    root = (
+        tk.Tk()
+    )  # pragma: no cover — mainloop teardown prevents a second Tk() in the same process
+    _app = CommandCenterUI(root)  # pragma: no cover
+    root.update_idletasks()  # pragma: no cover
+    if autoclose_ms is not None:  # pragma: no cover
+        root.after(autoclose_ms, root.destroy)  # pragma: no cover
+    root.mainloop()  # pragma: no cover
+    return 0  # pragma: no cover
